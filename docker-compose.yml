@@ -23,7 +23,10 @@ services:
     # Not published to the host: only the app container can reach the database.
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-unknown}
     image: tools-portal:latest
     restart: unless-stopped
     env_file: .env
@@ -36,6 +39,12 @@ services:
       - "${APP_BIND_ADDRESS:-0.0.0.0}:8016:8016"
     volumes:
       - backups:/app/backups
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8016/api/public/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
     depends_on:
       db:
         condition: service_healthy

@@ -19,7 +19,33 @@ Built on the Sympl design-system starter: Next.js 16 (App Router), React 19, Pri
 
 Effective tool access = tools of the user's role + user "Grant" overrides − user "Deny" overrides. Disabled tools are hidden from everyone.
 
-## Deploying (Docker, http://10.0.10.106:8016)
+## Deploying with `deploy.sh` (recommended)
+
+On the server (Docker with the compose plugin, git):
+
+```bash
+git clone https://github.com/jonbrulotte-arch/tools-portal.git && cd tools-portal
+```
+
+```bash
+./deploy.sh install
+```
+
+`install` checks Docker, disk space and port 8016. It then creates `.env`: it generates every secret, asks for the first admin's email, name and password, and sets the file to mode 600. Finally it builds the image, starts PostgreSQL and the app, and waits until the app's health check passes. For automation, pass `--yes --admin-email you@company.com --admin-name "Your Name"`.
+
+| Command | What it does |
+|---|---|
+| `./deploy.sh update` | Dumps the database, runs `git pull --ff-only`, rebuilds and restarts, then waits for the health check. If the new version doesn't become healthy, it rolls the app back to the previous image automatically and prints the command to restore the pre-update database dump. Options: `--branch main`, `--force`, `--no-pull`. |
+| `./deploy.sh rollback [--with-db latest\|FILE]` | Switches back to the previous image and optionally restores a database dump. A safety dump is taken first. |
+| `./deploy.sh backup` | Saves a database dump to `.deploy/db-backups/` and copies the in-app backups to `.deploy/app-backups/`. Copy `.deploy/` off the server regularly. |
+| `./deploy.sh restore-db FILE\|latest` | Replaces the database with a dump. A safety dump is taken first. |
+| `./deploy.sh status` | Shows containers, health, running and previous versions, recent dumps, deploy history and disk space. |
+| `./deploy.sh logs [app\|db]`, `start`, `stop`, `restart` | Day-to-day operations. |
+| `./deploy.sh env-check` | Validates `.env`: secret strength, a URL-safe DB password and URL format. |
+
+Every run is logged to `.deploy/deploy.log`. The last 10 database dumps are kept (`--keep N` changes this). `./deploy.sh help` lists all options. The app exposes `GET /api/public/health` (database check plus running version), which Docker's healthcheck and the script use.
+
+## Deploying manually (Docker, http://10.0.10.106:8016)
 
 On the server (Docker with the compose plugin):
 

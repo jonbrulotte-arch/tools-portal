@@ -17,7 +17,9 @@ FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates tini && apt-get clean \
   && groupadd -r app && useradd -r -g app -d /app app && mkdir -p /app/backups && chown app:app /app /app/backups
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=8016 HOSTNAME=0.0.0.0 BACKUP_DIR=/app/backups
+ARG APP_VERSION=unknown
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=8016 HOSTNAME=0.0.0.0 BACKUP_DIR=/app/backups APP_VERSION=$APP_VERSION
+LABEL org.opencontainers.image.title="tools-portal" org.opencontainers.image.version=$APP_VERSION
 COPY --from=build --chown=app:app /app/package.json /app/next.config.ts /app/prisma.config.ts /app/tsconfig.json ./
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/.next ./.next
@@ -29,4 +31,6 @@ RUN chmod +x /entrypoint.sh
 USER app
 EXPOSE 8016
 VOLUME ["/app/backups"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8016)+'/api/public/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
