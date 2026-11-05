@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users & auth ─────────────────────────────────────────────
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id               String     @id @default(cuid())
+  email            String     @unique
+  name             String
+  passwordHash     String?
+  status           UserStatus @default(INVITED)
+  roleId           String
+  role             Role       @relation(fields: [roleId], references: [id])
+  failedLoginCount Int        @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  invitedById      String?
+  invitedAt        DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  toolAccess     UserToolAccess[]
+  inviteTokens   InviteToken[]
+  resetTokens    PasswordResetToken[]
+  auditLogs      AuditLog[]
+  discounts      ShopifyDiscount[]
+}
+
+model InviteToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ─── RBAC ─────────────────────────────────────────────────────
+
+model Role {
+  id           String           @id @default(cuid())
+  name         String           @unique
+  description  String           @default("")
+  isSystem     Boolean          @default(false)
+  isSuperAdmin Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  permissions  RolePermission[]
+  toolAccess   RoleToolAccess[]
+  users        User[]
+}
+
+model RolePermission {
+  roleId     String
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission String
+
+  @@id([roleId, permission])
+}
+
+model Tool {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  name        String
+  description String           @default("")
+  usage       String           @default("")
+  icon        String           @default("Wrench")
+  enabled     Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roleAccess  RoleToolAccess[]
+  userAccess  UserToolAccess[]
+}
+
+model RoleToolAccess {
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  toolId String
+  tool   Tool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, toolId])
+}
+
+enum AccessEffect {
+  GRANT
+  DENY
+}
+
+model UserToolAccess {
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolId String
+  tool   Tool         @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  effect AccessEffect
+
+  @@id([userId, toolId])
+}
+
+// ─── Audit log ────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  action     String
+  category   String
+  targetType String?
+  targetId   String?
+  success    Boolean  @default(true)
+  ip         String?
+  userAgent  String?
+  metadata   Json?
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@index([category])
+}
+
+// ─── Settings ─────────────────────────────────────────────────
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Asset {
+  key       String   @id
+  mimeType  String
+  data      Bytes
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Tool: Shopify Discount Code Generator ───────────────────
+
+enum ShopifyAuthType {
+  ACCESS_TOKEN
+  CLIENT_CREDENTIALS
+}
+
+model ShopifyStore {
+  id                   String          @id @default(cuid())
+  name                 String
+  shopDomain           String          @unique
+  authType             ShopifyAuthType
+  encAccessToken       String?
+  clientId             String?
+  encClientSecret      String?
+  encCachedToken       String?
+  cachedTokenExpiresAt DateTime?
+  apiVersion           String          @default("2026-10")
+  currencyCode         String?
+  enabled              Boolean         @default(true)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  discounts            ShopifyDiscount[]
+}
+
+enum DiscountValueType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+enum DiscountRecordStatus {
+  CREATED
+  FAILED
+}
+
+model ShopifyDiscount {
+  id                String               @id @default(cuid())
+  storeId           String
+  store             ShopifyStore         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdById       String?
+  createdBy         User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdByEmail    String?
+  title             String
+  valueType         DiscountValueType
+  value             Decimal?             @db.Decimal(12, 2)
+  codes             String[]
+  config            Json
+  shopifyDiscountId String?
+  status            DiscountRecordStatus
+  errorMessage      String?
+  requestPayload    Json?
+  responsePayload   Json?
+  startsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime             @default(now())
+
+  @@index([createdAt])
+  @@index([storeId])
+  @@index([createdById])
+}
