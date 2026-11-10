@@ -18,7 +18,7 @@ export default async function ShopifyToolLayout({ children }: { children: React.
             <p className="text-sm text-gray-500 mt-1">{tool?.description}</p>
           </div>
         </div>
-        <ToolNav canManageStores={user.can("tool.shopify-discounts.manage-stores")} />
+        <ToolNav canManageStores={user.isAdmin} />
       </div>
       {children}
     </div>

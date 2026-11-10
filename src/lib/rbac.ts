@@ -16,6 +16,8 @@ export type CurrentUser = {
   roleId: string;
   roleName: string;
   isSuperAdmin: boolean;
+  /** Super Admin, or a role with at least one admin.* permission. */
+  isAdmin: boolean;
   access: Access;
   can: (permission: Permission) => boolean;
   canUseTool: (slug: string) => boolean;
@@ -56,6 +58,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     roleId: user.roleId,
     roleName: user.role.name,
     isSuperAdmin: user.role.isSuperAdmin,
+    isAdmin: user.role.isSuperAdmin || [...access.permissions].some((p) => p.startsWith("admin.")),
     access,
     can: (p) => access.permissions.has(p),
     canUseTool: (slug) => access.toolSlugs.has(slug),
@@ -93,12 +96,13 @@ export async function requireTool(slug: string): Promise<CurrentUser> {
  * For route handlers. Usage:
  *   const g = await guard({ permission: "admin.users" }); if (g instanceof NextResponse) return g;
  */
-export async function guard(opts: { permission?: Permission; tool?: string } = {}): Promise<CurrentUser | NextResponse> {
+export async function guard(opts: { permission?: Permission; tool?: string; admin?: boolean } = {}): Promise<CurrentUser | NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const okPerm = !opts.permission || user.can(opts.permission);
   const okTool = !opts.tool || user.canUseTool(opts.tool);
-  if (!okPerm || !okTool) {
+  const okAdmin = !opts.admin || user.isAdmin;
+  if (!okPerm || !okTool || !okAdmin) {
     await logAudit({ action: "access.denied", category: "AUTH", actorId: user.id, actorEmail: user.email, success: false, metadata: { ...opts } });
     return NextResponse.json({ error: "You do not have permission to do that" }, { status: 403 });
   }

@@ -13,12 +13,6 @@ export const ADMIN_PERMISSIONS = [
 
 export const TOOL_PERMISSIONS = [
   {
-    key: "tool.shopify-discounts.manage-stores",
-    tool: "shopify-discounts",
-    label: "Shopify: manage stores",
-    description: "Add, edit and remove connected Shopify stores and their API credentials.",
-  },
-  {
     key: "tool.shopify-discounts.view-all",
     tool: "shopify-discounts",
     label: "Shopify: view all discounts",

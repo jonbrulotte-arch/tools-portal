@@ -80,7 +80,7 @@ Optional: limit the app to that one mailbox with an Exchange Online application 
 
 ## Connecting Shopify stores
 
-In the tool, open **Stores** (requires the *Shopify: manage stores* permission) → **Add store**. Two ways to authenticate:
+In the tool, open **Stores** → **Add store**. Only admins can add, edit, test or remove stores: Super Admins, and users whose role has at least one admin permission (Users, Roles, Tools, Access Log, Backup or Settings). Other users with access to the tool can create discounts on the connected stores but never see the Stores tab. Two ways to authenticate:
 
 - **Client ID & secret (Dev Dashboard app, recommended).** Create an app in the Shopify Dev Dashboard with Admin API scopes `write_discounts, read_discounts, read_products`, release a version and install it on the store (the store must be in your organization). Paste the Client ID and secret. The portal exchanges them for an access token with the client-credentials grant and refreshes it every 24 hours.
 - **Admin API access token.** For an existing custom app created in Shopify admin: paste its `shpat_…` token (same scopes).

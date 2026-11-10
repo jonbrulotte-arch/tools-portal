@@ -10,7 +10,7 @@ export default async function NewDiscountPage() {
   const stores = await prisma.shopifyStore.findMany({ where: { enabled: true }, orderBy: { name: "asc" } });
   return (
     <NewDiscountForm
-      canManageStores={user.can("tool.shopify-discounts.manage-stores")}
+      canManageStores={user.isAdmin}
       stores={stores.map((s) => ({ id: s.id, name: s.name, shopDomain: s.shopDomain, currency: s.currencyCode }))}
     />
   );

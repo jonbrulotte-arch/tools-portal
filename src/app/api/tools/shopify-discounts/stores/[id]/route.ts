@@ -9,7 +9,7 @@ import { publicStore, storeSchema } from "@/lib/shopify/stores";
 const patchSchema = storeSchema.omit({ shopDomain: true });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await guard({ tool: "shopify-discounts", permission: "tool.shopify-discounts.manage-stores" });
+  const actor = await guard({ tool: "shopify-discounts", admin: true }) // store management: admins only;
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   const body = await parseBody(req, patchSchema);
@@ -55,7 +55,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await guard({ tool: "shopify-discounts", permission: "tool.shopify-discounts.manage-stores" });
+  const actor = await guard({ tool: "shopify-discounts", admin: true }) // store management: admins only;
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   const store = await prisma.shopifyStore.findUnique({ where: { id }, include: { _count: { select: { discounts: true } } } });

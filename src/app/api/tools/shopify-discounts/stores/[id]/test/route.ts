@@ -6,7 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { testConnection } from "@/lib/shopify/client";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await guard({ tool: "shopify-discounts", permission: "tool.shopify-discounts.manage-stores" });
+  const actor = await guard({ tool: "shopify-discounts", admin: true }) // store management: admins only;
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   const store = await prisma.shopifyStore.findUnique({ where: { id } });

@@ -9,7 +9,7 @@ import { publicStore, storeSchema } from "@/lib/shopify/stores";
 
 
 export async function POST(req: Request) {
-  const actor = await guard({ tool: "shopify-discounts", permission: "tool.shopify-discounts.manage-stores" });
+  const actor = await guard({ tool: "shopify-discounts", admin: true }) // store management: admins only;
   if (actor instanceof NextResponse) return actor;
   const body = await parseBody(req, storeSchema);
   if (body instanceof NextResponse) return body;
