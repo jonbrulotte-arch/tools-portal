@@ -85,14 +85,6 @@ In the tool, open **Stores** (requires the *Shopify: manage stores* permission) 
 - **Client ID & secret (Dev Dashboard app, recommended).** Create an app in the Shopify Dev Dashboard with Admin API scopes `write_discounts, read_discounts, read_products`, release a version and install it on the store (the store must be in your organization). Paste the Client ID and secret. The portal exchanges them for an access token with the client-credentials grant and refreshes it every 24 hours.
 - **Admin API access token.** For an existing custom app created in Shopify admin: paste its `shpat_…` token (same scopes).
 
-- **Connect with Shopify (OAuth, works for any store).** Use this when Client ID & secret fails with `shop_not_permitted`: that means the store isn't listed under **Stores** in your Dev Dashboard organization, even if the app is installed on it.
-  1. Edit the store (or add it) and choose **Connect with Shopify**. Enter the app's Client ID and secret, and copy the **Redirect URL** shown (`<APP_URL>/api/tools/shopify-discounts/oauth/callback`).
-  2. In the Dev Dashboard, open the app → **Versions** → create a version, add that URL under **Redirect URLs**, and release it.
-  3. Make sure the app is installed on the store.
-  4. Back on the portal's Stores page, click the link icon (**Connect**) and approve in Shopify. You return to the portal with the store marked **Connected**.
-
-  The portal stores an expiring offline token and a refresh token (both encrypted) and renews them automatically. If a store goes unused for about 90 days, or someone uninstalls the app, click Connect again. Connecting must be done by a portal user with *Shopify: manage stores*, in the same browser session.
-
 Use **Test connection** to confirm the store name, currency and scopes. Credentials are encrypted at rest and never sent back to the browser.
 
 Creating a discount: **New discount** → pick the store(s) → title and code (single code or N generated unique codes) → percentage, fixed amount or free shipping → applies to all products, specific collections or specific products (single store) → minimum purchase, usage limits, combinations, start/end dates → **Create discount**. The tool calls `discountCodeBasicCreate` / `discountCodeFreeShippingCreate` (plus `discountRedeemCodeBulkAdd` for extra codes) and records the request, response and result in the discount log. Users see their own discounts unless they have *Shopify: view all discounts*.
