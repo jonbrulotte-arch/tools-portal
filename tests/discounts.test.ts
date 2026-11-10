@@ -12,6 +12,7 @@ describe("discount config", () => {
     expect(mutation).toContain("discountCodeBasicCreate(basicCodeDiscount: $input)");
     const input = (variables.input as Record<string, unknown>);
     expect(input.code).toBe("SAVE20");
+    expect(input.context).toEqual({ all: "ALL" });
     expect(input.customerGets).toEqual({ value: { percentage: 0.2 }, items: { all: true } });
     expect(input.minimumRequirement).toBeNull();
   });
@@ -29,7 +30,7 @@ describe("discount config", () => {
     const c = discountConfigSchema.parse({ ...base, valueType: "FREE_SHIPPING", value: undefined, maxShippingPrice: 20 });
     const { resultKey, variables } = buildDiscountMutation(c, "SHIP");
     expect(resultKey).toBe("discountCodeFreeShippingCreate");
-    expect(variables.input).toMatchObject({ destination: { all: true }, maximumShippingPrice: "20.00" });
+    expect(variables.input).toMatchObject({ context: { all: "ALL" }, destination: { all: true }, maximumShippingPrice: "20.00" });
   });
 
   it("validates bad input", () => {

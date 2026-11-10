@@ -77,6 +77,8 @@ export function buildDiscountMutation(c: DiscountConfig, firstCode: string): { m
   const common = {
     title: c.title,
     code: firstCode,
+    // Required since the 2025 API versions (replaces customerSelection): every buyer can use the code.
+    context: { all: "ALL" },
     startsAt: new Date(c.startsAt).toISOString(),
     endsAt: c.endsAt ? new Date(c.endsAt).toISOString() : null,
     usageLimit: c.usageLimit ?? null,
