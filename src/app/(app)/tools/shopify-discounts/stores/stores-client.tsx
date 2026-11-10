@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plug, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Link2, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,16 +12,22 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableWrap, Th, Td, Tr, EmptyRow, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { PublicStore } from "@/lib/shopify/stores";
 
 type StoreRow = PublicStore & { discountCount: number };
+type AuthType = "ACCESS_TOKEN" | "CLIENT_CREDENTIALS" | "OAUTH";
+type Notice = { type: "success" | "error" | "warning"; text: string } | null;
 type TestResult = { shopName: string; currencyCode: string; scopes: string[]; hasWriteDiscounts: boolean; hasReadProducts: boolean };
 
-export function StoresClient({ stores, defaultApiVersion }: { stores: StoreRow[]; defaultApiVersion: string }) {
+export function StoresClient({ stores, defaultApiVersion, redirectUri, initialNotice }: { stores: StoreRow[]; defaultApiVersion: string; redirectUri: string; initialNotice: Notice }) {
   const router = useRouter();
   const [editing, setEditing] = useState<StoreRow | "new" | null>(null);
-  const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; text: string } | null>(null);
+  const [notice, setNotice] = useState<Notice>(initialNotice);
+  useEffect(() => {
+    // Drop ?connected= / ?oauthError= from the address bar once shown.
+    if (initialNotice) router.replace("/tools/shopify-discounts/stores", { scroll: false });
+  }, [initialNotice, router]);
   const [testing, setTesting] = useState<string | null>(null);
 
   async function test(s: StoreRow) {
@@ -83,11 +89,35 @@ export function StoresClient({ stores, defaultApiVersion }: { stores: StoreRow[]
                 <p className="font-medium">{s.name}</p>
                 <p className="text-xs text-gray-500">{s.shopDomain}{s.currencyCode ? ` · ${s.currencyCode}` : ""}</p>
               </Td>
-              <Td>{s.authType === "ACCESS_TOKEN" ? <Badge variant="secondary">Admin API token</Badge> : <Badge variant="purple">Client credentials</Badge>}</Td>
+              <Td>
+                {s.authType === "ACCESS_TOKEN" && <Badge variant="secondary">Admin API token</Badge>}
+                {s.authType === "CLIENT_CREDENTIALS" && <Badge variant="purple">Client credentials</Badge>}
+                {s.authType === "OAUTH" && (
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge variant="default">Connect with Shopify</Badge>
+                    {s.oauthConnected ? (
+                      <span className="text-xs text-green-700" title={s.oauthExpiresAt ? `Renews automatically; reconnect needed if unused until ${formatDate(s.oauthExpiresAt)}` : undefined}>
+                        Connected {formatDate(s.oauthConnectedAt)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-700">Not connected</span>
+                    )}
+                  </div>
+                )}
+              </Td>
               <Td className="font-mono text-xs">{s.apiVersion}</Td>
               <Td>{s.discountCount}</Td>
               <Td>{s.enabled ? <Badge variant="success">Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>}</Td>
               <Td className="text-right whitespace-nowrap">
+                {s.authType === "OAUTH" && (
+                  <a
+                    href={`/api/tools/shopify-discounts/stores/${s.id}/oauth/start`}
+                    title={s.oauthConnected ? "Reconnect with Shopify" : "Connect with Shopify"}
+                    className={cn("inline-flex p-1.5 rounded-md hover:bg-gray-100", s.oauthConnected ? "text-gray-400 hover:text-gray-700" : "text-blue-600 hover:text-blue-700")}
+                  >
+                    <Link2 className="h-4 w-4" />
+                  </a>
+                )}
                 <RowAction title="Test connection" onClick={() => test(s)} disabled={testing === s.id}><Plug className={cn("h-4 w-4", testing === s.id && "animate-pulse")} /></RowAction>
                 <RowAction title="Edit store" onClick={() => setEditing(s)}><Pencil className="h-4 w-4" /></RowAction>
                 {s.discountCount === 0 && <RowAction danger title="Remove store" onClick={() => remove(s)}><Trash2 className="h-4 w-4" /></RowAction>}
@@ -100,7 +130,8 @@ export function StoresClient({ stores, defaultApiVersion }: { stores: StoreRow[]
       <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-700 space-y-3">
         <h3 className="text-base font-semibold text-gray-900">How to connect a store</h3>
         <p><strong>Option A: Dev Dashboard app (recommended for new setups).</strong> In the Shopify Dev Dashboard, create an app with the Admin API scopes <span className="font-mono text-xs">write_discounts, read_discounts, read_products</span>, release a version and install it on the store (the store must belong to your organization). Copy the app&apos;s Client ID and Client secret here. Tokens are fetched automatically and refreshed every 24 hours.</p>
-        <p><strong>Option B: Admin API access token.</strong> If the store already has a custom app created in Shopify admin, paste its Admin API access token (starts with <span className="font-mono text-xs">shpat_</span>), with the same scopes.</p>
+        <p><strong>Option B: Connect with Shopify (for stores outside your organization).</strong> Use this when the store isn&apos;t listed under <em>Stores</em> in your Dev Dashboard organization and Option A fails with <span className="font-mono text-xs">shop_not_permitted</span>. In the app&apos;s version settings, add <span className="font-mono text-xs break-all">{redirectUri}</span> as a redirect URL and release the version. Install the app on the store, add the store here with the app&apos;s Client ID and secret, then click the link icon (Connect) and approve in Shopify. The connection renews itself automatically.</p>
+        <p><strong>Option C: Admin API access token.</strong> If the store already has a custom app created in Shopify admin, paste its Admin API access token (starts with <span className="font-mono text-xs">shpat_</span>), with the same scopes.</p>
       </div>
 
       {editing && (
@@ -108,6 +139,7 @@ export function StoresClient({ stores, defaultApiVersion }: { stores: StoreRow[]
           key={editing === "new" ? "new" : editing.id}
           store={editing === "new" ? null : editing}
           defaultApiVersion={defaultApiVersion}
+          redirectUri={redirectUri}
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
@@ -120,11 +152,35 @@ export function StoresClient({ stores, defaultApiVersion }: { stores: StoreRow[]
   );
 }
 
-function StoreDialog({ store, defaultApiVersion, onClose, onSaved }: { store: StoreRow | null; defaultApiVersion: string; onClose: () => void; onSaved: (msg: string) => void }) {
+function CopyField({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex gap-2">
+      <Input value={value} readOnly className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          } catch {
+            /* clipboard unavailable over plain HTTP: the field is selectable */
+          }
+        }}
+      >
+        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? "Copied" : "Copy"}
+      </Button>
+    </div>
+  );
+}
+
+function StoreDialog({ store, defaultApiVersion, redirectUri, onClose, onSaved }: { store: StoreRow | null; defaultApiVersion: string; redirectUri: string; onClose: () => void; onSaved: (msg: string) => void }) {
   const [form, setForm] = useState({
     name: store?.name ?? "",
     shopDomain: store?.shopDomain ?? "",
-    authType: store?.authType ?? ("CLIENT_CREDENTIALS" as "ACCESS_TOKEN" | "CLIENT_CREDENTIALS"),
+    authType: store?.authType ?? ("CLIENT_CREDENTIALS" as AuthType),
     accessToken: "",
     clientId: store?.clientId ?? "",
     clientSecret: "",
@@ -143,7 +199,13 @@ function StoreDialog({ store, defaultApiVersion, onClose, onSaved }: { store: St
     try {
       if (store) await apiFetch(`/api/tools/shopify-discounts/stores/${store.id}`, { method: "PATCH", json });
       else await apiFetch(`/api/tools/shopify-discounts/stores`, { method: "POST", json });
-      onSaved(store ? `${form.name} updated.` : `${form.name} connected. Use "Test connection" to verify it.`);
+      onSaved(
+        form.authType === "OAUTH"
+          ? `${form.name} saved. Click the link icon (Connect) to approve the app in Shopify.`
+          : store
+            ? `${form.name} updated.`
+            : `${form.name} connected. Use "Test connection" to verify it.`,
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -172,14 +234,15 @@ function StoreDialog({ store, defaultApiVersion, onClose, onSaved }: { store: St
           </div>
           <div>
             <Label>Authentication</Label>
-            <div className="flex gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               {(
                 [
-                  ["CLIENT_CREDENTIALS", "Client ID & secret", "Dev Dashboard app"],
+                  ["CLIENT_CREDENTIALS", "Client ID & secret", "Dev Dashboard app, store in your organization"],
+                  ["OAUTH", "Connect with Shopify", "Dev Dashboard app, approve in Shopify (any store)"],
                   ["ACCESS_TOKEN", "Admin API access token", "Custom app created in Shopify admin"],
                 ] as const
               ).map(([v, label, hint]) => (
-                <button key={v} type="button" onClick={() => set("authType", v)} className={cn("flex-1 rounded-lg border px-4 py-3 text-left text-sm", form.authType === v ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 hover:bg-gray-50")}>
+                <button key={v} type="button" onClick={() => set("authType", v)} className={cn("rounded-lg border px-4 py-3 text-left text-sm", form.authType === v ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 hover:bg-gray-50")}>
                   <span className="font-medium text-gray-900">{label}</span>
                   <span className="block text-xs text-gray-500">{hint}</span>
                 </button>
@@ -201,6 +264,18 @@ function StoreDialog({ store, defaultApiVersion, onClose, onSaved }: { store: St
                 <Label htmlFor="s-sec">Client secret</Label>
                 <Input id="s-sec" type="password" autoComplete="off" value={form.clientSecret} onChange={(e) => set("clientSecret", e.target.value)} placeholder={store?.hasClientSecret ? keepHint : ""} required={!store?.hasClientSecret} />
               </div>
+            </div>
+          )}
+          {form.authType === "OAUTH" && (
+            <div className="space-y-2">
+              <Label>Redirect URL</Label>
+              <CopyField value={redirectUri} />
+              <p className="text-xs text-gray-500">
+                In the Dev Dashboard, open the app → <strong>Versions</strong> → create a version, add this under <strong>Redirect URLs</strong>, and release it. After saving here, click the link icon on the store to approve the app in Shopify.
+              </p>
+              {store?.authType === "OAUTH" && (form.clientSecret || form.clientId !== store.clientId) && (
+                <p className="text-xs text-amber-700">Changing the Client ID or secret disconnects the store; you&apos;ll need to click Connect again.</p>
+              )}
             </div>
           )}
           <div className="grid gap-4 sm:grid-cols-2 items-end">

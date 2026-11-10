@@ -1,14 +1,11 @@
 import type { ShopifyStore } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { ShopifyError, explainTokenError } from "@/lib/shopify/client-error";
+import { refreshOAuthToken } from "@/lib/shopify/oauth";
 
+export { ShopifyError };
 export const DEFAULT_API_VERSION = "2026-10";
-
-export class ShopifyError extends Error {
-  constructor(message: string, public details?: unknown) {
-    super(message);
-  }
-}
 
 /** Normalise "my-shop", "my-shop.myshopify.com" or "https://my-shop.myshopify.com/admin" to "my-shop.myshopify.com". */
 export function normalizeShopDomain(input: string): string {
@@ -18,11 +15,23 @@ export function normalizeShopDomain(input: string): string {
   return d;
 }
 
-/** Access token for a store: a static Admin API token, or a client-credentials token (cached encrypted, refreshed before expiry). */
+/**
+ * Access token for a store:
+ * - ACCESS_TOKEN: the static Admin API token
+ * - CLIENT_CREDENTIALS: client-credentials token (cached encrypted, refreshed before expiry)
+ * - OAUTH: expiring offline token from "Connect with Shopify", renewed with the refresh token
+ */
 export async function getAccessToken(store: ShopifyStore, opts: { forceRefresh?: boolean } = {}): Promise<string> {
   if (store.authType === "ACCESS_TOKEN") {
     if (!store.encAccessToken) throw new ShopifyError("No Admin API access token saved for this store");
     return decrypt(store.encAccessToken);
+  }
+  if (store.authType === "OAUTH") {
+    if (!store.encCachedToken) throw new ShopifyError("This store isn't connected yet. Click Connect on the Stores page to approve the app in Shopify.");
+    if (!opts.forceRefresh && store.cachedTokenExpiresAt && store.cachedTokenExpiresAt.getTime() > Date.now() + 5 * 60_000) {
+      return decrypt(store.encCachedToken);
+    }
+    return refreshOAuthToken(store);
   }
   if (!opts.forceRefresh && store.encCachedToken && store.cachedTokenExpiresAt && store.cachedTokenExpiresAt.getTime() > Date.now() + 5 * 60_000) {
     return decrypt(store.encCachedToken);
@@ -35,7 +44,7 @@ export async function getAccessToken(store: ShopifyStore, opts: { forceRefresh?:
   });
   const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string; error_description?: string };
   if (!res.ok || !body.access_token) {
-    throw new ShopifyError(`Shopify token request failed (${res.status}): ${body.error_description ?? body.error ?? res.statusText}`);
+    throw new ShopifyError(explainTokenError(`Shopify token request failed (${res.status}): ${body.error_description ?? body.error ?? res.statusText}`));
   }
   const expiresAt = new Date(Date.now() + (body.expires_in ?? 86399) * 1000);
   const encCachedToken = encrypt(body.access_token);
@@ -58,7 +67,7 @@ export async function adminGraphql<T = Record<string, unknown>>(store: ShopifySt
       headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
       body: JSON.stringify({ query, variables }),
     });
-    if (res.status === 401 && store.authType === "CLIENT_CREDENTIALS" && !refreshed) {
+    if (res.status === 401 && store.authType !== "ACCESS_TOKEN" && !refreshed) {
       token = await getAccessToken(store, { forceRefresh: true });
       refreshed = true;
       continue;

@@ -21,7 +21,8 @@ export async function POST(req: Request) {
   }
   if (await prisma.shopifyStore.findUnique({ where: { shopDomain } })) return jsonError("That store is already connected.", 409);
   if (body.authType === "ACCESS_TOKEN" && !body.accessToken) return jsonError("Admin API access token is required");
-  if (body.authType === "CLIENT_CREDENTIALS" && (!body.clientId || !body.clientSecret)) return jsonError("Client ID and client secret are required");
+  const usesApp = body.authType === "CLIENT_CREDENTIALS" || body.authType === "OAUTH";
+  if (usesApp && (!body.clientId || !body.clientSecret)) return jsonError("Client ID and client secret are required");
 
   const store = await prisma.shopifyStore.create({
     data: {
@@ -31,8 +32,8 @@ export async function POST(req: Request) {
       apiVersion: body.apiVersion,
       enabled: body.enabled,
       encAccessToken: body.authType === "ACCESS_TOKEN" ? encrypt(body.accessToken!) : null,
-      clientId: body.authType === "CLIENT_CREDENTIALS" ? body.clientId : null,
-      encClientSecret: body.authType === "CLIENT_CREDENTIALS" ? encrypt(body.clientSecret!) : null,
+      clientId: usesApp ? body.clientId : null,
+      encClientSecret: usesApp ? encrypt(body.clientSecret!) : null,
     },
   });
   await logAudit({ action: "shopify.store_added", category: "SHOPIFY", actorId: actor.id, actorEmail: actor.email, targetType: "ShopifyStore", targetId: store.id, metadata: { name: store.name, shopDomain, authType: store.authType } });

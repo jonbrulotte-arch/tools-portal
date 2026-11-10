@@ -162,6 +162,7 @@ model Asset {
 enum ShopifyAuthType {
   ACCESS_TOKEN
   CLIENT_CREDENTIALS
+  OAUTH
 }
 
 model ShopifyStore {
@@ -174,6 +175,11 @@ model ShopifyStore {
   encClientSecret      String?
   encCachedToken       String?
   cachedTokenExpiresAt DateTime?
+  // OAuth ("Connect with Shopify"): expiring offline token + rotating refresh token
+  encRefreshToken       String?
+  refreshTokenExpiresAt DateTime?
+  oauthScopes           String?
+  oauthConnectedAt      DateTime?
   apiVersion           String          @default("2026-10")
   currencyCode         String?
   enabled              Boolean         @default(true)
