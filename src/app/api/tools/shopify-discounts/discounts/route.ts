@@ -5,6 +5,9 @@ import { guard } from "@/lib/rbac";
 import { parseBody, jsonError } from "@/lib/api";
 import { discountConfigSchema } from "@/lib/shopify/discounts";
 import { createDiscountOnStore } from "@/lib/shopify/create";
+import { getSetting } from "@/lib/settings";
+import { GROUP_LABELS, lockViolations } from "@/lib/shopify/form-presets";
+import { logAudit } from "@/lib/audit";
 
 const schema = z.object({ storeIds: z.array(z.string()).min(1, "Select at least one store").max(20), config: discountConfigSchema });
 
@@ -13,6 +16,22 @@ export async function POST(req: Request) {
   if (actor instanceof NextResponse) return actor;
   const body = await parseBody(req, schema);
   if (body instanceof NextResponse) return body;
+
+  // Admin-locked form settings bind non-admins; enforced here, not just in the form.
+  if (!actor.isAdmin) {
+    const violations = lockViolations(body.config, await getSetting("shopifyDiscountForm"));
+    if (violations.length) {
+      await logAudit({
+        action: "shopify.discount_blocked_by_lock",
+        category: "SHOPIFY",
+        actorId: actor.id,
+        actorEmail: actor.email,
+        success: false,
+        metadata: { lockedFields: violations, title: body.config.title, storeIds: body.storeIds },
+      });
+      return jsonError(`Some settings are locked by an admin and have changed (${violations.map((v) => GROUP_LABELS[v]).join(", ")}). Reload the page and try again.`);
+    }
+  }
   const stores = await prisma.shopifyStore.findMany({ where: { id: { in: body.storeIds }, enabled: true } });
   if (stores.length !== new Set(body.storeIds).size) return jsonError("One or more selected stores are unavailable");
   if (stores.length > 1 && (body.config.collectionIds.length || body.config.productIds.length)) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, RefreshCw, Search, X, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, RefreshCw, Search, X, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
+import { presetFormValues } from "@/lib/shopify/form-presets";
+import type { ShopifyDiscountFormSettings } from "@/lib/settings";
 
 type Store = { id: string; name: string; shopDomain: string; currency: string | null };
 type Item = { id: string; title: string };
@@ -41,9 +43,18 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-function Radio({ checked, onChange, label, hint }: { checked: boolean; onChange: () => void; label: string; hint?: string }) {
+function LockNote({ locked, isAdmin }: { locked: boolean; isAdmin: boolean }) {
+  if (!locked) return null;
+  return isAdmin ? (
+    <Badge variant="secondary" className="gap-1 whitespace-nowrap"><Lock className="h-3 w-3" /> Locked for non-admins</Badge>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 whitespace-nowrap"><Lock className="h-3.5 w-3.5" /> Set by your admin</span>
+  );
+}
+
+function Radio({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: () => void; label: string; hint?: string; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onChange} className={cn("flex-1 rounded-lg border px-4 py-3 text-left text-sm transition-colors", checked ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:bg-gray-50")}>
+    <button type="button" onClick={onChange} disabled={disabled} className={cn("flex-1 rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60", checked ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:bg-gray-50")}>
       <span className="font-medium text-gray-900">{label}</span>
       {hint && <span className="block text-xs text-gray-500 mt-0.5">{hint}</span>}
     </button>
@@ -108,7 +119,13 @@ function Picker({ storeId, kind, selected, onChange }: { storeId: string; kind: 
   );
 }
 
-export function NewDiscountForm({ stores, canManageStores }: { stores: Store[]; canManageStores: boolean }) {
+export function NewDiscountForm({ stores, canManageStores, presets, isAdmin }: { stores: Store[]; canManageStores: boolean; presets: ShopifyDiscountFormSettings; isAdmin: boolean }) {
+  const preset = presetFormValues(presets);
+  // Locked groups are read-only for non-admins (also enforced by the API).
+  const lockMin = presets.minimum.locked && !isAdmin;
+  const lockLimit = presets.usageLimit.locked && !isAdmin;
+  const lockOnce = presets.oncePerCustomer.locked && !isAdmin;
+  const lockComb = presets.combinesWith.locked && !isAdmin;
   const [storeIds, setStoreIds] = useState<string[]>(stores.length === 1 ? [stores[0].id] : []);
   const [title, setTitle] = useState("");
   const [codeMode, setCodeMode] = useState<"single" | "bulk">("single");
@@ -120,16 +137,16 @@ export function NewDiscountForm({ stores, canManageStores }: { stores: Store[]; 
   const [appliesTo, setAppliesTo] = useState<"all" | "collections" | "products">("all");
   const [collections, setCollections] = useState<Item[]>([]);
   const [products, setProducts] = useState<Item[]>([]);
-  const [minimum, setMinimum] = useState<"none" | "subtotal" | "quantity">("none");
-  const [minimumValue, setMinimumValue] = useState("");
-  const [limitTotal, setLimitTotal] = useState(true);
-  const [usageLimit, setUsageLimit] = useState("1");
-  const [oncePerCustomer, setOncePerCustomer] = useState(true);
+  const [minimum, setMinimum] = useState<"none" | "subtotal" | "quantity">(preset.minimum);
+  const [minimumValue, setMinimumValue] = useState(preset.minimumValue);
+  const [limitTotal, setLimitTotal] = useState(preset.limitTotal);
+  const [usageLimit, setUsageLimit] = useState(preset.usageLimit);
+  const [oncePerCustomer, setOncePerCustomer] = useState(preset.oncePerCustomer);
   const [maxShipping, setMaxShipping] = useState("");
   const [startsAt, setStartsAt] = useState(localNow);
   const [hasEnd, setHasEnd] = useState(false);
   const [endsAt, setEndsAt] = useState("");
-  const [combines, setCombines] = useState({ orderDiscounts: false, productDiscounts: false, shippingDiscounts: false });
+  const [combines, setCombines] = useState(preset.combines);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<Result[] | null>(null);
@@ -202,6 +219,12 @@ export function NewDiscountForm({ stores, canManageStores }: { stores: Store[]; 
     setValue("");
     setCollections([]);
     setProducts([]);
+    setMinimum(preset.minimum);
+    setMinimumValue(preset.minimumValue);
+    setLimitTotal(preset.limitTotal);
+    setUsageLimit(preset.usageLimit);
+    setOncePerCustomer(preset.oncePerCustomer);
+    setCombines(preset.combines);
   }
 
   return (
@@ -315,33 +338,49 @@ export function NewDiscountForm({ stores, canManageStores }: { stores: Store[]; 
 
         <Section title="4. Requirements & limits">
           <div>
-            <Label>Minimum purchase requirement</Label>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <Label className="mb-0">Minimum purchase requirement</Label>
+              <LockNote locked={presets.minimum.locked} isAdmin={isAdmin} />
+            </div>
             <div className="flex gap-2">
-              <Radio checked={minimum === "none"} onChange={() => setMinimum("none")} label="None" />
-              <Radio checked={minimum === "subtotal"} onChange={() => setMinimum("subtotal")} label="Minimum amount" />
-              <Radio checked={minimum === "quantity"} onChange={() => setMinimum("quantity")} label="Minimum quantity" />
+              <Radio disabled={lockMin} checked={minimum === "none"} onChange={() => setMinimum("none")} label="None" />
+              <Radio disabled={lockMin} checked={minimum === "subtotal"} onChange={() => setMinimum("subtotal")} label="Minimum amount" />
+              <Radio disabled={lockMin} checked={minimum === "quantity"} onChange={() => setMinimum("quantity")} label="Minimum quantity" />
             </div>
           </div>
           {minimum !== "none" && (
             <div className="max-w-xs">
               <Label htmlFor="minv">{minimum === "subtotal" ? `Minimum subtotal${currency ? ` (${currency})` : ""}` : "Minimum number of items"}</Label>
-              <Input id="minv" type="number" step={minimum === "subtotal" ? "0.01" : "1"} min="1" value={minimumValue} onChange={(e) => setMinimumValue(e.target.value)} required />
+              <Input id="minv" type="number" step={minimum === "subtotal" ? "0.01" : "1"} min="1" value={minimumValue} onChange={(e) => setMinimumValue(e.target.value)} required disabled={lockMin} />
             </div>
           )}
           <div className="space-y-3">
-            <label className="flex items-center gap-3 text-sm text-gray-700"><Switch checked={limitTotal} onCheckedChange={setLimitTotal} /> Limit the total number of times this discount can be used</label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-3 text-sm text-gray-700"><Switch checked={limitTotal} onCheckedChange={setLimitTotal} disabled={lockLimit} /> Limit the total number of times this discount can be used</label>
+              <LockNote locked={presets.usageLimit.locked} isAdmin={isAdmin} />
+            </div>
             {limitTotal && (
               <div className="max-w-xs ml-12">
-                <Input type="number" min={1} value={usageLimit} onChange={(e) => setUsageLimit(e.target.value)} aria-label="Usage limit" />
-                {codeMode === "bulk" && <p className="text-xs text-gray-500 mt-1">The limit applies across all generated codes combined.</p>}
+                <Input type="number" min={1} value={usageLimit} onChange={(e) => setUsageLimit(e.target.value)} aria-label="Usage limit" disabled={lockLimit} />
+                {codeMode === "bulk" && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    The limit applies across all generated codes combined.{lockLimit && " It's set by your admin; ask them if your batch needs more uses."}
+                  </p>
+                )}
               </div>
             )}
-            <label className="flex items-center gap-3 text-sm text-gray-700"><Switch checked={oncePerCustomer} onCheckedChange={setOncePerCustomer} /> Limit to one use per customer</label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-3 text-sm text-gray-700"><Switch checked={oncePerCustomer} onCheckedChange={setOncePerCustomer} disabled={lockOnce} /> Limit to one use per customer</label>
+              <LockNote locked={presets.oncePerCustomer.locked} isAdmin={isAdmin} />
+            </div>
           </div>
         </Section>
 
         <Section title="5. Combinations">
-          <p className="text-sm text-gray-500">Allow this discount to be combined with:</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-gray-500">Allow this discount to be combined with:</p>
+            <LockNote locked={presets.combinesWith.locked} isAdmin={isAdmin} />
+          </div>
           {(
             [
               ["productDiscounts", "Product discounts"],
@@ -350,7 +389,7 @@ export function NewDiscountForm({ stores, canManageStores }: { stores: Store[]; 
             ] as const
           ).map(([k, label]) => (
             <label key={k} className="flex items-center gap-3 text-sm text-gray-700">
-              <Checkbox checked={combines[k]} onCheckedChange={(c) => setCombines({ ...combines, [k]: !!c })} /> {label}
+              <Checkbox checked={combines[k]} onCheckedChange={(c) => setCombines({ ...combines, [k]: !!c })} disabled={lockComb} /> {label}
             </label>
           ))}
         </Section>

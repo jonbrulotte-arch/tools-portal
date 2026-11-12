@@ -11,7 +11,12 @@ export function ToolNav({ canManageStores }: { canManageStores: boolean }) {
   const items = [
     { href: BASE, label: "Discount log", exact: true },
     { href: `${BASE}/new`, label: "New discount" },
-    ...(canManageStores ? [{ href: `${BASE}/stores`, label: "Stores" }] : []),
+    ...(canManageStores
+      ? [
+          { href: `${BASE}/settings`, label: "Form settings" },
+          { href: `${BASE}/stores`, label: "Stores" },
+        ]
+      : []),
   ];
   return (
     <div className="inline-flex h-9 items-center rounded-lg bg-gray-100 p-1 text-gray-500">

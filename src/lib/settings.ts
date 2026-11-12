@@ -31,11 +31,20 @@ export type BackupSettings = {
   retention: number; // number of scheduled backups to keep
 };
 
+/** Admin presets for the Shopify New Discount form; locked groups can't be changed by non-admins. */
+export type ShopifyDiscountFormSettings = {
+  minimum: { type: "none" | "subtotal" | "quantity"; value: number | null; locked: boolean };
+  usageLimit: { enabled: boolean; count: number; locked: boolean };
+  oncePerCustomer: { enabled: boolean; locked: boolean };
+  combinesWith: { productDiscounts: boolean; orderDiscounts: boolean; shippingDiscounts: boolean; locked: boolean };
+};
+
 type SettingsMap = {
   branding: BrandingSettings;
   email: EmailSettings;
   security: SecuritySettings;
   backup: BackupSettings;
+  shopifyDiscountForm: ShopifyDiscountFormSettings;
 };
 
 export const SETTING_DEFAULTS: SettingsMap = {
@@ -49,6 +58,12 @@ export const SETTING_DEFAULTS: SettingsMap = {
   },
   security: { maxFailedLogins: 5, lockoutMinutes: 15, inviteExpiryHours: 72, resetExpiryMinutes: 60 },
   backup: { schedule: "daily", hour: 2, weekday: 0, retention: 14 },
+  shopifyDiscountForm: {
+    minimum: { type: "none", value: null, locked: false },
+    usageLimit: { enabled: true, count: 1, locked: false },
+    oncePerCustomer: { enabled: true, locked: false },
+    combinesWith: { productDiscounts: false, orderDiscounts: false, shippingDiscounts: false, locked: false },
+  },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<SettingsMap[K]> {
