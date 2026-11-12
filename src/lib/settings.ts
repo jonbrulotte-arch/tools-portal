@@ -31,7 +31,7 @@ export type BackupSettings = {
   retention: number; // number of scheduled backups to keep
 };
 
-/** Admin presets for the Shopify New Discount form; locked groups can't be changed by non-admins. */
+/** Admin presets for the Shopify New Discount form; locked groups can't be changed by regular users. */
 export type ShopifyDiscountFormSettings = {
   minimum: { type: "none" | "subtotal" | "quantity"; value: number | null; locked: boolean };
   usageLimit: { enabled: boolean; count: number; locked: boolean };

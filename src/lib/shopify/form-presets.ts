@@ -3,7 +3,7 @@ import type { ShopifyDiscountFormSettings } from "@/lib/settings";
 import type { DiscountConfig } from "@/lib/shopify/discounts";
 
 // Admin presets + locks for the New Discount form (Requirements & limits, Combinations).
-// Locks bind non-admins only; admins can always change these fields.
+// Locks bind regular users; admins and holders of the tool's settings permission can always change these fields.
 
 export const formPresetSchema = z
   .object({

@@ -9,6 +9,8 @@ export type ToolDefinition = {
   usage: string;
   icon: string; // lucide-react icon name, see src/components/tool-icon.tsx
   sortOrder: number;
+  /** What the tool's "manage tool settings" permission lets a role change (shown in the role editor). */
+  settingsDescription?: string;
 };
 
 export const TOOL_REGISTRY: ToolDefinition[] = [
@@ -20,6 +22,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       "Use it to set up promo codes for campaigns, customer service goodwill gestures or influencer partnerships. Pick the store, configure the discount (percentage, fixed amount or free shipping, limits and dates) and submit; every discount created is recorded in the tool's activity log.",
     icon: "TicketPercent",
     sortOrder: 10,
+    settingsDescription: "Open the tool's Form settings tab: preset and lock the New Discount form's requirements, limits and combinations. (Connected stores stay admin-only.)",
   },
 ];
 

@@ -87,7 +87,7 @@ In the tool, open **Stores** → **Add store**. Only admins can add, edit, test 
 
 Use **Test connection** to confirm the store name, currency and scopes.
 
-**Form settings (admins).** The tool's **Form settings** tab sets what the New discount form starts with for *Requirements & limits* (minimum purchase, total usage limit, one use per customer) and *Combinations*, for all stores. Each group can be **locked for non-admins**: regular users see it greyed out with "Set by your admin", and the server rejects a submission that changes a locked value (logged as `shopify.discount_blocked_by_lock`). Admins can still change locked values on each discount. Credentials are encrypted at rest and never sent back to the browser.
+**Form settings.** Shown to Super Admins and to roles with *Shopify Discount Code Generator: manage tool settings* (Admin → Roles & Permissions). The tool's **Form settings** tab sets what the New discount form starts with for *Requirements & limits* (minimum purchase, total usage limit, one use per customer) and *Combinations*, for all stores. Each group can be **locked for regular users**: they see it greyed out with "Set by your admin", and the server rejects a submission that changes a locked value (logged as `shopify.discount_blocked_by_lock`). Admins and settings managers can still change locked values on each discount. Credentials are encrypted at rest and never sent back to the browser.
 
 Creating a discount: **New discount** → pick the store(s) → title and code (single code or N generated unique codes) → percentage, fixed amount or free shipping → applies to all products, specific collections or specific products (single store) → minimum purchase, usage limits, combinations, start/end dates → **Create discount**. The tool calls `discountCodeBasicCreate` / `discountCodeFreeShippingCreate` (plus `discountRedeemCodeBulkAdd` for extra codes) and records the request, response and result in the discount log. Users see their own discounts unless they have *Shopify: view all discounts*.
 
@@ -127,5 +127,5 @@ Checks: `npm run lint`, `npm run typecheck`, `npm test`. Database integration te
 1. Add an entry to `src/lib/tools/registry.ts` (slug, name, description, usage text, icon from `src/components/tool-icon.tsx`). It's synced into the database on startup.
 2. Build pages under `src/app/(app)/tools/<slug>/`, guarded with `requireTool("<slug>")`.
 3. Put APIs under `src/app/api/tools/<slug>/`, guarded with `guard({ tool: "<slug>" })`, and record actions with `logAudit(...)`.
-4. If the tool needs extra capabilities, add them to `TOOL_PERMISSIONS` in `src/lib/permissions.ts`; they appear in the role editor automatically.
+4. Every tool automatically gets a *"<tool>: manage tool settings"* permission (`toolSettingsPermission(slug)` in `src/lib/permissions.ts`); guard the tool's settings pages and APIs with it, and describe what it covers in the registry's `settingsDescription`. Extra capabilities go in `EXTRA_TOOL_PERMISSIONS`; both appear in the role editor automatically.
 5. Add any new Prisma models to `TABLE_ORDER` in `src/lib/backup.ts` (backups fail loudly if one is missing).

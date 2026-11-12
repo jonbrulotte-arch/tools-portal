@@ -4,10 +4,11 @@ import { parseBody } from "@/lib/api";
 import { getSetting, setSetting } from "@/lib/settings";
 import { formPresetSchema } from "@/lib/shopify/form-presets";
 import { logAudit } from "@/lib/audit";
+import { toolSettingsPermission } from "@/lib/permissions";
 
-// Presets + locks for the New Discount form. Admins only.
+// Presets + locks for the New Discount form. Requires the tool's "manage tool settings" permission.
 export async function PATCH(req: Request) {
-  const actor = await guard({ tool: "shopify-discounts", admin: true });
+  const actor = await guard({ tool: "shopify-discounts", permission: toolSettingsPermission("shopify-discounts") });
   if (actor instanceof NextResponse) return actor;
   const body = await parseBody(req, formPresetSchema);
   if (body instanceof NextResponse) return body;

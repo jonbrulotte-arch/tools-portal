@@ -46,7 +46,7 @@ function Section({ title, description, children }: { title: string; description?
 function LockNote({ locked, isAdmin }: { locked: boolean; isAdmin: boolean }) {
   if (!locked) return null;
   return isAdmin ? (
-    <Badge variant="secondary" className="gap-1 whitespace-nowrap"><Lock className="h-3 w-3" /> Locked for non-admins</Badge>
+    <Badge variant="secondary" className="gap-1 whitespace-nowrap"><Lock className="h-3 w-3" /> Locked for regular users</Badge>
   ) : (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 whitespace-nowrap"><Lock className="h-3.5 w-3.5" /> Set by your admin</span>
   );
@@ -121,7 +121,7 @@ function Picker({ storeId, kind, selected, onChange }: { storeId: string; kind: 
 
 export function NewDiscountForm({ stores, canManageStores, presets, isAdmin }: { stores: Store[]; canManageStores: boolean; presets: ShopifyDiscountFormSettings; isAdmin: boolean }) {
   const preset = presetFormValues(presets);
-  // Locked groups are read-only for non-admins (also enforced by the API).
+  // Locked groups are read-only for regular users; admins and tool-settings managers can change them (also enforced by the API).
   const lockMin = presets.minimum.locked && !isAdmin;
   const lockLimit = presets.usageLimit.locked && !isAdmin;
   const lockOnce = presets.oncePerCustomer.locked && !isAdmin;

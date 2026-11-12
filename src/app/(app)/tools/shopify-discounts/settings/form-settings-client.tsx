@@ -18,7 +18,7 @@ function LockSwitch({ checked, onChange, id }: { checked: boolean; onChange: (v:
   return (
     <label htmlFor={id} className={cn("flex items-center gap-2 text-sm font-medium whitespace-nowrap", checked ? "text-blue-700" : "text-gray-500")}>
       <Lock className="h-4 w-4" />
-      Lock for non-admins
+      Lock for regular users
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </label>
   );
@@ -72,7 +72,7 @@ export function FormSettingsClient({ initial }: { initial: ShopifyDiscountFormSe
   return (
     <form onSubmit={save} className="space-y-6">
       <Alert variant="info">
-        These values pre-fill the <strong>New discount</strong> form for everyone. A <strong>locked</strong> setting can&apos;t be changed by regular users (it&apos;s greyed out for them and enforced on the server); admins can still change it on each discount. Applies to all stores.
+        These values pre-fill the <strong>New discount</strong> form for everyone. A <strong>locked</strong> setting can&apos;t be changed by regular users (it&apos;s greyed out for them and enforced on the server). Admins, and roles with this tool&apos;s <em>manage tool settings</em> permission, can still change it on each discount. Applies to all stores.
       </Alert>
 
       <Card>

@@ -8,6 +8,7 @@ import { createDiscountOnStore } from "@/lib/shopify/create";
 import { getSetting } from "@/lib/settings";
 import { GROUP_LABELS, lockViolations } from "@/lib/shopify/form-presets";
 import { logAudit } from "@/lib/audit";
+import { toolSettingsPermission } from "@/lib/permissions";
 
 const schema = z.object({ storeIds: z.array(z.string()).min(1, "Select at least one store").max(20), config: discountConfigSchema });
 
@@ -17,8 +18,8 @@ export async function POST(req: Request) {
   const body = await parseBody(req, schema);
   if (body instanceof NextResponse) return body;
 
-  // Admin-locked form settings bind non-admins; enforced here, not just in the form.
-  if (!actor.isAdmin) {
+  // Locked form settings bind everyone except admins and the tool's settings managers; enforced here, not just in the form.
+  if (!actor.isAdmin && !actor.can(toolSettingsPermission("shopify-discounts"))) {
     const violations = lockViolations(body.config, await getSetting("shopifyDiscountForm"));
     if (violations.length) {
       await logAudit({

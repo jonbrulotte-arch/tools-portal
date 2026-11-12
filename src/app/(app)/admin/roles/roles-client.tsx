@@ -48,7 +48,7 @@ export function RolesClient({ roles, tools, adminPermissions, toolPermissions }:
         <thead>
           <tr>
             <Th>Role</Th>
-            <Th>Admin permissions</Th>
+            <Th>Permissions</Th>
             <Th>Tools</Th>
             <Th>Users</Th>
             <Th className="text-right">Actions</Th>

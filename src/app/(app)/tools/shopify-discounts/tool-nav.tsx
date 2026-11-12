@@ -6,17 +6,13 @@ import { cn } from "@/lib/utils";
 
 const BASE = "/tools/shopify-discounts";
 
-export function ToolNav({ canManageStores }: { canManageStores: boolean }) {
+export function ToolNav({ canManageStores, canManageSettings }: { canManageStores: boolean; canManageSettings: boolean }) {
   const pathname = usePathname();
   const items = [
     { href: BASE, label: "Discount log", exact: true },
     { href: `${BASE}/new`, label: "New discount" },
-    ...(canManageStores
-      ? [
-          { href: `${BASE}/settings`, label: "Form settings" },
-          { href: `${BASE}/stores`, label: "Stores" },
-        ]
-      : []),
+    ...(canManageSettings ? [{ href: `${BASE}/settings`, label: "Form settings" }] : []),
+    ...(canManageStores ? [{ href: `${BASE}/stores`, label: "Stores" }] : []),
   ];
   return (
     <div className="inline-flex h-9 items-center rounded-lg bg-gray-100 p-1 text-gray-500">

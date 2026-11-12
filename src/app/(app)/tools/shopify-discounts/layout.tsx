@@ -2,6 +2,7 @@ import { requireTool } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { ToolIcon } from "@/components/tool-icon";
 import { ToolNav } from "./tool-nav";
+import { toolSettingsPermission } from "@/lib/permissions";
 
 export default async function ShopifyToolLayout({ children }: { children: React.ReactNode }) {
   const user = await requireTool("shopify-discounts");
@@ -18,7 +19,7 @@ export default async function ShopifyToolLayout({ children }: { children: React.
             <p className="text-sm text-gray-500 mt-1">{tool?.description}</p>
           </div>
         </div>
-        <ToolNav canManageStores={user.isAdmin} />
+        <ToolNav canManageStores={user.isAdmin} canManageSettings={user.can(toolSettingsPermission("shopify-discounts"))} />
       </div>
       {children}
     </div>
