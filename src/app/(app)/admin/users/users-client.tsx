@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Lock, Mail, Pencil, Search, Trash2, UserPlus, UserX, UserCheck } from "lucide-react";
+import { KeyRound, Loader2, Lock, Mail, Pencil, Search, Trash2, UserPlus, UserX, UserCheck } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,18 +62,33 @@ export function UsersClient({
     return users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.roleName.toLowerCase().includes(q));
   }, [users, query]);
 
-  async function act(fn: () => Promise<unknown>, success: string) {
-    setNotice(null);
+  // Row action in progress ("<userId>:<action>"), so its button shows a spinner and can't be double-clicked.
+  const [busy, setBusy] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Bring each new message into view, even when the table is scrolled down.
+    if (notice) noticeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [notice]);
+
+  async function act(key: string, fn: () => Promise<unknown>, success: string, pending?: string) {
+    if (busy) return;
+    setBusy(key);
+    setNotice(pending ? { type: "info", text: pending } : null);
     try {
       const res = (await fn()) as { emailSent?: boolean; emailError?: string; inviteUrl?: string } | undefined;
       if (res && res.emailSent === false) {
-        setNotice({ type: "error", text: `Email could not be sent: ${res.emailError}. Share this invite link manually:`, link: res.inviteUrl });
+        setNotice({ type: "error", text: `Email could not be sent: ${res.emailError?.replace(/\.+$/, "")}. Share this invite link manually:`, link: res.inviteUrl });
       } else setNotice({ type: "success", text: success });
       router.refresh();
     } catch (err) {
       setNotice({ type: "error", text: (err as Error).message });
+    } finally {
+      setBusy(null);
     }
   }
+
+  // Icon for a row action: a spinner while that action runs.
+  const icon = (key: string, Icon: React.ElementType) => (busy === key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -89,10 +104,12 @@ export function UsersClient({
 
       {!emailReady && <Alert variant="warning">Email (Microsoft Graph) is not configured, so invitations can&apos;t be emailed. Configure it under Admin → Settings → Email. Until then you&apos;ll get an invite link to share manually.</Alert>}
       {notice && (
+        <div ref={noticeRef} className="scroll-mt-6">
         <Alert variant={notice.type}>
           {notice.text}
           {notice.link && <div className="mt-2 font-mono text-xs break-all select-all">{notice.link}</div>}
         </Alert>
+        </div>
       )}
 
       <div className="relative max-w-sm">
@@ -135,40 +152,41 @@ export function UsersClient({
                   <Pencil className="h-4 w-4" />
                 </RowAction>
                 {u.status === "INVITED" && (
-                  <RowAction title="Resend invite" onClick={() => act(() => apiFetch(`/api/admin/users/${u.id}/resend-invite`, { method: "POST" }), `Invite resent to ${u.email}.`)}>
-                    <Mail className="h-4 w-4" />
+                  <RowAction title="Resend invite" disabled={!!busy} onClick={() => act(`${u.id}:invite`, () => apiFetch(`/api/admin/users/${u.id}/resend-invite`, { method: "POST" }), `Invite resent to ${u.email}.`, `Sending a new invitation to ${u.email}…`)}>
+                    {icon(`${u.id}:invite`, Mail)}
                   </RowAction>
                 )}
                 {u.status === "ACTIVE" && (
-                  <RowAction title="Send password reset email" onClick={() => act(() => apiFetch(`/api/admin/users/${u.id}/reset-password`, { method: "POST" }), `Password reset sent to ${u.email}.`)}>
-                    <KeyRound className="h-4 w-4" />
+                  <RowAction title="Send password reset email" disabled={!!busy} onClick={() => act(`${u.id}:reset`, () => apiFetch(`/api/admin/users/${u.id}/reset-password`, { method: "POST" }), `Password reset sent to ${u.email}.`, `Sending a password reset email to ${u.email}…`)}>
+                    {icon(`${u.id}:reset`, KeyRound)}
                   </RowAction>
                 )}
                 {u.locked && (
-                  <RowAction title="Unlock account" onClick={() => act(() => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { unlock: true } }), `${u.email} unlocked.`)}>
-                    <Lock className="h-4 w-4" />
+                  <RowAction title="Unlock account" disabled={!!busy} onClick={() => act(`${u.id}:unlock`, () => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { unlock: true } }), `${u.email} unlocked.`)}>
+                    {icon(`${u.id}:unlock`, Lock)}
                   </RowAction>
                 )}
                 {u.id !== currentUserId && u.status === "ACTIVE" && (
-                  <RowAction title="Disable user" onClick={() => act(() => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { status: "DISABLED" } }), `${u.email} disabled.`)}>
-                    <UserX className="h-4 w-4" />
+                  <RowAction title="Disable user" disabled={!!busy} onClick={() => act(`${u.id}:disable`, () => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { status: "DISABLED" } }), `${u.email} disabled.`)}>
+                    {icon(`${u.id}:disable`, UserX)}
                   </RowAction>
                 )}
                 {u.status === "DISABLED" && (
-                  <RowAction title="Re-enable user" onClick={() => act(() => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { status: "ACTIVE" } }), `${u.email} enabled.`)}>
-                    <UserCheck className="h-4 w-4" />
+                  <RowAction title="Re-enable user" disabled={!!busy} onClick={() => act(`${u.id}:enable`, () => apiFetch(`/api/admin/users/${u.id}`, { method: "PATCH", json: { status: "ACTIVE" } }), `${u.email} enabled.`)}>
+                    {icon(`${u.id}:enable`, UserCheck)}
                   </RowAction>
                 )}
                 {u.id !== currentUserId && (
                   <RowAction
                     danger
                     title="Delete user"
+                    disabled={!!busy}
                     onClick={() => {
                       if (confirm(`Delete ${u.name} (${u.email})? This cannot be undone. Their history stays in the access log.`))
-                        act(() => apiFetch(`/api/admin/users/${u.id}`, { method: "DELETE" }), `${u.email} deleted.`);
+                        act(`${u.id}:delete`, () => apiFetch(`/api/admin/users/${u.id}`, { method: "DELETE" }), `${u.email} deleted.`);
                     }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    {icon(`${u.id}:delete`, Trash2)}
                   </RowAction>
                 )}
               </Td>
@@ -184,7 +202,7 @@ export function UsersClient({
         tools={tools}
         onDone={(res, email) => {
           setInviteOpen(false);
-          if (res.emailSent === false) setNotice({ type: "error", text: `User created, but the email could not be sent: ${res.emailError}. Share this invite link manually:`, link: res.inviteUrl });
+          if (res.emailSent === false) setNotice({ type: "error", text: `User created, but the email could not be sent: ${res.emailError?.replace(/\.+$/, "")}. Share this invite link manually:`, link: res.inviteUrl });
           else setNotice({ type: "success", text: `Invitation sent to ${email}.` });
           router.refresh();
         }}

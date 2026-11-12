@@ -38,3 +38,36 @@ describe("graph mail", () => {
     await expect(sendMail({ email: "a@b.com" }, "S", "H", settings)).rejects.toThrow("Access denied");
   });
 });
+
+describe("graph mail errors", () => {
+  it("names Microsoft's request ID when Microsoft answered", async () => {
+    const { describeGraphError } = await import("@/lib/graph-mail");
+    const msg = describeGraphError("Microsoft Graph sendMail", { status: 502, statusText: "Bad Gateway", headers: new Headers() }, {
+      error: { code: "UnknownError", message: "", innerError: { "request-id": "7f384814-9de1", date: "2026-11-12T18:17:24" } },
+    });
+    expect(msg).toContain("failed (502 Bad Gateway): UnknownError");
+    expect(msg).toContain("Microsoft request ID: 7f384814-9de1 (2026-11-12T18:17:24 UTC)");
+  });
+
+  it("points at a firewall or proxy when there is no Microsoft request ID", async () => {
+    const { describeGraphError } = await import("@/lib/graph-mail");
+    const msg = describeGraphError("Microsoft Graph sendMail", { status: 504, statusText: "Gateway Timeout", headers: new Headers() }, {});
+    expect(msg).toContain("failed (504 Gateway Timeout): no details returned");
+    expect(msg).toContain("firewall or proxy");
+  });
+
+  it("gives up with a clear message when Graph doesn't answer", async () => {
+    // Graph never answers; the request only ends when its time limit aborts it.
+    const hang = vi.fn((url: string, init: RequestInit) => {
+      if (url.includes("login.microsoftonline.com")) return Promise.resolve(new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 })));
+      return new Promise<Response>((_, reject) => {
+        if (init.signal?.aborted) return reject(init.signal.reason);
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    });
+    vi.stubGlobal("fetch", hang);
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => AbortSignal.abort(new DOMException("timed out", "TimeoutError")));
+    await expect(sendMail({ email: "a@b.com" }, "S", "H", settings)).rejects.toThrow("no response from graph.microsoft.com within 30 seconds");
+    timeout.mockRestore();
+  });
+});
