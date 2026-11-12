@@ -33,7 +33,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         tools={tools.map((t) => ({ href: toolHref(t.slug), label: t.name, icon: t.icon }))}
         adminItems={ADMIN_NAV.filter((i) => user.can(i.permission)).map((i) => i.key)}
       />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      {/* relative: absolutely positioned descendants (e.g. Radix checkbox/switch hidden inputs) stay inside the scroll area instead of stretching the page */}
+      <main className="relative flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }
