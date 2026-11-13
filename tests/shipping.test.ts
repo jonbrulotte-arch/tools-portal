@@ -6,6 +6,7 @@ import { rateCsvRows, rateRows } from "@/lib/shipping/rate-table";
 import { buildUpsRateRequest, parseUpsRateResponse, upsAccountFor, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
 import { distanceMiles, zoneForDistance, estimateZone, fitZoneBands, representativeZips, zipPoint } from "@/lib/shipping/geo";
 import { parseReport } from "@/lib/shipping/report";
+import { isDue, nextRun, zonedParts } from "@/lib/shipping/schedule";
 import { stateForZip } from "@/lib/shipping/zip-state";
 import { billable, upsDimWeight, uspsDimWeight } from "@/lib/shipping/dims";
 import { mapProduct, plainValue } from "@/lib/salsify";
@@ -213,5 +214,21 @@ describe("ZIP to state", () => {
   it("covers our warehouses, quote ZIPs and edge ranges", () => {
     const cases: [string, string | null][] = [["89113", "NV"], ["43125", "OH"], ["10001", "NY"], ["90001", "CA"], ["32202", "FL"], ["77008", "TX"], ["73301", "TX"], ["73111", "OK"], ["98391", "WA"], ["87102", "NM"], ["88510", "TX"], ["20001", "DC"], ["05501", "MA"], ["05401", "VT"], ["99501", "AK"], ["96813", "HI"], ["00601", "PR"], ["abc", null]];
     for (const [zip, st] of cases) expect([zip, stateForZip(zip)]).toEqual([zip, st]);
+  });
+});
+
+describe("nightly schedule", () => {
+  const sched = { enabled: true, hour: 1, timezone: "America/Los_Angeles", keepRuns: 14 };
+  it("fires at the chosen hour in the chosen time zone (server clock is UTC)", () => {
+    expect(isDue(sched, new Date("2026-11-13T09:00:00Z"))).toBe(true); // 1 AM PST
+    expect(isDue(sched, new Date("2026-11-13T08:00:00Z"))).toBe(false);
+    expect(isDue(sched, new Date("2026-07-13T08:00:00Z"))).toBe(true); // 1 AM PDT
+    expect(isDue({ ...sched, enabled: false }, new Date("2026-11-13T09:00:00Z"))).toBe(false);
+    expect(zonedParts(new Date("2026-11-13T09:00:00Z"), "America/New_York").hour).toBe(4);
+  });
+  it("works out the next run", () => {
+    expect(nextRun(sched, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T09:00:00.000Z");
+    expect(nextRun({ ...sched, timezone: "America/New_York", hour: 23 }, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T04:00:00.000Z");
+    expect(nextRun({ ...sched, enabled: false }, new Date())).toBeNull();
   });
 });

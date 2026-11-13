@@ -54,9 +54,12 @@ export type ShippingRatesSettings = {
   mode: "simulated" | "live";
   ups: { clientId: string; encClientSecret: string | null; environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
+  /** Automatic quote run once a day. */
+  schedule: ShippingSchedule;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
+export type ShippingSchedule = { enabled: boolean; hour: number; timezone: string; keepRuns: number };
 /** Salsify property names to read (case-sensitive, as shown in Salsify). */
 export type SalsifySizeFields = { weight: string; length: string; width: string; height: string };
 export type SalsifyFieldMap = SalsifySizeFields & {
@@ -99,6 +102,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
     ],
     upsAccounts: { "796305": "LV", W293F5: "LV", "9X0F56": "GV", "9X0F53": "GV" },
     upsRatingAccounts: {},
+    schedule: { enabled: false, hour: 1, timezone: "America/Los_Angeles", keepRuns: 14 },
     quoteZips: {},
     uspsMaxLb: 20,
     upsMaxLb: 150,
@@ -136,7 +140,11 @@ export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<S
 function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
   const d = SETTING_DEFAULTS.shippingRates.salsify;
   const fields = { ...d.fields, ...s.salsify?.fields };
-  return { ...s, salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } } };
+  return {
+    ...s,
+    schedule: { ...SETTING_DEFAULTS.shippingRates.schedule, ...s.schedule },
+    salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } },
+  };
 }
 
 export async function setSetting<K extends keyof SettingsMap>(key: K, patch: Partial<SettingsMap[K]>): Promise<SettingsMap[K]> {

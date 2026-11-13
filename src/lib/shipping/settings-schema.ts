@@ -10,6 +10,12 @@ export const shippingSettingsSchema = z
       .max(10),
     upsAccounts: z.record(z.string().regex(/^[A-Z0-9]{6}$/i, "UPS accounts are 6 characters"), z.string()),
     upsRatingAccounts: z.record(z.string(), z.string().max(6)).default({}),
+    schedule: z.object({
+      enabled: z.boolean(),
+      hour: z.coerce.number().int().min(0).max(23),
+      timezone: z.enum(["America/Los_Angeles", "America/Phoenix", "America/Denver", "America/Chicago", "America/New_York", "UTC"]),
+      keepRuns: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
+    }),
     quoteZips: z.record(z.string(), z.record(z.string(), z.union([zip, z.literal("")]))),
     uspsMaxLb: z.coerce.number().int().min(1).max(70),
     upsMaxLb: z.coerce.number().int().min(1).max(150),

@@ -54,7 +54,10 @@ export function buildQuoteGrid(s: ShippingRatesSettings, sug: ZipSuggestions): Q
   return out;
 }
 
-export async function startQuoteRun(actor: { id: string; email: string }) {
+type Actor = { id: string | null; email: string };
+
+/** Starts a run in the background; `finished` resolves when it ends. */
+export async function startQuoteRun(actor: Actor) {
   const busy = await prisma.shippingQuoteRun.findFirst({ where: { status: { in: ["PENDING", "RUNNING"] } } });
   if (busy) throw new Error("A quote run is already in progress. Wait for it to finish or cancel it.");
   const s = await getSetting("shippingRates");
@@ -70,11 +73,11 @@ export async function startQuoteRun(actor: { id: string; email: string }) {
       config: { origins: s.origins, quoteZips: quoteZipsFor(s, sug), uspsMaxLb: s.uspsMaxLb, upsMaxLb: s.upsMaxLb, upsApiVersion: s.ups.apiVersion, upsEnvironment: s.ups.environment } as Prisma.InputJsonValue,
     },
   });
-  void executeRun(run.id, s, grid, actor);
-  return run;
+  const finished = executeRun(run.id, s, grid, actor);
+  return { run, finished };
 }
 
-async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRequest[], actor: { id: string; email: string }, start = { done: 0, failed: 0 }) {
+async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRequest[], actor: Actor, start = { done: 0, failed: 0 }) {
   await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "RUNNING", done: start.done, failed: start.failed, error: null, finishedAt: null, startedAt: new Date(), startDone: start.done } });
   let done = start.done, failed = start.failed, i = 0, cancelled = false;
   const gate: ThrottleGate = {};
@@ -117,7 +120,7 @@ async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRe
 }
 
 /** Re-quotes only the failed cells of a finished run (e.g. after the carrier throttled us). */
-export async function retryFailedQuotes(runId: string, actor: { id: string; email: string }) {
+export async function retryFailedQuotes(runId: string, actor: Actor) {
   const busy = await prisma.shippingQuoteRun.findFirst({ where: { status: { in: ["PENDING", "RUNNING"] } } });
   if (busy) throw new Error("A quote run is already in progress. Wait for it to finish or cancel it.");
   const run = await prisma.shippingQuoteRun.findUnique({ where: { id: runId } });
@@ -130,8 +133,8 @@ export async function retryFailedQuotes(runId: string, actor: { id: string; emai
   const grid: QuoteRequest[] = failedRows.map((r) => ({ carrier: r.carrier as QuoteRequest["carrier"], service: r.service as QuoteRequest["service"], origin: r.origin, originZip: originZip[r.origin], destZip: r.destZip, zone: r.zone, weight: Number(r.weight) }));
   await prisma.shippingQuote.deleteMany({ where: { runId, amount: null } });
   await logAudit({ action: "shipping.quote_run_retried", category: "TOOL", actorId: actor.id, actorEmail: actor.email, targetType: "ShippingQuoteRun", targetId: runId, metadata: { retrying: grid.length } });
-  void executeRun(runId, s, grid, actor, { done: Math.max(0, run.done - grid.length), failed: Math.max(0, run.failed - grid.length) });
-  return { retrying: grid.length };
+  const finished = executeRun(runId, s, grid, actor, { done: Math.max(0, run.done - grid.length), failed: Math.max(0, run.failed - grid.length) });
+  return { retrying: grid.length, finished };
 }
 
 /** After a restart, jobs that were running in the old process can't finish. */

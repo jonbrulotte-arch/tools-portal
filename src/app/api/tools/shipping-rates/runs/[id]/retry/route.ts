@@ -10,7 +10,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   try {
-    return NextResponse.json(await retryFailedQuotes(id, actor));
+    const { retrying } = await retryFailedQuotes(id, actor);
+    return NextResponse.json({ retrying });
   } catch (err) {
     return jsonError(errorMessage(err));
   }

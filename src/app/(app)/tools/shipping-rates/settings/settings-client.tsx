@@ -14,7 +14,8 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { SalsifyFieldMap, SalsifySizeFields } from "@/lib/settings";
+import type { SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import { Switch } from "@/components/ui/switch";
 
 type Origin = { code: string; name: string; zip: string };
 type Initial = {
@@ -28,7 +29,18 @@ type Initial = {
   ups: { clientId: string; hasSecret: boolean; environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; hasPassPhrase: boolean; endpoint: string };
   salsify: { orgId: string; fields: SalsifyFieldMap };
+  schedule: ShippingSchedule;
 };
+
+const TIMEZONES = [
+  { value: "America/Los_Angeles", label: "Pacific (Las Vegas)" },
+  { value: "America/Phoenix", label: "Arizona" },
+  { value: "America/Denver", label: "Mountain" },
+  { value: "America/Chicago", label: "Central" },
+  { value: "America/New_York", label: "Eastern (Groveport)" },
+  { value: "UTC", label: "UTC" },
+];
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "AM" : "PM"}`;
 
 const SALSIFY_FALLBACK: { key: keyof SalsifySizeFields; label: string }[] = [
   { key: "weight", label: "Fallback weight (lb)" },
@@ -72,6 +84,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const [ups, setUps] = useState({ ...initial.ups, clientSecret: "" });
   const [endicia, setEndicia] = useState({ ...initial.endicia, passPhrase: "" });
   const [salsify, setSalsify] = useState(initial.salsify);
+  const [schedule, setSchedule] = useState(initial.schedule);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -96,6 +109,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
           ups: { clientId: ups.clientId, clientSecret: ups.clientSecret || undefined, environment: ups.environment, apiVersion: ups.apiVersion },
           endicia: { requesterId: endicia.requesterId, accountId: endicia.accountId, passPhrase: endicia.passPhrase || undefined, endpoint: endicia.endpoint },
           salsify,
+          schedule,
         },
       });
       setUps((u) => ({ ...u, clientSecret: "", hasSecret: u.hasSecret || !!u.clientSecret }));
@@ -140,6 +154,58 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
             <Choice checked={mode === "simulated"} onClick={() => setMode("simulated")} label="Simulated" hint="Placeholder prices, no API calls" />
             <Choice checked={mode === "live"} onClick={() => setMode("live")} label="Live" hint="Real UPS and Endicia (USPS) rates" />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Nightly quote run</CardTitle>
+          <CardDescription>
+            Runs the full quote grid once a day so the rate chart stays current. Only runs in live mode, and skips a night if another run is in progress. Failed quotes are re-quoted once at the end. Older nightly runs are deleted automatically; runs started by hand are kept.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={schedule.enabled} onCheckedChange={(v) => setSchedule({ ...schedule, enabled: v })} />
+            Run quotes automatically every night
+          </label>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label>Start at</Label>
+              <Select value={String(schedule.hour)} onValueChange={(v) => setSchedule({ ...schedule, hour: Number(v) })} disabled={!schedule.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {hourLabel(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={schedule.timezone} onValueChange={(v) => setSchedule({ ...schedule, timezone: v })} disabled={!schedule.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="keep-runs">Keep this many nightly runs</Label>
+              <Input id="keep-runs" type="number" min={1} max={90} value={schedule.keepRuns} onChange={(e) => setSchedule({ ...schedule, keepRuns: Number(e.target.value) })} disabled={!schedule.enabled} />
+            </div>
+          </div>
+          {schedule.enabled && mode !== "live" && <Alert variant="warning">The tool is in simulated mode, so nightly runs will be skipped until you switch Rates source to Live.</Alert>}
         </CardContent>
       </Card>
 

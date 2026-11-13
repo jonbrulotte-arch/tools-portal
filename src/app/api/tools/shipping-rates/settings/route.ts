@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { guard } from "@/lib/rbac";
 import { parseBody } from "@/lib/api";
-import { getSetting, setSetting } from "@/lib/settings";
+import { getSetting, setSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { encrypt } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { shippingSettingsSchema } from "@/lib/shipping/settings-schema";
@@ -13,7 +13,7 @@ export async function PATCH(req: Request) {
   const body = await parseBody(req, shippingSettingsSchema);
   if (body instanceof NextResponse) return body;
   const before = await getSetting("shippingRates");
-  const value = {
+  const value: ShippingRatesSettings = {
     origins: body.origins,
     upsAccounts: Object.fromEntries(Object.entries(body.upsAccounts).map(([k, v]) => [k.toUpperCase(), v])),
     upsRatingAccounts: Object.fromEntries(Object.entries(body.upsRatingAccounts).map(([k, v]) => [k, v.toUpperCase()])),
@@ -34,6 +34,7 @@ export async function PATCH(req: Request) {
       endpoint: body.endicia.endpoint,
     },
     salsify: body.salsify,
+    schedule: body.schedule,
   };
   await setSetting("shippingRates", value);
   const redact = (s: typeof value) => ({

@@ -38,7 +38,7 @@ export function ModeBadge({ mode }: { mode: string }) {
   return mode === "live" ? <Badge variant="success">Live carrier rates</Badge> : <Badge variant="warning">Simulated rates (not real prices)</Badge>;
 }
 
-export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes }: { mode: string; gridSize: number; origins: { code: string; name: string; zip: string }[]; runs: Run[]; selectedId: string | null; quotes: QuoteCell[] }) {
+export function QuotesClient({ mode, nightly, gridSize, origins, runs, selectedId, quotes }: { mode: string; nightly: { next: string | null; timezone: string; zoneLabel: string } | null; gridSize: number; origins: { code: string; name: string; zip: string }[]; runs: Run[]; selectedId: string | null; quotes: QuoteCell[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +136,21 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
             Pulls a rate for every warehouse, zone 2–8 and weight: USPS Ground Advantage up to 20 lb (including the 4, 8, 12 and 15.99 oz tiers) and UPS Ground up to 150 lb, both commercial and residential. That&apos;s {gridSize.toLocaleString()} quotes with the current settings.
             {mode !== "live" && " Settings are in simulated mode until UPS and Endicia credentials are added, so prices are placeholders."}
           </CardDescription>
+          <p className="text-xs text-gray-500 pt-1">
+            {nightly ? (
+              <>
+                Nightly run: on
+                {nightly.next && (
+                  <>
+                    ; next {new Date(nightly.next).toLocaleString("en-US", { timeZone: nightly.timezone, weekday: "short", hour: "numeric", minute: "2-digit" })} {nightly.zoneLabel}
+                  </>
+                )}
+                {mode !== "live" && " (skipped while the tool is in simulated mode)"}.
+              </>
+            ) : (
+              "Nightly run: off (turn it on in Settings)."
+            )}
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           {active ? (
