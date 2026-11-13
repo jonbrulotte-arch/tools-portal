@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { upsTier, uspsTier, uspsQuoteWeights, tierOunces, weightLabel } from "@/lib/shipping/weights";
 import { findCutoff } from "@/lib/shipping/analysis";
+import { rateCsvRows, rateRows } from "@/lib/shipping/rate-table";
 import { buildUpsRateRequest, parseUpsRateResponse, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
 import { distanceMiles, zoneForDistance, estimateZone, fitZoneBands, representativeZips, zipPoint } from "@/lib/shipping/geo";
 import { parseReport } from "@/lib/shipping/report";
@@ -30,6 +31,21 @@ describe("UPS vs USPS cutoff", () => {
   });
   it("ignores sub-pound tiers", () => {
     expect(findCutoff([p(0.5, 5, 4), p(1, 8, 9)])).toBeNull();
+  });
+  it("builds the rate-by-weight table and CSV", () => {
+    const pts = (ups: number[]) => [1, 2].map((weight, i) => ({ weight, usps: [8, 12][i], ups: ups[i] }));
+    const cx = [
+      { origin: "LV", zone: 8, upsService: "GROUND_COM" as const, cutoff: 2, points: pts([9, 11]) },
+      { origin: "LV", zone: 8, upsService: "GROUND_RES" as const, cutoff: null, points: pts([13, 15]) },
+      { origin: "GV", zone: 4, upsService: "GROUND_COM" as const, cutoff: null, points: pts([9, 13]) },
+    ];
+    const rows = rateRows(cx, { origin: "LV", zone: 8 });
+    expect(rows).toEqual([
+      { origin: "LV", zone: 8, weight: 1, usps: 8, upsCom: 9, upsRes: 13, cheaperCom: "USPS", cheaperRes: "USPS" },
+      { origin: "LV", zone: 8, weight: 2, usps: 12, upsCom: 11, upsRes: 15, cheaperCom: "UPS", cheaperRes: "USPS" },
+    ]);
+    expect(rateRows(cx)).toHaveLength(4);
+    expect(rateCsvRows(rows, "live", [{ code: "LV", name: "Las Vegas, NV", zip: "89113" }])[1]).toEqual(["live", "Las Vegas, NV", "89113", 8, "2 lb", 2, "12.00", "11.00", "15.00", "UPS", "USPS"]);
   });
 });
 

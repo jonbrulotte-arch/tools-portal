@@ -115,7 +115,7 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 **Analysis** shows:
 - shipments per zone for each warehouse;
 - per warehouse and zone, the lightest weight from which UPS stays cheaper than USPS, both from the quotes and from our actual costs;
-- a rate-by-weight chart;
+- a rate-by-weight chart with a table under it (USPS, UPS commercial and UPS residential prices per weight and which is cheaper), exportable to CSV for the current warehouse and zone or for all of them;
 - quote-vs-actual accuracy per carrier, warehouse and zone.
 
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
