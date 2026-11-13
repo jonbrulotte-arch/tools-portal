@@ -21,6 +21,10 @@ export const TABLE_ORDER = [
   "Asset",
   "ShopifyStore",
   "ShopifyDiscount",
+  "ShippingReport",
+  "ShippingHistoryAgg",
+  "ShippingQuoteRun",
+  "ShippingQuote",
   "AuditLog",
 ] as const;
 

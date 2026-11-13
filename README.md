@@ -16,6 +16,7 @@ Built on the Sympl design-system starter: Next.js 16 (App Router), React 19, Pri
 | **Backup & Restore** | Admin → Backup & Restore | `admin.backup`. Full JSON backups (gzipped) of every table, on demand or on a schedule; download, upload and restore. |
 | **Settings** | Admin → Settings | `admin.settings`. Branding (site name, accent word, tagline, logo), Microsoft Graph email, sign-in security, backup schedule. |
 | **Shopify Discount Code Generator** | `/tools/shopify-discounts` | Users granted the tool. Create discount codes on connected Shopify stores; every attempt is kept in the tool's discount log. |
+| **Shipping Rates Generator** | `/tools/shipping-rates` | Users granted the tool. Upload the ship cost history report, quote UPS Ground and USPS Ground Advantage from each warehouse for zones 2–8, find the most-used zone and the weight where UPS becomes cheaper, and check quotes against actual costs. |
 
 Effective tool access = tools of the user's role + user "Grant" overrides − user "Deny" overrides. Disabled tools are hidden from everyone.
 
@@ -90,6 +91,34 @@ Use **Test connection** to confirm the store name, currency and scopes.
 **Form settings.** Shown to Super Admins and to roles with *Shopify Discount Code Generator: manage tool settings* (Admin → Roles & Permissions). The tool's **Form settings** tab sets what the New discount form starts with for *Requirements & limits* (minimum purchase, total usage limit, one use per customer) and *Combinations*, for all stores. Each group can be **locked for regular users**: they see it greyed out with "Set by your admin", and the server rejects a submission that changes a locked value (logged as `shopify.discount_blocked_by_lock`). Admins and settings managers can still change locked values on each discount. Credentials are encrypted at rest and never sent back to the browser.
 
 Creating a discount: **New discount** → pick the store(s) → title and code (single code or N generated unique codes) → percentage, fixed amount or free shipping → applies to all products, specific collections or specific products (single store) → minimum purchase, usage limits, combinations, start/end dates → **Create discount**. The tool calls `discountCodeBasicCreate` / `discountCodeFreeShippingCreate` (plus `discountRedeemCodeBulkAdd` for extra codes) and records the request, response and result in the discount log. Users see their own discounts unless they have *Shopify: view all discounts*.
+
+## Shipping Rates Generator
+
+Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is shown to Super Admins and roles with *Shipping Rates Generator: manage tool settings*.
+
+**Cost reports.** Upload the Ship Cost History export (`.xlsx`, up to 80 MB) and it is processed in the background (about 15 s for 70,000 rows).
+- UPS invoice lines are added up per tracking number: freight, fuel, residential, delivery area and so on.
+- The warehouse comes from the UPS shipper account in the tracking number (Settings → UPS accounts) or from the USPS origin ZIP.
+- Only our own **prepaid** shipping is analysed. Third-party and collect packages are left out, though they still help learn which UPS zone each city is in.
+- USPS rows have no zone. The zone is taken from our UPS shipments to the same city where there are any; otherwise it is estimated from the distance, using zone boundaries learned per warehouse from the UPS invoices.
+- Only totals per carrier, service, warehouse, zone and weight are stored. No names or addresses are kept.
+
+**Quotes.** A run requests one rate per warehouse, zone (2–8) and weight. That means USPS Ground Advantage at 4/8/12/15.99 oz and 1–20 lb, plus UPS Ground commercial and residential at 1–150 lb (4,536 quotes with the defaults).
+- Each zone is quoted to one destination ZIP: the one set in Settings, else the city we ship to most in that zone according to the latest report, else a ZIP mid-way through the zone by distance.
+- Runs can be cancelled and exported to CSV.
+
+**Modes.** In **simulated** mode (the default) prices are placeholders, so the cutoff and accuracy figures are only a demonstration. A banner says so everywhere. Switch to **live** once credentials are set:
+- **UPS:** create an app at developer.ups.com with the *Rating* product. Enter its Client ID and secret, and set the shipper accounts. Negotiated rates are used when the account has them.
+- **USPS (Endicia):** enter the Requester ID, Account ID and pass phrase, and the production `EwsLabelService.asmx` endpoint (the default is Endicia's test server).
+- **Save & test** sends one real 2 lb zone-5 quote. Secrets are encrypted at rest and never sent back to the browser.
+
+**Analysis** shows:
+- shipments per zone for each warehouse;
+- per warehouse and zone, the lightest weight from which UPS stays cheaper than USPS, both from the quotes and from our actual costs;
+- a rate-by-weight chart;
+- quote-vs-actual accuracy per carrier, warehouse and zone.
+
+ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
 
 ## Backups
 

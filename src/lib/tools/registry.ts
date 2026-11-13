@@ -24,6 +24,16 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     sortOrder: 10,
     settingsDescription: "Open the tool's Form settings tab: preset and lock the New Discount form's requirements, limits and combinations. (Connected stores stay admin-only.)",
   },
+  {
+    slug: "shipping-rates",
+    name: "Shipping Rates Generator",
+    description: "Compare UPS Ground and USPS Ground Advantage rates from our Las Vegas and Groveport warehouses, and check them against what we actually paid.",
+    usage:
+      "Upload the ship cost history report to see which zones we ship to most and what each shipment really cost. Run a quote to pull current UPS and USPS rates for every zone (2–8) and weight, find the weight where UPS becomes cheaper than USPS, and see how closely the quotes match our actual costs.",
+    icon: "Truck",
+    sortOrder: 20,
+    settingsDescription: "Open the tool's Settings tab: warehouses, UPS account-to-warehouse mapping, quote ZIPs per zone, weight ranges, and the UPS and Endicia API credentials.",
+  },
 ];
 
 export function toolHref(slug: string) {

@@ -39,12 +39,28 @@ export type ShopifyDiscountFormSettings = {
   combinesWith: { productDiscounts: boolean; orderDiscounts: boolean; shippingDiscounts: boolean; locked: boolean };
 };
 
+/** Shipping Rates Generator configuration (secrets encrypted). */
+export type ShippingOrigin = { code: string; name: string; zip: string };
+export type ShippingRatesSettings = {
+  origins: ShippingOrigin[];
+  /** UPS shipper account (6 chars after "1Z" in tracking numbers) → origin code. */
+  upsAccounts: Record<string, string>;
+  /** Destination ZIP to quote per origin and zone; missing entries use an automatic choice. */
+  quoteZips: Record<string, Record<string, string>>;
+  uspsMaxLb: number;
+  upsMaxLb: number;
+  mode: "simulated" | "live";
+  ups: { clientId: string; encClientSecret: string | null; environment: "production" | "test"; apiVersion: string };
+  endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
+};
+
 type SettingsMap = {
   branding: BrandingSettings;
   email: EmailSettings;
   security: SecuritySettings;
   backup: BackupSettings;
   shopifyDiscountForm: ShopifyDiscountFormSettings;
+  shippingRates: ShippingRatesSettings;
 };
 
 export const SETTING_DEFAULTS: SettingsMap = {
@@ -63,6 +79,19 @@ export const SETTING_DEFAULTS: SettingsMap = {
     usageLimit: { enabled: true, count: 1, locked: false },
     oncePerCustomer: { enabled: true, locked: false },
     combinesWith: { productDiscounts: false, orderDiscounts: false, shippingDiscounts: false, locked: false },
+  },
+  shippingRates: {
+    origins: [
+      { code: "LV", name: "Las Vegas, NV", zip: "89113" },
+      { code: "GV", name: "Groveport, OH", zip: "43125" },
+    ],
+    upsAccounts: { "796305": "LV", W293F5: "LV", "9X0F56": "GV", "9X0F53": "GV" },
+    quoteZips: {},
+    uspsMaxLb: 20,
+    upsMaxLb: 150,
+    mode: "simulated",
+    ups: { clientId: "", encClientSecret: null, environment: "production", apiVersion: "v2403" },
+    endicia: { requesterId: "", accountId: "", encPassPhrase: null, endpoint: "https://elstestserver.endicia.com/LabelService/EwsLabelService.asmx" },
   },
 };
 

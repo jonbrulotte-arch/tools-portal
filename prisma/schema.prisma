@@ -30,11 +30,11 @@ model User {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  toolAccess     UserToolAccess[]
-  inviteTokens   InviteToken[]
-  resetTokens    PasswordResetToken[]
-  auditLogs      AuditLog[]
-  discounts      ShopifyDiscount[]
+  toolAccess   UserToolAccess[]
+  inviteTokens InviteToken[]
+  resetTokens  PasswordResetToken[]
+  auditLogs    AuditLog[]
+  discounts    ShopifyDiscount[]
 }
 
 model InviteToken {
@@ -165,20 +165,20 @@ enum ShopifyAuthType {
 }
 
 model ShopifyStore {
-  id                   String          @id @default(cuid())
+  id                   String            @id @default(cuid())
   name                 String
-  shopDomain           String          @unique
+  shopDomain           String            @unique
   authType             ShopifyAuthType
   encAccessToken       String?
   clientId             String?
   encClientSecret      String?
   encCachedToken       String?
   cachedTokenExpiresAt DateTime?
-  apiVersion           String          @default("2026-10")
+  apiVersion           String            @default("2026-10")
   currencyCode         String?
-  enabled              Boolean         @default(true)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  enabled              Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
   discounts            ShopifyDiscount[]
 }
 
@@ -217,4 +217,89 @@ model ShopifyDiscount {
   @@index([createdAt])
   @@index([storeId])
   @@index([createdById])
+}
+
+// ─── Tool: Shipping Rates Generator ──────────────────────────
+// Uploaded ship-cost reports are reduced to aggregates; no names/addresses are stored.
+
+enum ShippingJobStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+  CANCELLED
+}
+
+model ShippingReport {
+  id           String               @id @default(cuid())
+  fileName     String
+  uploadedById String?
+  uploadedBy   String?
+  status       ShippingJobStatus    @default(PENDING)
+  error        String?
+  progress     Int                  @default(0)
+  rowCount     Int                  @default(0)
+  dateFrom     DateTime?
+  dateTo       DateTime?
+  summary      Json?
+  createdAt    DateTime             @default(now())
+  finishedAt   DateTime?
+  aggregates   ShippingHistoryAgg[]
+
+  @@index([createdAt])
+}
+
+model ShippingHistoryAgg {
+  id         String         @id @default(cuid())
+  reportId   String
+  report     ShippingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  carrier    String // UPS | USPS
+  service    String // UPS: GROUND_COM | GROUND_RES ; USPS: GROUND_ADVANTAGE
+  origin     String // origin code, e.g. LV | GV
+  zone       Int
+  zoneSource String // actual | ups-city | distance
+  weight     Decimal        @db.Decimal(8, 2) // billed lb (UPS) / USPS tier in lb (0.25, 0.5, 0.75, 1, 2, ...)
+  count      Int
+  total      Decimal        @db.Decimal(12, 2)
+  minCost    Decimal        @db.Decimal(10, 2)
+  maxCost    Decimal        @db.Decimal(10, 2)
+
+  @@index([reportId, carrier, origin, zone])
+}
+
+model ShippingQuoteRun {
+  id          String            @id @default(cuid())
+  mode        String // live | simulated
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  total       Int               @default(0)
+  done        Int               @default(0)
+  failed      Int               @default(0)
+  error       String?
+  config      Json
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+  quotes      ShippingQuote[]
+
+  @@index([createdAt])
+}
+
+model ShippingQuote {
+  id         String           @id @default(cuid())
+  runId      String
+  run        ShippingQuoteRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  carrier    String
+  service    String
+  origin     String
+  zone       Int
+  destZip    String
+  weight     Decimal          @db.Decimal(8, 2)
+  amount     Decimal?         @db.Decimal(10, 2)
+  listAmount Decimal?         @db.Decimal(10, 2)
+  apiZone    String?
+  error      String?
+  createdAt  DateTime         @default(now())
+
+  @@index([runId, carrier, origin, zone])
 }
