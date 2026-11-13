@@ -293,6 +293,9 @@ model ShippingQuoteRun {
   error       String?
   config      Json
   createdAt   DateTime          @default(now())
+  /// When the current pass began (a "Retry failed" pass starts a new one) and how many quotes were done before it.
+  startedAt   DateTime?
+  startDone   Int               @default(0)
   finishedAt  DateTime?
   quotes      ShippingQuote[]
 

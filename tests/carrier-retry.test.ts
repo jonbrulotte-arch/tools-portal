@@ -28,6 +28,20 @@ describe("carrier retries", () => {
     expect(gate.USPS.interval).toBeLessThan(500);
   });
 
+  it("backs off once per throttling burst and recovers quickly", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(OK)));
+    const gate: ThrottleGate = { USPS: { pauseUntil: 0, interval: 1000, nextAt: 0 } };
+    for (let i = 0; i < 30; i++) await getQuoteWithRetry(settings, "live", q, gate, async () => {});
+    expect(gate.USPS.interval).toBeLessThan(50); // 1 s gap gone after ~30 good calls
+    // four workers turned away at once: one step, not four
+    const busy = () => new Response("busy", { status: 429 });
+    const replies = [busy(), busy(), busy(), busy(), new Response(OK), new Response(OK), new Response(OK), new Response(OK)];
+    vi.stubGlobal("fetch", vi.fn(async () => replies.shift()!));
+    const g2: ThrottleGate = {};
+    await Promise.all(Array.from({ length: 4 }, () => getQuoteWithRetry(settings, "live", q, g2, async () => {})));
+    expect(g2.USPS.interval).toBeLessThanOrEqual(100);
+  });
+
   it("gives up after 8 tries and says so", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("busy", { status: 429 })));
     await expect(getQuoteWithRetry(settings, "live", q, {}, async () => {})).rejects.toThrow("gave up after 8 tries");

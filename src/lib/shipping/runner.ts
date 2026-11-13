@@ -75,7 +75,7 @@ export async function startQuoteRun(actor: { id: string; email: string }) {
 }
 
 async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRequest[], actor: { id: string; email: string }, start = { done: 0, failed: 0 }) {
-  await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "RUNNING", done: start.done, failed: start.failed, error: null, finishedAt: null } });
+  await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "RUNNING", done: start.done, failed: start.failed, error: null, finishedAt: null, startedAt: new Date(), startDone: start.done } });
   let done = start.done, failed = start.failed, i = 0, cancelled = false;
   const gate: ThrottleGate = {};
   const concurrency = s.mode === "live" ? LIVE_CONCURRENCY : 32;

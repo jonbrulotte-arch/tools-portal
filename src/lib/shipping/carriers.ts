@@ -265,16 +265,17 @@ export async function getQuote(s: ShippingRatesSettings, mode: "simulated" | "li
 /**
  * Per-carrier pacing shared by every worker in a batch of quotes.
  * - pauseUntil: after a throttled/failed call, nobody calls that carrier again until this time.
- * - interval: minimum gap between calls. It doubles each time the carrier throttles us (up to 5 s)
- *   and shrinks slowly while calls succeed, so a run settles just under the carrier's limit.
+ * - interval: minimum gap between calls. It grows by half each time the carrier starts throttling us
+ *   (one step per throttling episode, however many calls were turned away in it; up to 1 s) and shrinks
+ *   by 10% with every success, so a run backs off briefly and is soon back to full speed.
  * - nextAt: the next free call slot.
  */
 export type ThrottleGate = Record<string, { pauseUntil: number; interval: number; nextAt: number }>;
 
 const MAX_ATTEMPTS = 8;
 /** Waits before retries 1–7 (about 3 minutes in all) unless the carrier sends Retry-After. */
-const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000, 60_000, 60_000];
-const MAX_INTERVAL_MS = 5_000;
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000, 15_000, 30_000, 60_000, 60_000];
+const MAX_INTERVAL_MS = 1_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** getQuote with pacing and automatic retries on retryable failures (throttling, timeouts, temporary errors). */
@@ -290,7 +291,7 @@ export async function getQuoteWithRetry(s: ShippingRatesSettings, mode: "simulat
     }
     try {
       const r = await getQuote(s, mode, q);
-      g.interval = g.interval > 60 ? g.interval - 20 : 0;
+      g.interval = g.interval > 25 ? Math.round(g.interval * 0.9) : 0;
       return r;
     } catch (err) {
       if (!(err instanceof CarrierError) || !err.retryable || attempt >= MAX_ATTEMPTS) {
@@ -298,8 +299,9 @@ export async function getQuoteWithRetry(s: ShippingRatesSettings, mode: "simulat
         throw err;
       }
       const delay = err.retryAfterMs ?? RETRY_DELAYS_MS[attempt - 1];
+      const newEpisode = Date.now() >= g.pauseUntil; // other workers turned away in the same burst don't compound it
       g.pauseUntil = Math.max(g.pauseUntil, Date.now() + delay);
-      g.interval = Math.min(MAX_INTERVAL_MS, g.interval ? g.interval * 2 : 250);
+      if (newEpisode) g.interval = Math.min(MAX_INTERVAL_MS, g.interval ? Math.round(g.interval * 1.5) : 100);
     }
   }
 }

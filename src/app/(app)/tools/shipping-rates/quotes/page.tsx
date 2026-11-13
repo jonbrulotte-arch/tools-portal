@@ -20,7 +20,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
       mode={settings.mode}
       gridSize={buildQuoteGrid(settings, await latestZipSuggestions()).length}
       origins={settings.origins}
-      runs={runs.map((r) => ({ id: r.id, mode: r.mode, status: r.status, total: r.total, done: r.done, failed: r.failed, error: r.error, startedBy: r.startedBy, createdAt: r.createdAt.toISOString(), finishedAt: r.finishedAt?.toISOString() ?? null }))}
+      runs={runs.map((r) => ({ id: r.id, mode: r.mode, status: r.status, total: r.total, done: r.done, failed: r.failed, error: r.error, startedBy: r.startedBy, createdAt: r.createdAt.toISOString(), startedAt: (r.startedAt ?? r.createdAt).toISOString(), startDone: r.startDone, finishedAt: r.finishedAt?.toISOString() ?? null }))}
       selectedId={selected?.id ?? null}
       quotes={quotes}
     />

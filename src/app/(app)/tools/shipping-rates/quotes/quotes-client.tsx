@@ -15,7 +15,19 @@ import { cn, formatDateTime } from "@/lib/utils";
 import type { QuoteCell } from "@/lib/shipping/analysis";
 import { weightLabel, ZONES } from "@/lib/shipping/weights";
 
-type Run = { id: string; mode: string; status: "PENDING" | "RUNNING" | "READY" | "FAILED" | "CANCELLED"; total: number; done: number; failed: number; error: string | null; startedBy: string | null; createdAt: string; finishedAt: string | null };
+type Run = { id: string; mode: string; status: "PENDING" | "RUNNING" | "READY" | "FAILED" | "CANCELLED"; total: number; done: number; failed: number; error: string | null; startedBy: string | null; createdAt: string; startedAt: string; startDone: number; finishedAt: string | null };
+
+/** "4m 05s", "1h 02m" */
+function duration(ms: number) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(sec).padStart(2, "0")}s`;
+}
+
+/** Elapsed time of a run's current pass (live while it runs). */
+function elapsedMs(r: Run, now: number) {
+  return (r.finishedAt ? Date.parse(r.finishedAt) : now) - Date.parse(r.startedAt);
+}
 const SERVICES = [
   { key: "GROUND_ADVANTAGE", label: "USPS Ground Advantage" },
   { key: "GROUND_COM", label: "UPS Ground — commercial" },
@@ -40,6 +52,22 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
     const t = setInterval(() => router.refresh(), 2000);
     return () => clearInterval(t);
   }, [active, router]);
+
+  // ticking clock for the running timer
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  const pace = useMemo(() => {
+    if (!active) return null;
+    const ms = elapsedMs(active, now);
+    const doneThisPass = active.done - active.startDone;
+    const perMin = ms > 5000 && doneThisPass > 0 ? doneThisPass / (ms / 60000) : null;
+    const left = active.total - active.done;
+    return { ms, perMin, etaMs: perMin ? (left / perMin) * 60000 : null };
+  }, [active, now]);
 
   async function retry(r: Run) {
     if (!confirm(`Re-quote the ${r.failed.toLocaleString()} failed quotes in this run? Quotes that already have a price are kept.`)) return;
@@ -115,6 +143,14 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
               <div className="flex items-center gap-3 text-sm text-gray-700">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                 Running: {active.done.toLocaleString()} of {active.total.toLocaleString()} quotes{active.failed ? `, ${active.failed} failed` : ""}
+                {pace && (
+                  <span className="text-gray-500 tabular-nums">
+                    {" "}
+                    · {duration(pace.ms)} elapsed
+                    {pace.perMin != null && <> · {Math.round(pace.perMin).toLocaleString()}/min</>}
+                    {pace.etaMs != null && <> · about {duration(pace.etaMs)} left</>}
+                  </span>
+                )}
                 <Button size="sm" variant="outline" onClick={() => cancel(active.id)}>
                   <Square className="h-3.5 w-3.5" /> Cancel
                 </Button>
@@ -139,12 +175,13 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
             <Th>Rates</Th>
             <Th>Quotes</Th>
             <Th>Status</Th>
+            <Th>Time</Th>
             <Th>Started by</Th>
             <Th />
           </tr>
         </thead>
         <tbody>
-          {runs.length === 0 && <EmptyRow colSpan={6}>No quote runs yet.</EmptyRow>}
+          {runs.length === 0 && <EmptyRow colSpan={7}>No quote runs yet.</EmptyRow>}
           {runs.map((r) => (
             <Tr key={r.id} className={cn(r.id === selectedId && "bg-blue-50/50")}>
               <Td className="whitespace-nowrap">{formatDateTime(r.createdAt)}</Td>
@@ -159,6 +196,7 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
                 <Badge variant={r.status === "READY" ? "success" : r.status === "FAILED" ? "destructive" : r.status === "RUNNING" ? "warning" : "secondary"}>{r.status.charAt(0) + r.status.slice(1).toLowerCase()}</Badge>
                 {r.error && <p className="text-xs text-red-700 mt-1">{r.error}</p>}
               </Td>
+              <Td className="whitespace-nowrap tabular-nums text-gray-700">{duration(elapsedMs(r, now))}</Td>
               <Td className="text-gray-500 text-xs">{r.startedBy}</Td>
               <Td className="text-right whitespace-nowrap">
                 {r.failed > 0 && !active && r.mode === mode && (
