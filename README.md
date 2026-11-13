@@ -126,6 +126,7 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 
 **Salsify setup.**
 - In the tool's **Settings → Salsify**, set the organization ID (from the Salsify address bar, `app.salsify.com/app/orgs/s-…/`). Also set the field names to read; the defaults are *Shipping Weight (Pounds)*, *Shipping Length/Width/Height (Inches)*, *Item Name* and *Shipping Packaging Type*. The part number is the Salsify product ID.
+- **Fallback fields** (default *UPC Weight (Pounds)* and *UPC Length/Width/Height (Inches)*) are used when a part doesn't have all four shipping values. They're used as a set, so weight and size describe the same package; if the fallback set is incomplete too, only the gaps are filled. Product quote flags parts that used fallback values.
 - Each user adds their **own Salsify API key** in **My Profile → Salsify API key**. The key is encrypted per user (`UserCredential` table), never sent back to the browser, and used only for that user's lookups. Saving, testing, removing and every lookup are recorded in the Access Log.
 
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.

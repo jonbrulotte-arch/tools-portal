@@ -56,7 +56,13 @@ export type ShippingRatesSettings = {
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
 /** Salsify property names to read (case-sensitive, as shown in Salsify). */
-export type SalsifyFieldMap = { name: string; weight: string; length: string; width: string; height: string; packaging: string };
+export type SalsifySizeFields = { weight: string; length: string; width: string; height: string };
+export type SalsifyFieldMap = SalsifySizeFields & {
+  name: string;
+  packaging: string;
+  /** Used when the main weight/size fields are incomplete for a part (e.g. the UPC/retail package values). */
+  fallback: SalsifySizeFields;
+};
 
 type SettingsMap = {
   branding: BrandingSettings;
@@ -105,6 +111,12 @@ export const SETTING_DEFAULTS: SettingsMap = {
         width: "Shipping Width (Inches)",
         height: "Shipping Height (Inches)",
         packaging: "Shipping Packaging Type",
+        fallback: {
+          weight: "UPC Weight (Pounds)",
+          length: "UPC Length (Inches)",
+          width: "UPC Width (Inches)",
+          height: "UPC Height (Inches)",
+        },
       },
     },
   },
@@ -113,7 +125,15 @@ export const SETTING_DEFAULTS: SettingsMap = {
 export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<SettingsMap[K]> {
   const row = await prisma.setting.findUnique({ where: { key } });
   const stored = (row?.value ?? {}) as Partial<SettingsMap[K]>;
-  return { ...SETTING_DEFAULTS[key], ...stored };
+  const merged = { ...SETTING_DEFAULTS[key], ...stored };
+  return (key === "shippingRates" ? withShippingDefaults(merged as ShippingRatesSettings) : merged) as SettingsMap[K];
+}
+
+/** Fills nested settings added after a value was first saved (e.g. the Salsify fallback fields). */
+function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
+  const d = SETTING_DEFAULTS.shippingRates.salsify;
+  const fields = { ...d.fields, ...s.salsify?.fields };
+  return { ...s, salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } } };
 }
 
 export async function setSetting<K extends keyof SettingsMap>(key: K, patch: Partial<SettingsMap[K]>): Promise<SettingsMap[K]> {

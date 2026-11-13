@@ -39,6 +39,7 @@ export const shippingSettingsSchema = z
         width: z.string().min(1, "Width field name is required").max(200),
         height: z.string().min(1, "Height field name is required").max(200),
         packaging: z.string().max(200),
+        fallback: z.object({ weight: z.string().max(200), length: z.string().max(200), width: z.string().max(200), height: z.string().max(200) }),
       }),
     }),
   })

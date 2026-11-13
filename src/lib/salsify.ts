@@ -14,6 +14,10 @@ export type SalsifyProduct = {
   width: number | null;
   height: number | null;
   packaging: string | null;
+  /** Where the weight and size came from: the main (shipping) fields, the fallback (UPC) fields, or a mix. */
+  source: "primary" | "fallback" | "mixed" | null;
+  /** Fields whose value came from the fallback set. */
+  fromFallback: ("weight" | "length" | "width" | "height")[];
 };
 
 async function salsifyFetch(apiKey: string, path: string) {
@@ -53,15 +57,37 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+const SIZE = ["weight", "length", "width", "height"] as const;
+
+/**
+ * Reads weight and size from the main fields. If any is missing, the whole fallback set is used when it's
+ * complete (so weight and box always describe the same package); otherwise each gap is filled from the
+ * fallback where it has a value.
+ */
 export function mapProduct(record: Record<string, unknown>, fields: SalsifyFieldMap, partNumber: string): SalsifyProduct {
+  const read = (names: Record<(typeof SIZE)[number], string>) => Object.fromEntries(SIZE.map((k) => [k, names[k] ? num(record[names[k]]) : null])) as Record<(typeof SIZE)[number], number | null>;
+  const primary = read(fields);
+  const fallback = fields.fallback ? read(fields.fallback) : { weight: null, length: null, width: null, height: null };
+  const complete = (v: Record<string, number | null>) => SIZE.every((k) => v[k] != null);
+  let size = primary;
+  let fromFallback: SalsifyProduct["fromFallback"] = [];
+  if (!complete(primary)) {
+    if (complete(fallback)) {
+      size = fallback;
+      fromFallback = [...SIZE];
+    } else {
+      size = Object.fromEntries(SIZE.map((k) => [k, primary[k] ?? fallback[k]])) as typeof primary;
+      fromFallback = SIZE.filter((k) => primary[k] == null && fallback[k] != null);
+    }
+  }
+  const any = SIZE.some((k) => size[k] != null);
   return {
     partNumber: plainValue(record["salsify:id"]) ?? partNumber,
     name: plainValue(record[fields.name]),
-    weight: num(record[fields.weight]),
-    length: num(record[fields.length]),
-    width: num(record[fields.width]),
-    height: num(record[fields.height]),
-    packaging: plainValue(record[fields.packaging]),
+    ...size,
+    packaging: fromFallback.length === SIZE.length ? null : plainValue(record[fields.packaging]),
+    source: !any ? null : fromFallback.length === 0 ? "primary" : fromFallback.length === SIZE.length ? "fallback" : "mixed",
+    fromFallback,
   };
 }
 

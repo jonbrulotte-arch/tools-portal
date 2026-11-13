@@ -58,7 +58,11 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
       setProduct(r.product);
       const v = (n: number | null) => (n == null ? "" : String(n));
       setForm({ weight: v(r.product.weight), length: v(r.product.length), width: v(r.product.width), height: v(r.product.height) });
-      if (r.missing.length) setMsg({ type: "warning", text: `Salsify has no value for ${r.missing.join(", ")}. Fill it in below before quoting.` });
+      const notes: string[] = [];
+      if (r.product.source === "fallback") notes.push("This part has no complete shipping weight and size in Salsify, so its UPC (fallback) weight and dimensions are used. Check them before quoting.");
+      if (r.product.source === "mixed") notes.push(`Some shipping values are missing in Salsify; ${r.product.fromFallback.join(", ")} came from the fallback (UPC) fields.`);
+      if (r.missing.length) notes.push(`Salsify has no value for ${r.missing.join(", ")}. Fill it in below before quoting.`);
+      if (notes.length) setMsg({ type: "warning", text: notes.join(" ") });
     } catch (err) {
       setProduct(null);
       setMsg({ type: "error", text: (err as Error).message });
@@ -194,6 +198,16 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
               <span className="font-semibold text-gray-900">{product.partNumber}</span>
               {product.name && <span className="text-gray-700"> · {product.name}</span>}
               {product.packaging && <span className="text-gray-500"> · {product.packaging}</span>}
+              {product.source === "fallback" && (
+                <Badge variant="warning" className="ml-2">
+                  UPC weight &amp; size
+                </Badge>
+              )}
+              {product.source === "mixed" && (
+                <Badge variant="warning" className="ml-2">
+                  Partly UPC values
+                </Badge>
+              )}
             </div>
           )}
 

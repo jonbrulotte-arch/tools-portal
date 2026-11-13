@@ -179,8 +179,16 @@ describe("product quotes", () => {
       fields,
       "00028-S",
     );
-    expect(p).toEqual({ partNumber: "00028-S", name: "Tire Inner Liner Scraper", weight: 0.3, length: 9, width: 7, height: 2, packaging: "Bubble Mailer" });
-    expect(mapProduct({}, fields, "X1")).toMatchObject({ partNumber: "X1", weight: null, length: null });
+    expect(p).toEqual({ partNumber: "00028-S", name: "Tire Inner Liner Scraper", weight: 0.3, length: 9, width: 7, height: 2, packaging: "Bubble Mailer", source: "primary", fromFallback: [] });
+    expect(mapProduct({}, fields, "X1")).toMatchObject({ partNumber: "X1", weight: null, length: null, source: null });
+  });
+  it("falls back to the UPC weight and size as a set", () => {
+    const fields = SETTING_DEFAULTS.shippingRates.salsify.fields;
+    const upc = { "UPC Weight (Pounds)": "0.25", "UPC Length (Inches)": "6.75", "UPC Width (Inches)": "3.00", "UPC Height (Inches)": "2.00" };
+    // shipping weight present but no shipping box: the whole UPC set is used so weight and size match
+    expect(mapProduct({ ...upc, "Shipping Weight (Pounds)": "0.30", "Shipping Packaging Type": "Bubble Mailer" }, fields, "A")).toMatchObject({ weight: 0.25, length: 6.75, width: 3, height: 2, source: "fallback", packaging: null });
+    // UPC set incomplete too: fill only the gaps
+    expect(mapProduct({ "Shipping Weight (Pounds)": "0.30", "UPC Length (Inches)": "6.75", "UPC Width (Inches)": "3.00" }, fields, "B")).toMatchObject({ weight: 0.3, length: 6.75, width: 3, height: null, source: "mixed", fromFallback: ["length", "width"] });
     expect(plainValue(["a", "b"])).toBe("a");
   });
 });

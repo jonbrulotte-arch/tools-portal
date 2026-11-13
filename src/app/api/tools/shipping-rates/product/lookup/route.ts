@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const product = await fetchSalsifyProduct(key, salsify.orgId, body.partNumber, salsify.fields);
     await logAudit({ action: "shipping.salsify_lookup", category: "TOOL", actorId: user.id, actorEmail: user.email, success: !!product, metadata: { partNumber: body.partNumber, found: !!product } });
     if (!product) return jsonError(`Part ${body.partNumber} wasn't found in Salsify.`, 404);
-    const missing = (["weight", "length", "width", "height"] as const).filter((k) => product[k] == null).map((k) => salsify.fields[k]);
+    const missing = (["weight", "length", "width", "height"] as const).filter((k) => product[k] == null).map((k) => `${salsify.fields[k]}${salsify.fields.fallback[k] ? ` / ${salsify.fields.fallback[k]}` : ""}`);
     return NextResponse.json({ product, missing });
   } catch (err) {
     await logAudit({ action: "shipping.salsify_lookup", category: "TOOL", actorId: user.id, actorEmail: user.email, success: false, metadata: { partNumber: body.partNumber, error: errorMessage(err) } });

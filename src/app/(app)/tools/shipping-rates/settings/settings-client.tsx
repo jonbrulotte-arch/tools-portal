@@ -13,7 +13,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { SalsifyFieldMap } from "@/lib/settings";
+import type { SalsifyFieldMap, SalsifySizeFields } from "@/lib/settings";
 
 type Origin = { code: string; name: string; zip: string };
 type Initial = {
@@ -28,7 +28,14 @@ type Initial = {
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
 
-const SALSIFY_FIELDS: { key: keyof SalsifyFieldMap; label: string }[] = [
+const SALSIFY_FALLBACK: { key: keyof SalsifySizeFields; label: string }[] = [
+  { key: "weight", label: "Fallback weight (lb)" },
+  { key: "length", label: "Fallback length (in)" },
+  { key: "width", label: "Fallback width (in)" },
+  { key: "height", label: "Fallback height (in)" },
+];
+
+const SALSIFY_FIELDS: { key: Exclude<keyof SalsifyFieldMap, "fallback">; label: string }[] = [
   { key: "weight", label: "Shipping weight (lb)" },
   { key: "length", label: "Shipping length (in)" },
   { key: "width", label: "Shipping width (in)" },
@@ -344,6 +351,20 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
                 <div key={f.key}>
                   <Label htmlFor={`sal-${f.key}`}>{f.label}</Label>
                   <Input id={`sal-${f.key}`} value={salsify.fields[f.key]} onChange={(e) => setSalsify({ ...salsify, fields: { ...salsify.fields, [f.key]: e.target.value } })} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">Fallback when shipping values are missing</p>
+            <p className="text-xs text-gray-500 mb-2">
+              If a part doesn&apos;t have all four shipping values, these are used instead (as a set, so weight and size describe the same package). Leave a box empty to skip it.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {SALSIFY_FALLBACK.map((f) => (
+                <div key={f.key}>
+                  <Label htmlFor={`sal-fb-${f.key}`}>{f.label}</Label>
+                  <Input id={`sal-fb-${f.key}`} value={salsify.fields.fallback[f.key]} onChange={(e) => setSalsify({ ...salsify, fields: { ...salsify.fields, fallback: { ...salsify.fields.fallback, [f.key]: e.target.value } } })} />
                 </div>
               ))}
             </div>
