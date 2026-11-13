@@ -22,15 +22,16 @@ describe("carrier retries", () => {
     const gate: ThrottleGate = {};
     const r = await getQuoteWithRetry(settings, "live", q, gate, async (ms) => waits.push(ms));
     expect(r.amount).toBe(9.87);
-    expect(waits).toHaveLength(2);
     expect(waits[0]).toBeGreaterThan(2500); // honoured Retry-After: 3
-    expect(gate.USPS).toBeGreaterThan(Date.now() - 10_000);
+    // throttling slowed the pace: calls are now spaced out, and success eases it off again
+    expect(gate.USPS.interval).toBeGreaterThan(0);
+    expect(gate.USPS.interval).toBeLessThan(500);
   });
 
-  it("gives up after 5 tries and says so", async () => {
+  it("gives up after 8 tries and says so", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("busy", { status: 429 })));
-    await expect(getQuoteWithRetry(settings, "live", q, {}, async () => {})).rejects.toThrow("gave up after 5 tries");
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(5);
+    await expect(getQuoteWithRetry(settings, "live", q, {}, async () => {})).rejects.toThrow("gave up after 8 tries");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(8);
   });
 
   it("doesn't retry a request the carrier rejected", async () => {

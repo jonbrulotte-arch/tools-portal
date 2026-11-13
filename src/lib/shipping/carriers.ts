@@ -261,28 +261,43 @@ export async function getQuote(s: ShippingRatesSettings, mode: "simulated" | "li
 }
 
 /**
- * Shared per-carrier pause for a batch of quotes. When a carrier throttles one request, every worker
- * waits before its next call to that carrier, so the batch slows down instead of failing.
+ * Per-carrier pacing shared by every worker in a batch of quotes.
+ * - pauseUntil: after a throttled/failed call, nobody calls that carrier again until this time.
+ * - interval: minimum gap between calls. It doubles each time the carrier throttles us (up to 5 s)
+ *   and shrinks slowly while calls succeed, so a run settles just under the carrier's limit.
+ * - nextAt: the next free call slot.
  */
-export type ThrottleGate = Record<string, number>;
+export type ThrottleGate = Record<string, { pauseUntil: number; interval: number; nextAt: number }>;
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 8;
+/** Waits before retries 1–7 (about 3 minutes in all) unless the carrier sends Retry-After. */
+const RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000, 60_000, 60_000];
+const MAX_INTERVAL_MS = 5_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** getQuote with automatic retries (2s, 4s, 8s, 16s, or the carrier's Retry-After) on retryable failures. */
+/** getQuote with pacing and automatic retries on retryable failures (throttling, timeouts, temporary errors). */
 export async function getQuoteWithRetry(s: ShippingRatesSettings, mode: "simulated" | "live", q: QuoteRequest, gate: ThrottleGate = {}, wait: (ms: number) => Promise<unknown> = sleep): Promise<QuoteResult> {
+  const g = (gate[q.carrier] ??= { pauseUntil: 0, interval: 0, nextAt: 0 });
   for (let attempt = 1; ; attempt++) {
-    const pause = (gate[q.carrier] ?? 0) - Date.now();
+    const pause = g.pauseUntil - Date.now();
     if (pause > 0) await wait(pause);
+    if (g.interval > 0) {
+      const slot = Math.max(Date.now(), g.nextAt);
+      g.nextAt = slot + g.interval;
+      if (slot > Date.now()) await wait(slot - Date.now());
+    }
     try {
-      return await getQuote(s, mode, q);
+      const r = await getQuote(s, mode, q);
+      g.interval = g.interval > 60 ? g.interval - 20 : 0;
+      return r;
     } catch (err) {
       if (!(err instanceof CarrierError) || !err.retryable || attempt >= MAX_ATTEMPTS) {
         if (err instanceof CarrierError && err.retryable) throw new Error(`${err.message} (gave up after ${MAX_ATTEMPTS} tries)`);
         throw err;
       }
-      const delay = err.retryAfterMs ?? 2000 * 2 ** (attempt - 1);
-      gate[q.carrier] = Math.max(gate[q.carrier] ?? 0, Date.now() + delay);
+      const delay = err.retryAfterMs ?? RETRY_DELAYS_MS[attempt - 1];
+      g.pauseUntil = Math.max(g.pauseUntil, Date.now() + delay);
+      g.interval = Math.min(MAX_INTERVAL_MS, g.interval ? g.interval * 2 : 250);
     }
   }
 }
