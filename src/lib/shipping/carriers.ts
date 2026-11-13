@@ -31,13 +31,35 @@ export type QuoteResult = {
 
 const TIMEOUT_MS = 20_000;
 
+/** A carrier failure that may succeed if tried again later (throttling, timeouts, temporary server errors). */
+export class CarrierError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+  }
+}
+
+const RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+function retryAfter(res: Response): number | null {
+  const v = res.headers.get("retry-after");
+  if (!v) return null;
+  const secs = Number(v);
+  if (Number.isFinite(secs)) return Math.min(secs * 1000, 120_000);
+  const at = Date.parse(v);
+  return Number.isFinite(at) ? Math.min(Math.max(at - Date.now(), 0), 120_000) : null;
+}
+
 async function timedFetch(url: string, init: RequestInit, what: string) {
   try {
     return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (err) {
     const e = err as Error & { cause?: { code?: string } };
-    if (e.name === "TimeoutError") throw new Error(`${what}: no response from ${new URL(url).host} within ${TIMEOUT_MS / 1000}s`);
-    throw new Error(`${what}: couldn't connect to ${new URL(url).host} (${e.cause?.code ?? e.message})`);
+    if (e.name === "TimeoutError") throw new CarrierError(`${what}: no response from ${new URL(url).host} within ${TIMEOUT_MS / 1000}s`, true);
+    throw new CarrierError(`${what}: couldn't connect to ${new URL(url).host} (${e.cause?.code ?? e.message})`, true);
   }
 }
 
@@ -166,7 +188,9 @@ async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<Quot
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as { response?: { errors?: { message?: string }[] } }).response?.errors?.map((e) => e.message).join("; ");
-    throw new Error(`UPS rate request failed (${res.status}, account ${account})${msg ? `: ${msg}` : ""}`);
+    if (res.status === 401) upsToken = null; // expired or revoked token: get a new one on the retry
+    const text = `UPS rate request failed (${res.status}${res.status === 429 ? " too many requests" : ""}, account ${account})${msg ? `: ${msg}` : ""}`;
+    throw new CarrierError(text, RETRY_STATUSES.has(res.status) || res.status === 401, retryAfter(res));
   }
   return parseUpsRateResponse(body);
 }
@@ -227,13 +251,40 @@ async function endiciaQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<
     "Endicia rate request",
   );
   const xml = await res.text();
-  if (!res.ok && !xml.includes("<Status>")) throw new Error(`Endicia rate request failed (${res.status})`);
+  if (!res.ok && !xml.includes("<Status>")) throw new CarrierError(`Endicia rate request failed (${res.status})`, RETRY_STATUSES.has(res.status), retryAfter(res));
   return parseEndiciaRateResponse(xml);
 }
 
 export async function getQuote(s: ShippingRatesSettings, mode: "simulated" | "live", q: QuoteRequest): Promise<QuoteResult> {
   if (mode === "simulated") return simulatedQuote(q);
   return q.carrier === "UPS" ? upsQuote(s, q) : endiciaQuote(s, q);
+}
+
+/**
+ * Shared per-carrier pause for a batch of quotes. When a carrier throttles one request, every worker
+ * waits before its next call to that carrier, so the batch slows down instead of failing.
+ */
+export type ThrottleGate = Record<string, number>;
+
+const MAX_ATTEMPTS = 5;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** getQuote with automatic retries (2s, 4s, 8s, 16s, or the carrier's Retry-After) on retryable failures. */
+export async function getQuoteWithRetry(s: ShippingRatesSettings, mode: "simulated" | "live", q: QuoteRequest, gate: ThrottleGate = {}, wait: (ms: number) => Promise<unknown> = sleep): Promise<QuoteResult> {
+  for (let attempt = 1; ; attempt++) {
+    const pause = (gate[q.carrier] ?? 0) - Date.now();
+    if (pause > 0) await wait(pause);
+    try {
+      return await getQuote(s, mode, q);
+    } catch (err) {
+      if (!(err instanceof CarrierError) || !err.retryable || attempt >= MAX_ATTEMPTS) {
+        if (err instanceof CarrierError && err.retryable) throw new Error(`${err.message} (gave up after ${MAX_ATTEMPTS} tries)`);
+        throw err;
+      }
+      const delay = err.retryAfterMs ?? 2000 * 2 ** (attempt - 1);
+      gate[q.carrier] = Math.max(gate[q.carrier] ?? 0, Date.now() + delay);
+    }
+  }
 }
 
 const inches = (n: number) => String(Math.round(n * 100) / 100);

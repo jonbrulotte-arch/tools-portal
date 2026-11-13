@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ShippingRatesSettings } from "@/lib/settings";
-import { getQuote, type QuoteRequest } from "@/lib/shipping/carriers";
+import { getQuoteWithRetry, type QuoteRequest, type ThrottleGate } from "@/lib/shipping/carriers";
 import { loadQuotes } from "@/lib/shipping/analysis";
 import { latestZipSuggestions, quoteZipsFor } from "@/lib/shipping/runner";
 import { billable, UPS_MAX_LB, USPS_MAX_LB, type Dims } from "@/lib/shipping/dims";
@@ -50,6 +50,7 @@ export async function quoteProduct(s: ShippingRatesSettings, input: ProductQuote
   );
 
   const rows: ProductQuoteRow[] = new Array(jobs.length);
+  const gate: ThrottleGate = {};
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
@@ -63,7 +64,7 @@ export async function quoteProduct(s: ShippingRatesSettings, input: ProductQuote
       else if (!j.destZip) row.error = "No destination ZIP for this zone";
       else {
         try {
-          const r = await getQuote(s, s.mode, { carrier: j.carrier, service: j.service, origin: j.origin.code, originZip: j.origin.zip, destZip: j.destZip, zone: j.zone, weight: input.weight, dims: input.dims });
+          const r = await getQuoteWithRetry(s, s.mode, { carrier: j.carrier, service: j.service, origin: j.origin.code, originZip: j.origin.zip, destZip: j.destZip, zone: j.zone, weight: input.weight, dims: input.dims }, gate);
           row.live = r.amount;
           if (chartPrice) row.diffPct = Math.round(((r.amount - chartPrice) / chartPrice) * 1000) / 10;
         } catch (err) {

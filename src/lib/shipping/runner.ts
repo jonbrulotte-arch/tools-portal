@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
-import { getQuote, type QuoteRequest } from "@/lib/shipping/carriers";
+import { getQuoteWithRetry, type QuoteRequest, type ThrottleGate } from "@/lib/shipping/carriers";
 import { representativeZips, type ZoneBands } from "@/lib/shipping/geo";
 import type { ReportSummary } from "@/lib/shipping/report";
 import { upsQuoteWeights, uspsQuoteWeights, ZONES } from "@/lib/shipping/weights";
@@ -74,9 +74,10 @@ export async function startQuoteRun(actor: { id: string; email: string }) {
   return run;
 }
 
-async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRequest[], actor: { id: string; email: string }) {
-  await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "RUNNING" } });
-  let done = 0, failed = 0, i = 0, cancelled = false;
+async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRequest[], actor: { id: string; email: string }, start = { done: 0, failed: 0 }) {
+  await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "RUNNING", done: start.done, failed: start.failed, error: null, finishedAt: null } });
+  let done = start.done, failed = start.failed, i = 0, cancelled = false;
+  const gate: ThrottleGate = {};
   const concurrency = s.mode === "live" ? LIVE_CONCURRENCY : 32;
   const pending: Prisma.ShippingQuoteCreateManyInput[] = [];
   const flush = async () => {
@@ -91,7 +92,7 @@ async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRe
       const q = grid[i++];
       const base = { runId, carrier: q.carrier, service: q.service, origin: q.origin, zone: q.zone, destZip: q.destZip, weight: new Prisma.Decimal(q.weight) };
       try {
-        const r = await getQuote(s, s.mode, q);
+        const r = await getQuoteWithRetry(s, s.mode, q, gate);
         pending.push({ ...base, amount: new Prisma.Decimal(r.amount), listAmount: r.listAmount != null ? new Prisma.Decimal(r.listAmount) : null, apiZone: r.apiZone ?? null });
       } catch (err) {
         failed++;
@@ -113,6 +114,24 @@ async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRe
   } catch (err) {
     await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "FAILED", error: err instanceof Error ? err.message : String(err), finishedAt: new Date(), done, failed } });
   }
+}
+
+/** Re-quotes only the failed cells of a finished run (e.g. after the carrier throttled us). */
+export async function retryFailedQuotes(runId: string, actor: { id: string; email: string }) {
+  const busy = await prisma.shippingQuoteRun.findFirst({ where: { status: { in: ["PENDING", "RUNNING"] } } });
+  if (busy) throw new Error("A quote run is already in progress. Wait for it to finish or cancel it.");
+  const run = await prisma.shippingQuoteRun.findUnique({ where: { id: runId } });
+  if (!run) throw new Error("Quote run not found");
+  const s = await getSetting("shippingRates");
+  if (run.mode !== s.mode) throw new Error(`This run used ${run.mode} rates but the tool is now in ${s.mode} mode. Start a new run instead.`);
+  const failedRows = await prisma.shippingQuote.findMany({ where: { runId, amount: null } });
+  if (!failedRows.length) throw new Error("This run has no failed quotes.");
+  const originZip = Object.fromEntries(((run.config as { origins?: { code: string; zip: string }[] })?.origins ?? s.origins).map((o) => [o.code, o.zip]));
+  const grid: QuoteRequest[] = failedRows.map((r) => ({ carrier: r.carrier as QuoteRequest["carrier"], service: r.service as QuoteRequest["service"], origin: r.origin, originZip: originZip[r.origin], destZip: r.destZip, zone: r.zone, weight: Number(r.weight) }));
+  await prisma.shippingQuote.deleteMany({ where: { runId, amount: null } });
+  await logAudit({ action: "shipping.quote_run_retried", category: "TOOL", actorId: actor.id, actorEmail: actor.email, targetType: "ShippingQuoteRun", targetId: runId, metadata: { retrying: grid.length } });
+  void executeRun(runId, s, grid, actor, { done: Math.max(0, run.done - grid.length), failed: Math.max(0, run.failed - grid.length) });
+  return { retrying: grid.length };
 }
 
 /** After a restart, jobs that were running in the old process can't finish. */

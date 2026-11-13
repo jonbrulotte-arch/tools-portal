@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Loader2, Play, Square } from "lucide-react";
+import { Download, Loader2, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
@@ -41,6 +41,18 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
     return () => clearInterval(t);
   }, [active, router]);
 
+  async function retry(r: Run) {
+    if (!confirm(`Re-quote the ${r.failed.toLocaleString()} failed quotes in this run? Quotes that already have a price are kept.`)) return;
+    setError(null);
+    try {
+      await apiFetch(`/api/tools/shipping-rates/runs/${r.id}/retry`, { method: "POST" });
+      router.push(`/tools/shipping-rates/quotes?run=${r.id}`);
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function start() {
     const what = mode === "live" ? `This makes ${gridSize.toLocaleString()} live requests to UPS and Endicia and can take a while.` : `This creates ${gridSize.toLocaleString()} simulated quotes (not real prices).`;
     if (!confirm(`${what} Start the quote run?`)) return;
@@ -73,6 +85,12 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
     const at = new Map(cells.map((q) => [`${q.weight}|${q.zone}`, q]));
     return { weights, at };
   }, [quotes, origin, service]);
+  // failure reasons, most common first (account numbers etc. kept; long messages trimmed)
+  const errorSummary = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const q of quotes) if (q.error) m.set(q.error.slice(0, 220), (m.get(q.error.slice(0, 220)) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [quotes]);
   // UPS returns the list rate as both values when no negotiated rate is available
   const upsPriced = selected?.mode === "live" ? quotes.filter((q) => q.carrier === "UPS" && q.amount != null).length : 0;
   const listOnlyUps = selected?.mode === "live" ? quotes.filter((q) => q.carrier === "UPS" && q.amount != null && q.listAmount != null && q.amount === q.listAmount).length : 0;
@@ -143,6 +161,11 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
               </Td>
               <Td className="text-gray-500 text-xs">{r.startedBy}</Td>
               <Td className="text-right whitespace-nowrap">
+                {r.failed > 0 && !active && r.mode === mode && (
+                  <Button size="sm" variant="ghost" onClick={() => retry(r)} title="Re-quote only the failed quotes">
+                    <RotateCcw className="h-3.5 w-3.5" /> Retry failed
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => router.push(`/tools/shipping-rates/quotes?run=${r.id}`)}>
                   View
                 </Button>
@@ -163,6 +186,18 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
               <ModeBadge mode={selected.mode} />
             </div>
             <CardDescription>Price per shipment by weight (rows) and zone (columns). Each zone is quoted to the destination ZIP shown under it.</CardDescription>
+            {errorSummary.length > 0 && (
+              <Alert variant="error" className="mt-2">
+                <p className="font-medium">Why quotes failed in this run</p>
+                <ul className="mt-1 space-y-0.5">
+                  {errorSummary.map(([msg, n]) => (
+                    <li key={msg}>
+                      <span className="font-medium">{n.toLocaleString("en-US")}×</span> {msg}
+                    </li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
             {listOnlyUps > 0 && (
               <Alert variant="warning" className="mt-2">
                 {listOnlyUps.toLocaleString("en-US")} of {upsPriced.toLocaleString("en-US")} UPS prices in this run are list rates: UPS returned no negotiated (account) rate for them. Check that the UPS accounts in Settings are linked to your UPS developer app and have negotiated rates enabled for API use.
