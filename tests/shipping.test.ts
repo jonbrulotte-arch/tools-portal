@@ -6,6 +6,7 @@ import { rateCsvRows, rateRows } from "@/lib/shipping/rate-table";
 import { buildUpsRateRequest, parseUpsRateResponse, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
 import { distanceMiles, zoneForDistance, estimateZone, fitZoneBands, representativeZips, zipPoint } from "@/lib/shipping/geo";
 import { parseReport } from "@/lib/shipping/report";
+import { stateForZip } from "@/lib/shipping/zip-state";
 import { billable, upsDimWeight, uspsDimWeight } from "@/lib/shipping/dims";
 import { mapProduct, plainValue } from "@/lib/salsify";
 import { SETTING_DEFAULTS } from "@/lib/settings";
@@ -82,7 +83,9 @@ describe("carrier formats", () => {
     const r = buildUpsRateRequest(q, "796305").RateRequest.Shipment;
     expect(r.Service.Code).toBe("03");
     expect(r.ShipmentRatingOptions.NegotiatedRatesIndicator).toBe("Y");
-    expect(r.ShipTo.Address).toMatchObject({ PostalCode: "10001", ResidentialAddressIndicator: "Y" });
+    expect(r.ShipTo.Address).toMatchObject({ PostalCode: "10001", StateProvinceCode: "NY", ResidentialAddressIndicator: "Y" });
+    expect(r.ShipFrom.Address).toEqual({ PostalCode: "89113", StateProvinceCode: "NV", CountryCode: "US" });
+    expect(r.Shipper.Address.StateProvinceCode).toBe("NV");
     expect(r.Package.PackageWeight.Weight).toBe("5");
   });
   it("prefers the negotiated UPS total", () => {
@@ -190,5 +193,12 @@ describe("product quotes", () => {
     // UPC set incomplete too: fill only the gaps
     expect(mapProduct({ "Shipping Weight (Pounds)": "0.30", "UPC Length (Inches)": "6.75", "UPC Width (Inches)": "3.00" }, fields, "B")).toMatchObject({ weight: 0.3, length: 6.75, width: 3, height: null, source: "mixed", fromFallback: ["length", "width"] });
     expect(plainValue(["a", "b"])).toBe("a");
+  });
+});
+
+describe("ZIP to state", () => {
+  it("covers our warehouses, quote ZIPs and edge ranges", () => {
+    const cases: [string, string | null][] = [["89113", "NV"], ["43125", "OH"], ["10001", "NY"], ["90001", "CA"], ["32202", "FL"], ["77008", "TX"], ["73301", "TX"], ["73111", "OK"], ["98391", "WA"], ["87102", "NM"], ["88510", "TX"], ["20001", "DC"], ["05501", "MA"], ["05401", "VT"], ["99501", "AK"], ["96813", "HI"], ["00601", "PR"], ["abc", null]];
+    for (const [zip, st] of cases) expect([zip, stateForZip(zip)]).toEqual([zip, st]);
   });
 });

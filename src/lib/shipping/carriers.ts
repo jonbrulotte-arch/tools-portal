@@ -2,6 +2,7 @@ import { decrypt } from "@/lib/crypto";
 import type { ShippingRatesSettings } from "@/lib/settings";
 import { tierOunces } from "@/lib/shipping/weights";
 import { billable, type Dims } from "@/lib/shipping/dims";
+import { stateForZip } from "@/lib/shipping/zip-state";
 
 // Rate quote providers. "live" calls UPS (Rating API, OAuth) and Endicia (Label Server,
 // CalculatePostageRate). "simulated" returns made-up but plausible prices so the tool can be
@@ -84,14 +85,20 @@ async function upsAccessToken(s: ShippingRatesSettings, account: string): Promis
   return body.access_token;
 }
 
+/** UPS wants a state with the ZIP (required on the ship-from address); it's derived from the ZIP. */
+function upsAddress(zip: string) {
+  const state = stateForZip(zip);
+  return { PostalCode: zip, ...(state ? { StateProvinceCode: state } : {}), CountryCode: "US" };
+}
+
 export function buildUpsRateRequest(q: QuoteRequest, account: string) {
   return {
     RateRequest: {
       Request: { RequestOption: "Rate", TransactionReference: { CustomerContext: "tools-portal shipping rates" } },
       Shipment: {
-        Shipper: { ShipperNumber: account, Address: { PostalCode: q.originZip, CountryCode: "US" } },
-        ShipFrom: { Address: { PostalCode: q.originZip, CountryCode: "US" } },
-        ShipTo: { Address: { PostalCode: q.destZip, CountryCode: "US", ...(q.service === "GROUND_RES" ? { ResidentialAddressIndicator: "Y" } : {}) } },
+        Shipper: { ShipperNumber: account, Address: upsAddress(q.originZip) },
+        ShipFrom: { Address: upsAddress(q.originZip) },
+        ShipTo: { Address: { ...upsAddress(q.destZip), ...(q.service === "GROUND_RES" ? { ResidentialAddressIndicator: "Y" } : {}) } },
         PaymentDetails: { ShipmentCharge: [{ Type: "01", BillShipper: { AccountNumber: account } }] },
         Service: { Code: "03", Description: "Ground" },
         ShipmentRatingOptions: { NegotiatedRatesIndicator: "Y" },
