@@ -18,6 +18,8 @@ import type { SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 type Origin = { code: string; name: string; zip: string };
 type Initial = {
   origins: Origin[];
@@ -151,17 +153,46 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
 
       <Card>
         <CardHeader>
-          <CardTitle>Nightly quote run</CardTitle>
+          <CardTitle>Scheduled quote run</CardTitle>
           <CardDescription>
-            Runs the full quote grid once a day so the rate chart stays current. Only runs in live mode, and skips a night if another run is in progress. Failed quotes are re-quoted once at the end. Older nightly runs are deleted automatically; runs started by hand are kept.
+            Runs the full quote grid automatically so the rate chart stays current. Weekly on Monday morning is usually enough: UPS fuel surcharges change each Monday, and base rates only a few times a year. Only runs in live mode, and is skipped if another run is in progress. Failed quotes are re-quoted once at the end. Older scheduled runs are deleted automatically; runs started by hand are kept.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <label className="flex items-center gap-3 text-sm text-gray-700">
             <Switch checked={schedule.enabled} onCheckedChange={(v) => setSchedule({ ...schedule, enabled: v })} />
-            Run quotes automatically every night
+            Run quotes automatically
           </label>
           <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label>Frequency</Label>
+              <Select value={schedule.frequency} onValueChange={(v) => setSchedule({ ...schedule, frequency: v as ShippingSchedule["frequency"] })} disabled={!schedule.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {schedule.frequency === "weekly" && (
+              <div>
+                <Label>Day</Label>
+                <Select value={String(schedule.weekday)} onValueChange={(v) => setSchedule({ ...schedule, weekday: Number(v) })} disabled={!schedule.enabled}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((d, i) => (
+                      <SelectItem key={d} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Start at</Label>
               <Select value={String(schedule.hour)} onValueChange={(v) => setSchedule({ ...schedule, hour: Number(v) })} disabled={!schedule.enabled}>
@@ -193,11 +224,11 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
               </Select>
             </div>
             <div>
-              <Label htmlFor="keep-runs">Keep this many nightly runs</Label>
+              <Label htmlFor="keep-runs">Keep this many scheduled runs</Label>
               <Input id="keep-runs" type="number" min={1} max={90} value={schedule.keepRuns} onChange={(e) => setSchedule({ ...schedule, keepRuns: Number(e.target.value) })} disabled={!schedule.enabled} />
             </div>
           </div>
-          {schedule.enabled && mode !== "live" && <Alert variant="warning">The tool is in simulated mode, so nightly runs will be skipped until you switch Rates source to Live.</Alert>}
+          {schedule.enabled && mode !== "live" && <Alert variant="warning">The tool is in simulated mode, so scheduled runs will be skipped until you switch Rates source to Live.</Alert>}
         </CardContent>
       </Card>
 

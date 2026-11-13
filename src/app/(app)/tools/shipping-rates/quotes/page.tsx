@@ -19,11 +19,12 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   return (
     <QuotesClient
       mode={settings.mode}
-      nightly={
+      schedule={
         settings.schedule.enabled
           ? {
               next: nextRun(settings.schedule, new Date())?.toISOString() ?? null,
               timezone: settings.schedule.timezone,
+              frequency: settings.schedule.frequency,
               zoneLabel: SCHEDULE_TIMEZONES.find((t) => t.value === settings.schedule.timezone)?.label ?? settings.schedule.timezone,
             }
           : null

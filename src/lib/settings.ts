@@ -55,12 +55,12 @@ export type ShippingRatesSettings = {
   mode: "simulated" | "live";
   ups: { clientId: string; encClientSecret: string | null; environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
-  /** Automatic quote run once a day. */
+  /** Automatic quote run (weekly or daily). */
   schedule: ShippingSchedule;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
-export type ShippingSchedule = { enabled: boolean; hour: number; timezone: string; keepRuns: number };
+export type ShippingSchedule = { enabled: boolean; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string; keepRuns: number };
 /** Salsify property names to read (case-sensitive, as shown in Salsify). */
 export type SalsifySizeFields = { weight: string; length: string; width: string; height: string };
 export type SalsifyFieldMap = SalsifySizeFields & {
@@ -103,7 +103,8 @@ export const SETTING_DEFAULTS: SettingsMap = {
     ],
     upsAccounts: { "796305": "LV", W293F5: "LV", "9X0F56": "GV", "9X0F53": "GV" },
     upsRatingAccounts: {},
-    schedule: { enabled: false, hour: 1, timezone: "America/Los_Angeles", keepRuns: 14 },
+    // weekly, early Monday: UPS fuel surcharges change each Monday; base rates change only a few times a year
+    schedule: { enabled: false, frequency: "weekly", weekday: 1, hour: 1, timezone: "America/Los_Angeles", keepRuns: 8 },
     quoteZips: {},
     uspsMaxLb: 20,
     upsMaxLb: 150,

@@ -5,16 +5,20 @@ import { errorMessage } from "@/lib/api";
 import { retryFailedQuotes, startQuoteRun } from "@/lib/shipping/runner";
 import { zonedParts } from "@/lib/timezone";
 
-// Nightly quote run: checked hourly by the app scheduler (src/lib/scheduler.ts). Runs once a day at the
-// configured hour in the configured time zone (the server clock is UTC), re-quotes failures once, and
-// prunes old nightly runs. Manual runs are never pruned.
+// Scheduled quote run: checked hourly by the app scheduler (src/lib/scheduler.ts). Runs weekly (on the
+// chosen day) or daily, at the configured hour in the configured time zone (the server clock is UTC),
+// re-quotes failures once, and prunes old scheduled runs. Manual runs are never pruned.
 
-export const SCHEDULE_ACTOR = { id: null, email: "nightly schedule" } as const;
+export const SCHEDULE_ACTOR = { id: null, email: "quote schedule" } as const;
+/** Earlier name for scheduled runs, still pruned with them. */
+const OLD_SCHEDULE_ACTORS = ["nightly schedule"];
 
 export { TIMEZONES as SCHEDULE_TIMEZONES, zonedParts } from "@/lib/timezone";
 
 export function isDue(s: ShippingSchedule, at: Date) {
-  return s.enabled && zonedParts(at, s.timezone).hour === s.hour;
+  if (!s.enabled) return false;
+  const p = zonedParts(at, s.timezone);
+  return p.hour === s.hour && (s.frequency === "daily" || p.weekday === s.weekday);
 }
 
 /** The next time the schedule fires (top of the hour), for display. */
@@ -22,9 +26,9 @@ export function nextRun(s: ShippingSchedule, from: Date): Date | null {
   if (!s.enabled) return null;
   const t = new Date(from);
   t.setUTCMinutes(0, 0, 0);
-  for (let i = 0; i < 49; i++) {
+  for (let i = 0; i < 24 * 8 + 1; i++) {
     t.setUTCHours(t.getUTCHours() + 1);
-    if (zonedParts(t, s.timezone).hour === s.hour) return new Date(t);
+    if (isDue(s, t)) return new Date(t);
   }
   return null;
 }
@@ -36,32 +40,32 @@ const audit = (action: string, success: boolean, metadata: Record<string, unknow
 export async function runScheduledQuotes(at = new Date()) {
   const s = await getSetting("shippingRates");
   if (!isDue(s.schedule, at)) return;
-  if (s.mode !== "live") return audit("shipping.nightly_skipped", true, { reason: "The tool is in simulated mode" });
+  if (s.mode !== "live") return audit("shipping.scheduled_run_skipped", true, { reason: "The tool is in simulated mode" });
   try {
     const { run, finished } = await startQuoteRun(SCHEDULE_ACTOR);
-    await audit("shipping.nightly_started", true, { total: run.total }, run.id);
+    await audit("shipping.scheduled_run_started", true, { total: run.total }, run.id);
     await finished;
     const after = await prisma.shippingQuoteRun.findUnique({ where: { id: run.id } });
     if (after?.status === "READY" && after.failed > 0) {
       const retry = await retryFailedQuotes(run.id, SCHEDULE_ACTOR);
       await retry.finished;
     }
-    await pruneNightlyRuns(s.schedule.keepRuns);
+    await pruneScheduledRuns(s.schedule.keepRuns);
   } catch (err) {
-    await audit("shipping.nightly_skipped", false, { reason: errorMessage(err) });
+    await audit("shipping.scheduled_run_skipped", false, { reason: errorMessage(err) });
   }
 }
 
-/** Keeps the newest `keep` nightly runs (their quotes go with them). */
-export async function pruneNightlyRuns(keep: number) {
+/** Keeps the newest `keep` scheduled runs (their quotes go with them). */
+export async function pruneScheduledRuns(keep: number) {
   const old = await prisma.shippingQuoteRun.findMany({
-    where: { startedBy: SCHEDULE_ACTOR.email, status: { notIn: ["PENDING", "RUNNING"] } },
+    where: { startedBy: { in: [SCHEDULE_ACTOR.email, ...OLD_SCHEDULE_ACTORS] }, status: { notIn: ["PENDING", "RUNNING"] } },
     orderBy: { createdAt: "desc" },
     skip: keep,
     select: { id: true },
   });
   if (!old.length) return 0;
   await prisma.shippingQuoteRun.deleteMany({ where: { id: { in: old.map((r) => r.id) } } });
-  await audit("shipping.nightly_pruned", true, { deleted: old.length, kept: keep });
+  await audit("shipping.scheduled_runs_pruned", true, { deleted: old.length, kept: keep });
   return old.length;
 }

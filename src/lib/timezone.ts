@@ -1,4 +1,4 @@
-// Time zones for schedules (backups, nightly quotes). The server clock runs on UTC, so a schedule's
+// Time zones for schedules (backups, scheduled quote runs). The server clock runs on UTC, so a schedule's
 // hour is checked in its own time zone. Safe to import from client components.
 
 export const TIMEZONES = [

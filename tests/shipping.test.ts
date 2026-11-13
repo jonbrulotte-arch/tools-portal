@@ -217,20 +217,24 @@ describe("ZIP to state", () => {
   });
 });
 
-describe("nightly schedule", () => {
-  const sched = { enabled: true, hour: 1, timezone: "America/Los_Angeles", keepRuns: 14 };
-  it("fires at the chosen hour in the chosen time zone (server clock is UTC)", () => {
-    expect(isDue(sched, new Date("2026-11-13T09:00:00Z"))).toBe(true); // 1 AM PST
-    expect(isDue(sched, new Date("2026-11-13T08:00:00Z"))).toBe(false);
-    expect(isDue(sched, new Date("2026-07-13T08:00:00Z"))).toBe(true); // 1 AM PDT
-    expect(isDue({ ...sched, enabled: false }, new Date("2026-11-13T09:00:00Z"))).toBe(false);
+describe("scheduled quote run", () => {
+  const weekly = { enabled: true, frequency: "weekly" as const, weekday: 1, hour: 1, timezone: "America/Los_Angeles", keepRuns: 8 };
+  const daily = { ...weekly, frequency: "daily" as const };
+  it("fires at the chosen hour and day in the chosen time zone (server clock is UTC)", () => {
+    expect(isDue(weekly, new Date("2026-11-16T09:00:00Z"))).toBe(true); // Mon 1 AM PST
+    expect(isDue(weekly, new Date("2026-11-13T09:00:00Z"))).toBe(false); // Fri 1 AM PST
+    expect(isDue(daily, new Date("2026-11-13T09:00:00Z"))).toBe(true);
+    expect(isDue(daily, new Date("2026-11-13T08:00:00Z"))).toBe(false);
+    expect(isDue(weekly, new Date("2026-07-13T08:00:00Z"))).toBe(true); // Mon 1 AM PDT
+    expect(isDue({ ...weekly, enabled: false }, new Date("2026-11-16T09:00:00Z"))).toBe(false);
     expect(zonedParts(new Date("2026-11-13T09:00:00Z"), "America/New_York").hour).toBe(4);
     // 02:00 UTC Sunday is still Saturday evening in Las Vegas (weekly backups use the local weekday)
     expect(zonedParts(new Date("2026-11-15T02:00:00Z"), "America/Los_Angeles")).toMatchObject({ hour: 18, weekday: 6 });
   });
   it("works out the next run", () => {
-    expect(nextRun(sched, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T09:00:00.000Z");
-    expect(nextRun({ ...sched, timezone: "America/New_York", hour: 23 }, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T04:00:00.000Z");
-    expect(nextRun({ ...sched, enabled: false }, new Date())).toBeNull();
+    expect(nextRun(weekly, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-16T09:00:00.000Z"); // Fri → Mon
+    expect(nextRun(daily, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T09:00:00.000Z");
+    expect(nextRun({ ...daily, timezone: "America/New_York", hour: 23 }, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T04:00:00.000Z");
+    expect(nextRun({ ...weekly, enabled: false }, new Date())).toBeNull();
   });
 });

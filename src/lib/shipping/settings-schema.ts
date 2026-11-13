@@ -13,6 +13,8 @@ export const shippingSettingsSchema = z
     upsRatingAccounts: z.record(z.string(), z.string().max(6)).default({}),
     schedule: z.object({
       enabled: z.boolean(),
+      frequency: z.enum(["daily", "weekly"]),
+      weekday: z.coerce.number().int().min(0).max(6),
       hour: z.coerce.number().int().min(0).max(23),
       timezone: z.enum(TIMEZONE_IDS),
       keepRuns: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
