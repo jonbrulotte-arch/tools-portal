@@ -3,6 +3,7 @@ import { getSetting, type ShippingSchedule } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { errorMessage } from "@/lib/api";
 import { retryFailedQuotes, startQuoteRun } from "@/lib/shipping/runner";
+import { zonedParts } from "@/lib/timezone";
 
 // Nightly quote run: checked hourly by the app scheduler (src/lib/scheduler.ts). Runs once a day at the
 // configured hour in the configured time zone (the server clock is UTC), re-quotes failures once, and
@@ -10,20 +11,7 @@ import { retryFailedQuotes, startQuoteRun } from "@/lib/shipping/runner";
 
 export const SCHEDULE_ACTOR = { id: null, email: "nightly schedule" } as const;
 
-export const SCHEDULE_TIMEZONES = [
-  { value: "America/Los_Angeles", label: "Pacific (Las Vegas)" },
-  { value: "America/Phoenix", label: "Arizona" },
-  { value: "America/Denver", label: "Mountain" },
-  { value: "America/Chicago", label: "Central" },
-  { value: "America/New_York", label: "Eastern (Groveport)" },
-  { value: "UTC", label: "UTC" },
-] as const;
-
-/** Hour (0–23) and calendar date at `at` in a time zone. */
-export function zonedParts(at: Date, timeZone: string) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit" }).formatToParts(at).map((p) => [p.type, p.value]));
-  return { hour: Number(parts.hour), date: `${parts.year}-${parts.month}-${parts.day}` };
-}
+export { TIMEZONES as SCHEDULE_TIMEZONES, zonedParts } from "@/lib/timezone";
 
 export function isDue(s: ShippingSchedule, at: Date) {
   return s.enabled && zonedParts(at, s.timezone).hour === s.hour;

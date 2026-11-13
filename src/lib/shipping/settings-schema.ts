@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TIMEZONE_IDS } from "@/lib/timezone";
 
 const zip = z.string().regex(/^\d{5}$/, "ZIP codes must be 5 digits");
 
@@ -13,7 +14,7 @@ export const shippingSettingsSchema = z
     schedule: z.object({
       enabled: z.boolean(),
       hour: z.coerce.number().int().min(0).max(23),
-      timezone: z.enum(["America/Los_Angeles", "America/Phoenix", "America/Denver", "America/Chicago", "America/New_York", "UTC"]),
+      timezone: z.enum(TIMEZONE_IDS),
       keepRuns: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
     }),
     quoteZips: z.record(z.string(), z.record(z.string(), z.union([zip, z.literal("")]))),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { TIMEZONE_IDS } from "@/lib/timezone";
 import { guard } from "@/lib/rbac";
 import { parseBody, jsonError } from "@/lib/api";
 import { getSetting, setSetting } from "@/lib/settings";
@@ -26,6 +27,7 @@ const schemas = {
   backup: z.object({
     schedule: z.enum(["off", "daily", "weekly"]),
     hour: z.coerce.number().int().min(0).max(23),
+    timezone: z.enum(TIMEZONE_IDS),
     weekday: z.coerce.number().int().min(0).max(6),
     retention: z.coerce.number().int().min(1).max(365),
   }),

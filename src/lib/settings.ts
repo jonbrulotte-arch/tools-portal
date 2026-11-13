@@ -26,7 +26,8 @@ export type SecuritySettings = {
 
 export type BackupSettings = {
   schedule: "off" | "daily" | "weekly";
-  hour: number; // 0-23 server time
+  hour: number; // 0-23, in `timezone`
+  timezone: string; // IANA zone the hour is in (the server clock is UTC)
   weekday: number; // 0=Sunday, used when weekly
   retention: number; // number of scheduled backups to keep
 };
@@ -88,7 +89,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
     senderName: "",
   },
   security: { maxFailedLogins: 5, lockoutMinutes: 15, inviteExpiryHours: 72, resetExpiryMinutes: 60 },
-  backup: { schedule: "daily", hour: 2, weekday: 0, retention: 14 },
+  backup: { schedule: "daily", hour: 2, timezone: "America/Los_Angeles", weekday: 0, retention: 14 },
   shopifyDiscountForm: {
     minimum: { type: "none", value: null, locked: false },
     usageLimit: { enabled: true, count: 1, locked: false },

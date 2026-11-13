@@ -225,6 +225,8 @@ describe("nightly schedule", () => {
     expect(isDue(sched, new Date("2026-07-13T08:00:00Z"))).toBe(true); // 1 AM PDT
     expect(isDue({ ...sched, enabled: false }, new Date("2026-11-13T09:00:00Z"))).toBe(false);
     expect(zonedParts(new Date("2026-11-13T09:00:00Z"), "America/New_York").hour).toBe(4);
+    // 02:00 UTC Sunday is still Saturday evening in Las Vegas (weekly backups use the local weekday)
+    expect(zonedParts(new Date("2026-11-15T02:00:00Z"), "America/Los_Angeles")).toMatchObject({ hour: 18, weekday: 6 });
   });
   it("works out the next run", () => {
     expect(nextRun(sched, new Date("2026-11-13T19:30:00Z"))?.toISOString()).toBe("2026-11-14T09:00:00.000Z");

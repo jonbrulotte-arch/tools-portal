@@ -4,6 +4,7 @@ import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { errorMessage } from "@/lib/api";
 import { runScheduledQuotes } from "@/lib/shipping/schedule";
+import { zonedParts } from "@/lib/timezone";
 
 // Runs every hour on the hour and checks the backup and nightly-quote schedules in settings,
 // so schedule changes apply without restarting the server.
@@ -17,9 +18,9 @@ export function startScheduler() {
     void runScheduledQuotes().catch((err) => console.error("[scheduler] nightly quotes:", errorMessage(err)));
     try {
       const s = await getSetting("backup");
-      const now = new Date();
-      if (s.schedule === "off" || now.getHours() !== s.hour) return;
-      if (s.schedule === "weekly" && now.getDay() !== s.weekday) return;
+      const now = zonedParts(new Date(), s.timezone);
+      if (s.schedule === "off" || now.hour !== s.hour) return;
+      if (s.schedule === "weekly" && now.weekday !== s.weekday) return;
       const result = await createBackup("scheduled", null);
       await pruneScheduled(s.retention);
       await logAudit({ action: "backup.scheduled", category: "BACKUP", actorEmail: "system", targetId: result.name, metadata: result, ip: null, userAgent: null });

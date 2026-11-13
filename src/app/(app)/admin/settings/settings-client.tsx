@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BrandMark } from "@/components/brand";
 import { apiFetch } from "@/lib/client-fetch";
+import { hourLabel, TIMEZONES } from "@/lib/timezone";
 import type { BackupSettings, SecuritySettings } from "@/lib/settings";
 
 type Msg = { type: "success" | "error"; text: string } | null;
@@ -284,11 +285,20 @@ function BackupTab({ initial }: { initial: BackupSettings }) {
               </Select>
             </div>
             <div>
-              <Label>Time (server time)</Label>
+              <Label>Time</Label>
               <Select value={String(form.hour)} onValueChange={(v) => setForm({ ...form, hour: Number(v) })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 24 }, (_, h) => <SelectItem key={h} value={String(h)}>{String(h).padStart(2, "0")}:00</SelectItem>)}
+                  {Array.from({ length: 24 }, (_, h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={form.timezone} onValueChange={(v) => setForm({ ...form, timezone: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

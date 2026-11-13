@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
 import type { SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
+import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
 type Origin = { code: string; name: string; zip: string };
 type Initial = {
@@ -32,15 +33,6 @@ type Initial = {
   schedule: ShippingSchedule;
 };
 
-const TIMEZONES = [
-  { value: "America/Los_Angeles", label: "Pacific (Las Vegas)" },
-  { value: "America/Phoenix", label: "Arizona" },
-  { value: "America/Denver", label: "Mountain" },
-  { value: "America/Chicago", label: "Central" },
-  { value: "America/New_York", label: "Eastern (Groveport)" },
-  { value: "UTC", label: "UTC" },
-];
-const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "AM" : "PM"}`;
 
 const SALSIFY_FALLBACK: { key: keyof SalsifySizeFields; label: string }[] = [
   { key: "weight", label: "Fallback weight (lb)" },
