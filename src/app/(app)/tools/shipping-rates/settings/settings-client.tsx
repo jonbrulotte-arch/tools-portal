@@ -13,6 +13,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
+import type { SalsifyFieldMap } from "@/lib/settings";
 
 type Origin = { code: string; name: string; zip: string };
 type Initial = {
@@ -24,7 +25,17 @@ type Initial = {
   mode: "simulated" | "live";
   ups: { clientId: string; hasSecret: boolean; environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; hasPassPhrase: boolean; endpoint: string };
+  salsify: { orgId: string; fields: SalsifyFieldMap };
 };
+
+const SALSIFY_FIELDS: { key: keyof SalsifyFieldMap; label: string }[] = [
+  { key: "weight", label: "Shipping weight (lb)" },
+  { key: "length", label: "Shipping length (in)" },
+  { key: "width", label: "Shipping width (in)" },
+  { key: "height", label: "Shipping height (in)" },
+  { key: "name", label: "Product name" },
+  { key: "packaging", label: "Packaging type" },
+];
 
 function Choice({ checked, onClick, label, hint }: { checked: boolean; onClick: () => void; label: string; hint: string }) {
   return (
@@ -45,6 +56,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const [mode, setMode] = useState(initial.mode);
   const [ups, setUps] = useState({ ...initial.ups, clientSecret: "" });
   const [endicia, setEndicia] = useState({ ...initial.endicia, passPhrase: "" });
+  const [salsify, setSalsify] = useState(initial.salsify);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -67,6 +79,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
           mode,
           ups: { clientId: ups.clientId, clientSecret: ups.clientSecret || undefined, environment: ups.environment, apiVersion: ups.apiVersion },
           endicia: { requesterId: endicia.requesterId, accountId: endicia.accountId, passPhrase: endicia.passPhrase || undefined, endpoint: endicia.endpoint },
+          salsify,
         },
       });
       setUps((u) => ({ ...u, clientSecret: "", hasSecret: u.hasSecret || !!u.clientSecret }));
@@ -308,6 +321,33 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
             </Button>
           </div>
           <TestResult carrier="USPS" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Salsify (product lookup)</CardTitle>
+          <CardDescription>
+            Used by Product quote to read a part&apos;s shipping weight and dimensions. Each user enters their own Salsify API key in My Profile; only the organization and field names are set here. The organization ID is in the Salsify address bar: app.salsify.com/app/orgs/<span className="font-mono">s-…</span>/
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="max-w-md">
+            <Label htmlFor="sal-org">Organization ID</Label>
+            <Input id="sal-org" value={salsify.orgId} onChange={(e) => setSalsify({ ...salsify, orgId: e.target.value.trim() })} placeholder="s-00000000-0000-0000-0000-000000000000" className="font-mono text-xs" autoComplete="off" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">Salsify field names</p>
+            <p className="text-xs text-gray-500 mb-2">Exactly as they appear in Salsify (case-sensitive). The part number is the Salsify product ID.</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SALSIFY_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <Label htmlFor={`sal-${f.key}`}>{f.label}</Label>
+                  <Input id={`sal-${f.key}`} value={salsify.fields[f.key]} onChange={(e) => setSalsify({ ...salsify, fields: { ...salsify.fields, [f.key]: e.target.value } })} />
+                </div>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

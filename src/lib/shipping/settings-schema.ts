@@ -30,6 +30,17 @@ export const shippingSettingsSchema = z
         .url()
         .refine((u) => u.startsWith("https://"), "Must be an https:// URL"),
     }),
+    salsify: z.object({
+      orgId: z.string().max(100),
+      fields: z.object({
+        name: z.string().max(200),
+        weight: z.string().min(1, "Weight field name is required").max(200),
+        length: z.string().min(1, "Length field name is required").max(200),
+        width: z.string().min(1, "Width field name is required").max(200),
+        height: z.string().min(1, "Height field name is required").max(200),
+        packaging: z.string().max(200),
+      }),
+    }),
   })
   .superRefine((s, ctx) => {
     const codes = new Set(s.origins.map((o) => o.code));

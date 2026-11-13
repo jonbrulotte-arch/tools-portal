@@ -10,6 +10,7 @@ export function ToolNav({ canManageSettings }: { canManageSettings: boolean }) {
   const pathname = usePathname();
   const items = [
     { href: BASE, label: "Analysis", exact: true },
+    { href: `${BASE}/product`, label: "Product quote" },
     { href: `${BASE}/reports`, label: "Cost reports" },
     { href: `${BASE}/quotes`, label: "Quotes" },
     ...(canManageSettings ? [{ href: `${BASE}/settings`, label: "Settings" }] : []),

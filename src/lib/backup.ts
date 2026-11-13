@@ -15,6 +15,7 @@ export const TABLE_ORDER = [
   "RoleToolAccess",
   "User",
   "UserToolAccess",
+  "UserCredential",
   "InviteToken",
   "PasswordResetToken",
   "Setting",

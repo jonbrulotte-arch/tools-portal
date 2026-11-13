@@ -1,6 +1,7 @@
 import { decrypt } from "@/lib/crypto";
 import type { ShippingRatesSettings } from "@/lib/settings";
 import { tierOunces } from "@/lib/shipping/weights";
+import { billable, type Dims } from "@/lib/shipping/dims";
 
 // Rate quote providers. "live" calls UPS (Rating API, OAuth) and Endicia (Label Server,
 // CalculatePostageRate). "simulated" returns made-up but plausible prices so the tool can be
@@ -13,7 +14,9 @@ export type QuoteRequest = {
   originZip: string;
   destZip: string;
   zone: number;
-  weight: number; // tier in lb (USPS sub-pound tiers 0.25/0.5/0.75/0.99)
+  weight: number; // lb: a chart tier (USPS sub-pound tiers 0.25/0.5/0.75/0.99) or a product's actual weight
+  /** Package size in inches (product quotes); carriers then apply dimensional weight. */
+  dims?: Dims | null;
 };
 export type QuoteResult = { amount: number; listAmount?: number; apiZone?: string };
 
@@ -32,7 +35,9 @@ async function timedFetch(url: string, init: RequestInit, what: string) {
 // ─── Simulated ──────────────────────────────────────────────────────────────
 
 /** Deterministic placeholder prices (NOT real carrier rates). */
-export function simulatedQuote(q: QuoteRequest): QuoteResult {
+export function simulatedQuote(req: QuoteRequest): QuoteResult {
+  const b = billable(req.weight, req.dims ?? null);
+  const q = req.dims ? { ...req, weight: req.carrier === "UPS" ? b.ups : b.usps } : req;
   const z = q.zone - 2; // 0..6
   if (q.carrier === "USPS") {
     const amount = q.weight < 1 ? 4.6 + q.weight * 3.2 + z * 0.32 : 7.2 + z * 0.9 + (q.weight - 1) * (0.55 + z * 0.22);
@@ -94,6 +99,9 @@ export function buildUpsRateRequest(q: QuoteRequest, account: string) {
         Package: {
           PackagingType: { Code: "02", Description: "Package" },
           PackageWeight: { UnitOfMeasurement: { Code: "LBS", Description: "Pounds" }, Weight: String(q.weight) },
+          ...(q.dims
+            ? { Dimensions: { UnitOfMeasurement: { Code: "IN", Description: "Inches" }, Length: inches(q.dims.length), Width: inches(q.dims.width), Height: inches(q.dims.height) } }
+            : {}),
         },
       },
     },
@@ -153,7 +161,12 @@ export function buildEndiciaRateRequest(s: ShippingRatesSettings, passPhrase: st
         </CertifiedIntermediary>
         <MailClass>GroundAdvantage</MailClass>
         <WeightOz>${tierOunces(q.weight)}</WeightOz>
-        <MailpieceShape>Parcel</MailpieceShape>
+        <MailpieceShape>Parcel</MailpieceShape>${
+          q.dims
+            ? `
+        <MailpieceDimensions><Length>${inches(q.dims.length)}</Length><Width>${inches(q.dims.width)}</Width><Height>${inches(q.dims.height)}</Height></MailpieceDimensions>`
+            : ""
+        }
         <FromPostalCode>${xmlEscape(q.originZip)}</FromPostalCode>
         <ToPostalCode>${xmlEscape(q.destZip)}</ToPostalCode>
       </PostageRateRequest>
@@ -195,6 +208,8 @@ export async function getQuote(s: ShippingRatesSettings, mode: "simulated" | "li
   if (mode === "simulated") return simulatedQuote(q);
   return q.carrier === "UPS" ? upsQuote(s, q) : endiciaQuote(s, q);
 }
+
+const inches = (n: number) => String(Math.round(n * 100) / 100);
 
 function round(n: number) {
   return Math.round(n * 100) / 100;

@@ -118,6 +118,16 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - a rate-by-weight chart with a table under it (USPS, UPS commercial and UPS residential prices per weight and which is cheaper), exportable to CSV for the current warehouse and zone or for all of them;
 - quote-vs-actual accuracy per carrier, warehouse and zone.
 
+**Product quote** quotes one part at its real weight and box size.
+- Enter a part number and **Look up in Salsify**. The part's shipping weight and length × width × height are read from Salsify, and you can adjust them or type them by hand.
+- **Get quotes** asks UPS Ground (commercial and residential) and USPS Ground Advantage for a price from each chosen warehouse to every zone, using the same destination ZIPs as the rate chart. The package size is sent, so the carriers apply dimensional weight.
+- Each price is shown next to the rate chart (a quote run) at the part's billable weight, with the difference and the cheaper carrier for business and home addresses. Results can be exported to CSV.
+- Billable weight: UPS L×W×H ÷ 139; USPS L×W×H ÷ 166 only for parcels over 1 cubic foot.
+
+**Salsify setup.**
+- In the tool's **Settings → Salsify**, set the organization ID (from the Salsify address bar, `app.salsify.com/app/orgs/s-…/`). Also set the field names to read; the defaults are *Shipping Weight (Pounds)*, *Shipping Length/Width/Height (Inches)*, *Item Name* and *Shipping Packaging Type*. The part number is the Salsify product ID.
+- Each user adds their **own Salsify API key** in **My Profile → Salsify API key**. The key is encrypted per user (`UserCredential` table), never sent back to the browser, and used only for that user's lookups. Saving, testing, removing and every lookup are recorded in the Access Log.
+
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
 
 ## Backups

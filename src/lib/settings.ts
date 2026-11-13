@@ -52,7 +52,11 @@ export type ShippingRatesSettings = {
   mode: "simulated" | "live";
   ups: { clientId: string; encClientSecret: string | null; environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
+  /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
+  salsify: { orgId: string; fields: SalsifyFieldMap };
 };
+/** Salsify property names to read (case-sensitive, as shown in Salsify). */
+export type SalsifyFieldMap = { name: string; weight: string; length: string; width: string; height: string; packaging: string };
 
 type SettingsMap = {
   branding: BrandingSettings;
@@ -92,6 +96,17 @@ export const SETTING_DEFAULTS: SettingsMap = {
     mode: "simulated",
     ups: { clientId: "", encClientSecret: null, environment: "production", apiVersion: "v2403" },
     endicia: { requesterId: "", accountId: "", encPassPhrase: null, endpoint: "https://elstestserver.endicia.com/LabelService/EwsLabelService.asmx" },
+    salsify: {
+      orgId: "",
+      fields: {
+        name: "Item Name",
+        weight: "Shipping Weight (Pounds)",
+        length: "Shipping Length (Inches)",
+        width: "Shipping Width (Inches)",
+        height: "Shipping Height (Inches)",
+        packaging: "Shipping Packaging Type",
+      },
+    },
   },
 };
 

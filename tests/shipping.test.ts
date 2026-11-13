@@ -6,6 +6,8 @@ import { rateCsvRows, rateRows } from "@/lib/shipping/rate-table";
 import { buildUpsRateRequest, parseUpsRateResponse, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
 import { distanceMiles, zoneForDistance, estimateZone, fitZoneBands, representativeZips, zipPoint } from "@/lib/shipping/geo";
 import { parseReport } from "@/lib/shipping/report";
+import { billable, upsDimWeight, uspsDimWeight } from "@/lib/shipping/dims";
+import { mapProduct, plainValue } from "@/lib/salsify";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 
 describe("weight tiers", () => {
@@ -145,5 +147,40 @@ describe("cost report processing", () => {
     const wb = new ExcelJS.Workbook();
     wb.addWorksheet("x").addRow(["name", "amount"]);
     await expect(parseReport(Buffer.from(await wb.xlsx.writeBuffer()), SETTING_DEFAULTS.shippingRates)).rejects.toThrow("missing column");
+  });
+});
+
+describe("product quotes", () => {
+  it("works out billable weight from package size", () => {
+    // 9 × 7 × 2 bubble mailer, 0.3 lb (Salsify 00028-S): UPS 126 in³ ÷ 139 → 1 lb; USPS under 1 cu ft → actual weight
+    expect(billable(0.3, { length: 9, width: 7, height: 2 })).toMatchObject({ ups: 1, usps: 0.3, upsTier: 1, uspsTier: 0.5, uspsDim: null });
+    // 18 × 14 × 12 box, 6 lb: UPS 3024 ÷ 139 → 22 lb; USPS 3024 ÷ 166 → 19 lb
+    expect(billable(6, { length: 18, width: 14, height: 12 })).toMatchObject({ ups: 22, usps: 19, upsDim: 22, uspsDim: 19 });
+    expect(upsDimWeight(null)).toBeNull();
+    expect(uspsDimWeight({ length: 12, width: 12, height: 12 })).toBeNull();
+    expect(billable(2.2, null)).toMatchObject({ ups: 3, usps: 2.2, uspsTier: 3 });
+  });
+  it("sends the package size to UPS and Endicia", () => {
+    const q = { carrier: "UPS" as const, service: "GROUND_COM" as const, origin: "LV", originZip: "89113", destZip: "10001", zone: 8, weight: 0.3, dims: { length: 9, width: 7, height: 2 } };
+    expect(buildUpsRateRequest(q, "796305").RateRequest.Shipment.Package).toMatchObject({ PackageWeight: { Weight: "0.3" }, Dimensions: { UnitOfMeasurement: { Code: "IN" }, Length: "9", Width: "7", Height: "2" } });
+    const xml = buildEndiciaRateRequest(SETTING_DEFAULTS.shippingRates, "x", { ...q, carrier: "USPS", service: "GROUND_ADVANTAGE" });
+    expect(xml).toContain("<WeightOz>4.8</WeightOz>");
+    expect(xml).toContain("<MailpieceDimensions><Length>9</Length><Width>7</Width><Height>2</Height></MailpieceDimensions>");
+    expect(buildEndiciaRateRequest(SETTING_DEFAULTS.shippingRates, "x", { ...q, carrier: "USPS", service: "GROUND_ADVANTAGE", dims: null })).not.toContain("MailpieceDimensions");
+  });
+  it("simulated quotes charge dimensional weight", () => {
+    const q = { carrier: "UPS" as const, service: "GROUND_COM" as const, origin: "LV", originZip: "89113", destZip: "10001", zone: 5, weight: 6 };
+    expect(simulatedQuote({ ...q, dims: { length: 18, width: 14, height: 12 } }).amount).toBe(simulatedQuote({ ...q, weight: 22 }).amount);
+  });
+  it("reads weight and size from a Salsify product", () => {
+    const fields = SETTING_DEFAULTS.shippingRates.salsify.fields;
+    const p = mapProduct(
+      { "salsify:id": "00028-S", "Item Name": { "en-US": "Tire Inner Liner Scraper" }, "Shipping Weight (Pounds)": "0.30", "Shipping Length (Inches)": "9.00", "Shipping Width (Inches)": "7.00", "Shipping Height (Inches)": "2.00", "Shipping Packaging Type": "Bubble Mailer" },
+      fields,
+      "00028-S",
+    );
+    expect(p).toEqual({ partNumber: "00028-S", name: "Tire Inner Liner Scraper", weight: 0.3, length: 9, width: 7, height: 2, packaging: "Bubble Mailer" });
+    expect(mapProduct({}, fields, "X1")).toMatchObject({ partNumber: "X1", weight: null, length: null });
+    expect(plainValue(["a", "b"])).toBe("a");
   });
 });

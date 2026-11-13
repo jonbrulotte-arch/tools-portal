@@ -35,6 +35,20 @@ model User {
   resetTokens  PasswordResetToken[]
   auditLogs    AuditLog[]
   discounts    ShopifyDiscount[]
+  credentials  UserCredential[]
+}
+
+/// A user's own API credential for an outside service (e.g. Salsify), encrypted with APP_ENCRYPTION_KEY.
+model UserCredential {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  encSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
 }
 
 model InviteToken {

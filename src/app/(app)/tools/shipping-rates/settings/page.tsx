@@ -29,6 +29,7 @@ export default async function ShippingSettingsPage() {
         mode: s.mode,
         ups: { clientId: s.ups.clientId, hasSecret: !!s.ups.encClientSecret, environment: s.ups.environment, apiVersion: s.ups.apiVersion },
         endicia: { requesterId: s.endicia.requesterId, accountId: s.endicia.accountId, hasPassPhrase: !!s.endicia.encPassPhrase, endpoint: s.endicia.endpoint },
+        salsify: s.salsify,
       }}
     />
   );

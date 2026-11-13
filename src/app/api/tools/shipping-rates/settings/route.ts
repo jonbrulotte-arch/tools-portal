@@ -32,6 +32,7 @@ export async function PATCH(req: Request) {
       encPassPhrase: body.endicia.clearPassPhrase ? null : body.endicia.passPhrase ? encrypt(body.endicia.passPhrase) : before.endicia.encPassPhrase,
       endpoint: body.endicia.endpoint,
     },
+    salsify: body.salsify,
   };
   await setSetting("shippingRates", value);
   const redact = (s: typeof value) => ({
