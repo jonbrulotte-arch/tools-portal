@@ -35,6 +35,6 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     await logAudit({ action: "shipping.api_tested", category: "TOOL", actorId: actor.id, actorEmail: actor.email, success: false, metadata: { carrier: body.carrier, error: errorMessage(err) } });
-    return NextResponse.json({ ok: false, message: errorMessage(err) }, { status: 502 });
+    return NextResponse.json({ ok: false, error: errorMessage(err), message: errorMessage(err) }, { status: 502 });
   }
 }
