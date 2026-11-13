@@ -65,7 +65,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const [endicia, setEndicia] = useState({ ...initial.endicia, passPhrase: "" });
   const [salsify, setSalsify] = useState(initial.salsify);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [test, setTest] = useState<Record<string, { ok: boolean; text: string } | "busy">>({});
+  const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
 
   const setZip = (origin: string, zone: number, zip: string) => setQuoteZips((q) => ({ ...q, [origin]: { ...(q[origin] ?? {}), [String(zone)]: zip.replace(/\D/g, "").slice(0, 5) } }));
@@ -106,8 +106,8 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
     if (!(await save())) return;
     setTest((t) => ({ ...t, [carrier]: "busy" }));
     try {
-      const r = await apiFetch<{ message: string }>("/api/tools/shipping-rates/settings/test", { method: "POST", json: { carrier } });
-      setTest((t) => ({ ...t, [carrier]: { ok: true, text: r.message } }));
+      const r = await apiFetch<{ message: string; negotiated: boolean | null }>("/api/tools/shipping-rates/settings/test", { method: "POST", json: { carrier } });
+      setTest((t) => ({ ...t, [carrier]: { ok: true, warn: r.negotiated === false, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, [carrier]: { ok: false, text: (err as Error).message } }));
     }
@@ -116,7 +116,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const TestResult = ({ carrier }: { carrier: string }) => {
     const r = test[carrier];
     if (!r || r === "busy") return null;
-    return <Alert variant={r.ok ? "success" : "error"}>{r.text}</Alert>;
+    return <Alert variant={!r.ok ? "error" : r.warn ? "warning" : "success"}>{r.text}</Alert>;
   };
 
   return (

@@ -92,7 +92,11 @@ describe("carrier formats", () => {
     expect(r.Package.PackageWeight.Weight).toBe("5");
   });
   it("prefers the negotiated UPS total", () => {
-    expect(parseUpsRateResponse({ RateResponse: { RatedShipment: { TotalCharges: { MonetaryValue: "30.10" }, NegotiatedRateCharges: { TotalCharge: { MonetaryValue: "18.42" } } } } })).toMatchObject({ amount: 18.42, listAmount: 30.1 });
+    expect(parseUpsRateResponse({ RateResponse: { RatedShipment: { TotalCharges: { MonetaryValue: "30.10" }, NegotiatedRateCharges: { TotalCharge: { MonetaryValue: "18.42" } } } } })).toMatchObject({ amount: 18.42, listAmount: 30.1, negotiated: true });
+    // no negotiated rate: the list rate is used, flagged, and UPS's alert is kept
+    expect(
+      parseUpsRateResponse({ RateResponse: { Response: { Alert: { Code: "110971", Description: "Your invoice may vary from the displayed reference rates" } }, RatedShipment: { TotalCharges: { MonetaryValue: "27.94" } } } }),
+    ).toEqual({ amount: 27.94, listAmount: 27.94, apiZone: undefined, negotiated: false, alerts: ["Your invoice may vary from the displayed reference rates (110971)"] });
     expect(() => parseUpsRateResponse({ response: { errors: [{ message: "Invalid postal code" }] } })).toThrow("Invalid postal code");
   });
   it("builds and reads Endicia Ground Advantage rates", () => {

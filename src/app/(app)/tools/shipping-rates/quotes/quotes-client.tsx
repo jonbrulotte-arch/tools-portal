@@ -73,6 +73,9 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
     const at = new Map(cells.map((q) => [`${q.weight}|${q.zone}`, q]));
     return { weights, at };
   }, [quotes, origin, service]);
+  // UPS returns the list rate as both values when no negotiated rate is available
+  const upsPriced = selected?.mode === "live" ? quotes.filter((q) => q.carrier === "UPS" && q.amount != null).length : 0;
+  const listOnlyUps = selected?.mode === "live" ? quotes.filter((q) => q.carrier === "UPS" && q.amount != null && q.listAmount != null && q.amount === q.listAmount).length : 0;
   const zips = useMemo(() => Object.fromEntries(ZONES.map((z) => [z, quotes.find((q) => q.origin === origin && q.zone === z)?.destZip ?? ""])), [quotes, origin]);
 
   return (
@@ -160,6 +163,11 @@ export function QuotesClient({ mode, gridSize, origins, runs, selectedId, quotes
               <ModeBadge mode={selected.mode} />
             </div>
             <CardDescription>Price per shipment by weight (rows) and zone (columns). Each zone is quoted to the destination ZIP shown under it.</CardDescription>
+            {listOnlyUps > 0 && (
+              <Alert variant="warning" className="mt-2">
+                {listOnlyUps.toLocaleString("en-US")} of {upsPriced.toLocaleString("en-US")} UPS prices in this run are list rates: UPS returned no negotiated (account) rate for them. Check that the UPS accounts in Settings are linked to your UPS developer app and have negotiated rates enabled for API use.
+              </Alert>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4">

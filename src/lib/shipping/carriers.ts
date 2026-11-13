@@ -19,7 +19,15 @@ export type QuoteRequest = {
   /** Package size in inches (product quotes); carriers then apply dimensional weight. */
   dims?: Dims | null;
 };
-export type QuoteResult = { amount: number; listAmount?: number; apiZone?: string };
+export type QuoteResult = {
+  amount: number;
+  listAmount?: number;
+  apiZone?: string;
+  /** UPS only: true when UPS returned a negotiated (account) rate, false when only the list rate came back. */
+  negotiated?: boolean;
+  /** Warnings the carrier sent with the price (e.g. why no negotiated rate was returned). */
+  alerts?: string[];
+};
 
 const TIMEOUT_MS = 20_000;
 
@@ -117,8 +125,13 @@ export function buildUpsRateRequest(q: QuoteRequest, account: string) {
 type Money = { MonetaryValue?: string };
 type UpsRated = { TotalCharges?: Money; NegotiatedRateCharges?: { TotalCharge?: Money }; Zone?: string; GuaranteedDelivery?: unknown };
 
+type UpsAlert = { Code?: string; Description?: string };
+
 export function parseUpsRateResponse(body: unknown): QuoteResult {
-  const b = body as { RateResponse?: { RatedShipment?: UpsRated | UpsRated[] }; response?: { errors?: { code?: string; message?: string }[] } };
+  const b = body as {
+    RateResponse?: { RatedShipment?: UpsRated | UpsRated[]; Response?: { Alert?: UpsAlert | UpsAlert[] } };
+    response?: { errors?: { code?: string; message?: string }[] };
+  };
   if (b.response?.errors?.length) throw new Error(`UPS: ${b.response.errors.map((e) => e.message).join("; ")}`);
   const rs = b.RateResponse?.RatedShipment;
   const r = Array.isArray(rs) ? rs[0] : rs;
@@ -126,7 +139,15 @@ export function parseUpsRateResponse(body: unknown): QuoteResult {
   const negotiated = Number(r?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue);
   const amount = Number.isFinite(negotiated) && negotiated > 0 ? negotiated : list;
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("UPS returned no price");
-  return { amount: round(amount), listAmount: Number.isFinite(list) ? round(list) : undefined, apiZone: r?.Zone };
+  const alertList = b.RateResponse?.Response?.Alert;
+  const alerts = (Array.isArray(alertList) ? alertList : alertList ? [alertList] : []).map((a) => `${a.Description ?? "Alert"}${a.Code ? ` (${a.Code})` : ""}`);
+  return {
+    amount: round(amount),
+    listAmount: Number.isFinite(list) ? round(list) : undefined,
+    apiZone: r?.Zone,
+    negotiated: Number.isFinite(negotiated) && negotiated > 0,
+    alerts,
+  };
 }
 
 async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<QuoteResult> {
