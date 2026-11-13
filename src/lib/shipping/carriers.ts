@@ -87,8 +87,10 @@ function upsBase(s: ShippingRatesSettings) {
   return s.ups.environment === "test" ? "https://wwwcie.ups.com" : "https://onlinetools.ups.com";
 }
 
-/** The UPS shipper account used for an origin: the first account mapped to it. */
+/** The UPS account used to quote from an origin: the one chosen in Settings, else the first account mapped to it. */
 export function upsAccountFor(s: ShippingRatesSettings, origin: string): string | null {
+  const chosen = s.upsRatingAccounts?.[origin];
+  if (chosen && s.upsAccounts[chosen] === origin) return chosen;
   return Object.entries(s.upsAccounts).find(([, o]) => o === origin)?.[0] ?? null;
 }
 

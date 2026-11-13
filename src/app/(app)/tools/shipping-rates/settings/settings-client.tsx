@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plug, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
@@ -19,6 +20,7 @@ type Origin = { code: string; name: string; zip: string };
 type Initial = {
   origins: Origin[];
   upsAccounts: Record<string, string>;
+  upsRatingAccounts: Record<string, string>;
   quoteZips: Record<string, Record<string, string>>;
   uspsMaxLb: number;
   upsMaxLb: number;
@@ -57,6 +59,12 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const router = useRouter();
   const [origins, setOrigins] = useState(initial.origins);
   const [accounts, setAccounts] = useState(Object.entries(initial.upsAccounts).map(([account, origin]) => ({ account, origin })));
+  const [ratingAccounts, setRatingAccounts] = useState(initial.upsRatingAccounts);
+  /** The account live quotes use for a warehouse: the chosen one if still mapped there, else the first mapped. */
+  const quotingAccount = (origin: string) => {
+    const mine = accounts.filter((a) => a.origin === origin && a.account.trim());
+    return mine.find((a) => a.account.trim().toUpperCase() === ratingAccounts[origin])?.account.trim().toUpperCase() ?? mine[0]?.account.trim().toUpperCase();
+  };
   const [quoteZips, setQuoteZips] = useState(initial.quoteZips);
   const [uspsMaxLb, setUspsMaxLb] = useState(initial.uspsMaxLb);
   const [upsMaxLb, setUpsMaxLb] = useState(initial.upsMaxLb);
@@ -80,6 +88,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
         json: {
           origins,
           upsAccounts: Object.fromEntries(accounts.filter((a) => a.account.trim()).map((a) => [a.account.trim().toUpperCase(), a.origin])),
+          upsRatingAccounts: Object.fromEntries(origins.map((o) => [o.code, quotingAccount(o.code)]).filter(([, a]) => a)),
           quoteZips,
           uspsMaxLb,
           upsMaxLb,
@@ -168,7 +177,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
       <Card>
         <CardHeader>
           <CardTitle>UPS accounts → warehouse</CardTitle>
-          <CardDescription>The UPS invoice rarely shows the origin, so each package is placed by its shipper account: the 6 characters after &quot;1Z&quot; in the tracking number. Live quotes also use the first account listed for each warehouse, so they reflect that account&apos;s negotiated rates.</CardDescription>
+          <CardDescription>The UPS invoice rarely shows the origin, so each package is placed by its shipper account: the 6 characters after &quot;1Z&quot; in the tracking number. Live quotes use the account ticked under &quot;Quote with&quot; for each warehouse, so they reflect that account&apos;s negotiated rates. It must be linked to your UPS developer app (developer.ups.com → Apps → Billing Account Number).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <TableWrap>
@@ -176,6 +185,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
               <tr>
                 <Th>UPS account</Th>
                 <Th>Warehouse</Th>
+                <Th className="text-center">Quote with</Th>
                 <Th />
               </tr>
             </thead>
@@ -198,6 +208,14 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
                         ))}
                       </SelectContent>
                     </Select>
+                  </Td>
+                  <Td className="text-center">
+                    <Checkbox
+                      aria-label={`Quote ${origins.find((o) => o.code === a.origin)?.name ?? a.origin} with ${a.account}`}
+                      checked={!!a.account.trim() && quotingAccount(a.origin) === a.account.trim().toUpperCase()}
+                      disabled={!a.account.trim()}
+                      onCheckedChange={(c) => c && setRatingAccounts((r) => ({ ...r, [a.origin]: a.account.trim().toUpperCase() }))}
+                    />
                   </Td>
                   <Td className="text-right">
                     <RowAction danger title="Remove" onClick={() => setAccounts((l) => l.filter((_, j) => j !== i))}>

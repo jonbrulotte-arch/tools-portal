@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { upsTier, uspsTier, uspsQuoteWeights, tierOunces, weightLabel } from "@/lib/shipping/weights";
 import { findCutoff } from "@/lib/shipping/analysis";
 import { rateCsvRows, rateRows } from "@/lib/shipping/rate-table";
-import { buildUpsRateRequest, parseUpsRateResponse, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
+import { buildUpsRateRequest, parseUpsRateResponse, upsAccountFor, buildEndiciaRateRequest, parseEndiciaRateResponse, simulatedQuote } from "@/lib/shipping/carriers";
 import { distanceMiles, zoneForDistance, estimateZone, fitZoneBands, representativeZips, zipPoint } from "@/lib/shipping/geo";
 import { parseReport } from "@/lib/shipping/report";
 import { stateForZip } from "@/lib/shipping/zip-state";
@@ -90,6 +90,12 @@ describe("carrier formats", () => {
     expect(r.Shipper.ShipperNumber).toBe("796305");
     expect(r).not.toHaveProperty("PaymentDetails");
     expect(r.Package.PackageWeight.Weight).toBe("5");
+  });
+  it("quotes each warehouse with its chosen UPS account", () => {
+    const s = SETTING_DEFAULTS.shippingRates;
+    expect(upsAccountFor(s, "LV")).toBe("796305"); // default: first mapped
+    expect(upsAccountFor({ ...s, upsRatingAccounts: { LV: "W293F5" } }, "LV")).toBe("W293F5");
+    expect(upsAccountFor({ ...s, upsRatingAccounts: { LV: "9X0F56" } }, "LV")).toBe("796305"); // not an LV account: ignored
   });
   it("prefers the negotiated UPS total", () => {
     expect(parseUpsRateResponse({ RateResponse: { RatedShipment: { TotalCharges: { MonetaryValue: "30.10" }, NegotiatedRateCharges: { TotalCharge: { MonetaryValue: "18.42" } } } } })).toMatchObject({ amount: 18.42, listAmount: 30.1, negotiated: true });

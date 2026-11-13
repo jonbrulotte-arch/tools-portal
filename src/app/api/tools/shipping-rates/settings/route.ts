@@ -16,6 +16,7 @@ export async function PATCH(req: Request) {
   const value = {
     origins: body.origins,
     upsAccounts: Object.fromEntries(Object.entries(body.upsAccounts).map(([k, v]) => [k.toUpperCase(), v])),
+    upsRatingAccounts: Object.fromEntries(Object.entries(body.upsRatingAccounts).map(([k, v]) => [k, v.toUpperCase()])),
     quoteZips: body.quoteZips,
     uspsMaxLb: body.uspsMaxLb,
     upsMaxLb: body.upsMaxLb,

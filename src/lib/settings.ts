@@ -45,6 +45,8 @@ export type ShippingRatesSettings = {
   origins: ShippingOrigin[];
   /** UPS shipper account (6 chars after "1Z" in tracking numbers) → origin code. */
   upsAccounts: Record<string, string>;
+  /** Warehouse code → the UPS account used for live quotes (must be linked to the UPS developer app). Default: the first mapped account. */
+  upsRatingAccounts: Record<string, string>;
   /** Destination ZIP to quote per origin and zone; missing entries use an automatic choice. */
   quoteZips: Record<string, Record<string, string>>;
   uspsMaxLb: number;
@@ -96,6 +98,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
       { code: "GV", name: "Groveport, OH", zip: "43125" },
     ],
     upsAccounts: { "796305": "LV", W293F5: "LV", "9X0F56": "GV", "9X0F53": "GV" },
+    upsRatingAccounts: {},
     quoteZips: {},
     uspsMaxLb: 20,
     upsMaxLb: 150,

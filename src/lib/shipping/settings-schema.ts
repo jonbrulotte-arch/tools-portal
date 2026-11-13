@@ -9,6 +9,7 @@ export const shippingSettingsSchema = z
       .min(1)
       .max(10),
     upsAccounts: z.record(z.string().regex(/^[A-Z0-9]{6}$/i, "UPS accounts are 6 characters"), z.string()),
+    upsRatingAccounts: z.record(z.string(), z.string().max(6)).default({}),
     quoteZips: z.record(z.string(), z.record(z.string(), z.union([zip, z.literal("")]))),
     uspsMaxLb: z.coerce.number().int().min(1).max(70),
     upsMaxLb: z.coerce.number().int().min(1).max(150),
@@ -48,5 +49,9 @@ export const shippingSettingsSchema = z
     if (codes.size !== s.origins.length) ctx.addIssue({ code: "custom", path: ["origins"], message: "Warehouse codes must be unique" });
     for (const [acct, origin] of Object.entries(s.upsAccounts)) {
       if (!codes.has(origin)) ctx.addIssue({ code: "custom", path: ["upsAccounts", acct], message: `Account ${acct} points to an unknown warehouse` });
+    }
+    for (const [origin, acct] of Object.entries(s.upsRatingAccounts)) {
+      const mapped = Object.entries(s.upsAccounts).find(([a]) => a.toUpperCase() === acct.toUpperCase())?.[1];
+      if (mapped !== origin) ctx.addIssue({ code: "custom", path: ["upsRatingAccounts", origin], message: `The quoting account ${acct} must be one of that warehouse's UPS accounts` });
     }
   });

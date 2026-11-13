@@ -23,6 +23,7 @@ export default async function ShippingSettingsPage() {
       initial={{
         origins: s.origins,
         upsAccounts: s.upsAccounts,
+        upsRatingAccounts: s.upsRatingAccounts,
         quoteZips: s.quoteZips,
         uspsMaxLb: s.uspsMaxLb,
         upsMaxLb: s.upsMaxLb,
