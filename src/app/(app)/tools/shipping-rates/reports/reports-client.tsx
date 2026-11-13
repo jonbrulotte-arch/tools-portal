@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, FileSpreadsheet, Info, Loader2, Trash2, Upload } from "lucide-react";
+import { BarChart3, CloudDownload, FileSpreadsheet, Info, Loader2, Trash2, Upload } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
@@ -37,12 +39,20 @@ const STATUS: Record<Report["status"], { label: string; variant: "secondary" | "
   CANCELLED: { label: "Cancelled", variant: "secondary" },
 };
 
-export function ReportsClient({ reports, currentUserId, canManage }: { reports: Report[]; currentUserId: string; canManage: boolean }) {
+type MangoInfo = {
+  defaultRange: { from: string; to: string };
+  days: number;
+  auto: { frequency: "daily" | "weekly"; next: string | null; timezone: string; zoneLabel: string } | null;
+};
+
+export function ReportsClient({ reports, currentUserId, canManage, mango }: { reports: Report[]; currentUserId: string; canManage: boolean; mango: MangoInfo }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [detail, setDetail] = useState<Report | null>(null);
+  const [range, setRange] = useState(mango.defaultRange);
+  const [importing, setImporting] = useState(false);
   const processing = reports.some((r) => r.status === "PENDING" || r.status === "RUNNING");
 
   // Refresh while a report is being processed.
@@ -69,6 +79,20 @@ export function ReportsClient({ reports, currentUserId, canManage }: { reports: 
     }
   }
 
+  async function importMango() {
+    setImporting(true);
+    setNotice(null);
+    try {
+      await apiFetch("/api/tools/shipping-rates/reports/import", { method: "POST", json: range });
+      setNotice({ type: "success", text: `Downloaded ${range.from} to ${range.to} from Mango. It's being processed now; this usually takes under a minute.` });
+      router.refresh();
+    } catch (err) {
+      setNotice({ type: "error", text: (err as Error).message });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function remove(r: Report) {
     if (!confirm(`Delete the report ${r.fileName}? Its totals are removed from the analysis.`)) return;
     try {
@@ -83,16 +107,46 @@ export function ReportsClient({ reports, currentUserId, canManage }: { reports: 
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Upload a ship cost history report</CardTitle>
+          <CardTitle>Get a ship cost history report</CardTitle>
           <CardDescription>
             The Excel (.xlsx) export with UPS invoice lines and USPS labels. Each UPS package&apos;s charges (freight, fuel, residential, delivery area…) are added up. Only our own prepaid shipping is used: third-party and collect shipments are left out. Names and addresses are read only to place each package and aren&apos;t stored.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label htmlFor="mango-from">From</Label>
+              <Input id="mango-from" type="date" value={range.from} max={range.to} onChange={(e) => setRange({ ...range, from: e.target.value })} className="w-44" />
+            </div>
+            <div>
+              <Label htmlFor="mango-to">To</Label>
+              <Input id="mango-to" type="date" value={range.to} min={range.from} max={mango.defaultRange.to} onChange={(e) => setRange({ ...range, to: e.target.value })} className="w-44" />
+            </div>
+            <Button onClick={importMango} disabled={importing || uploading || !range.from || !range.to}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} {importing ? "Downloading from Mango…" : "Import from Mango"}
+            </Button>
+            <span className="text-sm text-gray-500 pb-2">or</span>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading || importing}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {uploading ? "Uploading…" : "Upload a file"}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500">
+            {mango.auto ? (
+              <>
+                Automatic import: {mango.auto.frequency}, the last {mango.days} days
+                {mango.auto.next && (
+                  <>
+                    ; next {new Date(mango.auto.next).toLocaleString("en-US", { timeZone: mango.auto.timezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} {mango.auto.zoneLabel}
+                  </>
+                )}
+                .
+              </>
+            ) : (
+              <>Automatic import: off{canManage ? " (turn it on in Settings → Mango cost import)" : ""}.</>
+            )}{" "}
+            UPS invoices reach Mango a few weeks after shipping, so the newest weeks have mostly USPS.
+          </p>
           <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-          <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {uploading ? "Uploading…" : "Upload report"}
-          </Button>
           {notice && <Alert variant={notice.type}>{notice.text}</Alert>}
         </CardContent>
       </Card>

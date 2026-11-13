@@ -57,9 +57,13 @@ export type ShippingRatesSettings = {
   endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
   /** Automatic quote run (weekly or daily). */
   schedule: ShippingSchedule;
+  /** Pull the Ship Cost History report from Mango automatically. */
+  mangoImport: MangoImportSettings;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
+/** Automatic Ship Cost History import from Mango's export (rolling date range, on a schedule). */
+export type MangoImportSettings = { enabled: boolean; url: string; days: number; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string; keepReports: number };
 export type ShippingSchedule = { enabled: boolean; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string; keepRuns: number };
 /** Salsify property names to read (case-sensitive, as shown in Salsify). */
 export type SalsifySizeFields = { weight: string; length: string; width: string; height: string };
@@ -105,6 +109,17 @@ export const SETTING_DEFAULTS: SettingsMap = {
     upsRatingAccounts: {},
     // weekly, early Monday: UPS fuel surcharges change each Monday; base rates change only a few times a year
     schedule: { enabled: false, frequency: "weekly", weekday: 1, hour: 1, timezone: "America/Los_Angeles", keepRuns: 8 },
+    // weekly at midnight Monday, an hour before the scheduled quote run, so each week's analysis pairs fresh costs with fresh quotes
+    mangoImport: {
+      enabled: false,
+      url: "http://mango.jsproducts.com/qc-dims/public/excel/Reader/php/exshipcost",
+      days: 90,
+      frequency: "weekly",
+      weekday: 1,
+      hour: 0,
+      timezone: "America/Los_Angeles",
+      keepReports: 8,
+    },
     quoteZips: {},
     uspsMaxLb: 20,
     upsMaxLb: 150,
@@ -145,6 +160,7 @@ function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
   return {
     ...s,
     schedule: { ...SETTING_DEFAULTS.shippingRates.schedule, ...s.schedule },
+    mangoImport: { ...SETTING_DEFAULTS.shippingRates.mangoImport, ...s.mangoImport },
     salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } },
   };
 }

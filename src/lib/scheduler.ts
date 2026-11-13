@@ -4,9 +4,10 @@ import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { errorMessage } from "@/lib/api";
 import { runScheduledQuotes } from "@/lib/shipping/schedule";
+import { runScheduledMangoImport } from "@/lib/shipping/mango-import";
 import { zonedParts } from "@/lib/timezone";
 
-// Runs every hour on the hour and checks the backup and quote-run schedules in settings,
+// Runs every hour on the hour and checks the backup, quote-run and Mango-import schedules in settings,
 // so schedule changes apply without restarting the server.
 const g = globalThis as unknown as { __portalScheduler?: boolean };
 
@@ -16,6 +17,7 @@ export function startScheduler() {
   cron.schedule("0 * * * *", async () => {
     // scheduled shipping quote runs go in the background (they can take an hour or more)
     void runScheduledQuotes().catch((err) => console.error("[scheduler] scheduled quotes:", errorMessage(err)));
+    void runScheduledMangoImport().catch((err) => console.error("[scheduler] Mango import:", errorMessage(err)));
     try {
       const s = await getSetting("backup");
       const now = zonedParts(new Date(), s.timezone);

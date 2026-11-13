@@ -14,7 +14,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import type { MangoImportSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
@@ -33,6 +33,7 @@ type Initial = {
   endicia: { requesterId: string; accountId: string; hasPassPhrase: boolean; endpoint: string };
   salsify: { orgId: string; fields: SalsifyFieldMap };
   schedule: ShippingSchedule;
+  mangoImport: MangoImportSettings;
 };
 
 
@@ -79,6 +80,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const [endicia, setEndicia] = useState({ ...initial.endicia, passPhrase: "" });
   const [salsify, setSalsify] = useState(initial.salsify);
   const [schedule, setSchedule] = useState(initial.schedule);
+  const [mangoImport, setMangoImport] = useState(initial.mangoImport);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -104,6 +106,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
           endicia: { requesterId: endicia.requesterId, accountId: endicia.accountId, passPhrase: endicia.passPhrase || undefined, endpoint: endicia.endpoint },
           salsify,
           schedule,
+          mangoImport,
         },
       });
       setUps((u) => ({ ...u, clientSecret: "", hasSecret: u.hasSecret || !!u.clientSecret }));
@@ -127,6 +130,17 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
       setTest((t) => ({ ...t, [carrier]: { ok: true, warn: r.negotiated === false, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, [carrier]: { ok: false, text: (err as Error).message } }));
+    }
+  }
+
+  async function testMango() {
+    if (!(await save())) return;
+    setTest((t) => ({ ...t, MANGO: "busy" }));
+    try {
+      const r = await apiFetch<{ message: string }>("/api/tools/shipping-rates/settings/mango-test", { method: "POST" });
+      setTest((t) => ({ ...t, MANGO: { ok: true, text: r.message } }));
+    } catch (err) {
+      setTest((t) => ({ ...t, MANGO: { ok: false, text: (err as Error).message } }));
     }
   }
 
@@ -229,6 +243,101 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
             </div>
           </div>
           {schedule.enabled && mode !== "live" && <Alert variant="warning">The tool is in simulated mode, so scheduled runs will be skipped until you switch Rates source to Live.</Alert>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mango cost import</CardTitle>
+          <CardDescription>
+            Pulls the Ship Cost History report straight from Mango&apos;s Export (no download or upload needed) and processes it like an uploaded file. Weekly at 12:00 AM Monday, an hour before the scheduled quote run, keeps each week&apos;s analysis current. Older automatic imports are deleted; reports uploaded or imported by hand are kept.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={mangoImport.enabled} onCheckedChange={(v) => setMangoImport({ ...mangoImport, enabled: v })} />
+            Import automatically
+          </label>
+          <div>
+            <Label htmlFor="mango-url">Mango export URL</Label>
+            <Input id="mango-url" value={mangoImport.url} onChange={(e) => setMangoImport({ ...mangoImport, url: e.target.value })} className="font-mono text-xs" />
+            <p className="text-xs text-gray-500 mt-1">Without the ?from=…&amp;to=… part; the portal adds the date range and asks for the full field list.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label htmlFor="mango-days">Date range (days back from today)</Label>
+              <Input id="mango-days" type="number" min={7} max={365} value={mangoImport.days} onChange={(e) => setMangoImport({ ...mangoImport, days: Number(e.target.value) })} />
+            </div>
+            <div>
+              <Label>Frequency</Label>
+              <Select value={mangoImport.frequency} onValueChange={(v) => setMangoImport({ ...mangoImport, frequency: v as MangoImportSettings["frequency"] })} disabled={!mangoImport.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {mangoImport.frequency === "weekly" && (
+              <div>
+                <Label>Day</Label>
+                <Select value={String(mangoImport.weekday)} onValueChange={(v) => setMangoImport({ ...mangoImport, weekday: Number(v) })} disabled={!mangoImport.enabled}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((d, i) => (
+                      <SelectItem key={d} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Start at</Label>
+              <Select value={String(mangoImport.hour)} onValueChange={(v) => setMangoImport({ ...mangoImport, hour: Number(v) })} disabled={!mangoImport.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {hourLabel(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={mangoImport.timezone} onValueChange={(v) => setMangoImport({ ...mangoImport, timezone: v })} disabled={!mangoImport.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="mango-keep">Keep this many automatic imports</Label>
+              <Input id="mango-keep" type="number" min={1} max={90} value={mangoImport.keepReports} onChange={(e) => setMangoImport({ ...mangoImport, keepReports: Number(e.target.value) })} disabled={!mangoImport.enabled} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="outline" onClick={testMango} disabled={busy || test.MANGO === "busy"}>
+              <Plug className="h-4 w-4" /> {test.MANGO === "busy" ? "Testing…" : "Save & test Mango"}
+            </Button>
+          </div>
+          <TestResult carrier="MANGO" />
         </CardContent>
       </Card>
 

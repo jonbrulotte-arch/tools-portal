@@ -32,6 +32,7 @@ export default async function ShippingSettingsPage() {
         endicia: { requesterId: s.endicia.requesterId, accountId: s.endicia.accountId, hasPassPhrase: !!s.endicia.encPassPhrase, endpoint: s.endicia.endpoint },
         salsify: s.salsify,
         schedule: s.schedule,
+        mangoImport: s.mangoImport,
       }}
     />
   );

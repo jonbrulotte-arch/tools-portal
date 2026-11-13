@@ -30,3 +30,24 @@ export function zonedParts(at: Date, timeZone: string) {
   );
   return { hour: Number(parts.hour), weekday: WEEKDAYS[parts.weekday], date: `${parts.year}-${parts.month}-${parts.day}` };
 }
+
+/** A weekly-or-daily schedule at a whole hour in a time zone (scheduled quote runs, Mango imports). */
+export type Recurrence = { enabled: boolean; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string };
+
+export function isDue(s: Recurrence, at: Date) {
+  if (!s.enabled) return false;
+  const p = zonedParts(at, s.timezone);
+  return p.hour === s.hour && (s.frequency === "daily" || p.weekday === s.weekday);
+}
+
+/** The next time the schedule fires (top of the hour), for display. */
+export function nextRun(s: Recurrence, from: Date): Date | null {
+  if (!s.enabled) return null;
+  const t = new Date(from);
+  t.setUTCMinutes(0, 0, 0);
+  for (let i = 0; i < 24 * 8 + 1; i++) {
+    t.setUTCHours(t.getUTCHours() + 1);
+    if (isDue(s, t)) return new Date(t);
+  }
+  return null;
+}

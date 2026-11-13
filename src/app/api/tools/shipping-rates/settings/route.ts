@@ -35,6 +35,7 @@ export async function PATCH(req: Request) {
     },
     salsify: body.salsify,
     schedule: body.schedule,
+    mangoImport: body.mangoImport,
   };
   await setSetting("shippingRates", value);
   const redact = (s: typeof value) => ({

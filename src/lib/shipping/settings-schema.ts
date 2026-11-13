@@ -19,6 +19,21 @@ export const shippingSettingsSchema = z
       timezone: z.enum(TIMEZONE_IDS),
       keepRuns: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
     }),
+    mangoImport: z.object({
+      enabled: z.boolean(),
+      url: z
+        .string()
+        .trim()
+        .url("Enter the full export URL")
+        .refine((u) => /^https?:\/\//i.test(u), "Must be an http:// or https:// URL")
+        .refine((u) => !new URL(u).search, "Leave out the ?from=…&to=… part; the portal adds the dates"),
+      days: z.coerce.number().int().min(7, "At least 7 days").max(365, "At most 365 days"),
+      frequency: z.enum(["daily", "weekly"]),
+      weekday: z.coerce.number().int().min(0).max(6),
+      hour: z.coerce.number().int().min(0).max(23),
+      timezone: z.enum(TIMEZONE_IDS),
+      keepReports: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
+    }),
     quoteZips: z.record(z.string(), z.record(z.string(), z.union([zip, z.literal("")]))),
     uspsMaxLb: z.coerce.number().int().min(1).max(70),
     upsMaxLb: z.coerce.number().int().min(1).max(150),

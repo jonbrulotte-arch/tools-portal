@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { getSetting, type ShippingSchedule } from "@/lib/settings";
+import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { errorMessage } from "@/lib/api";
 import { retryFailedQuotes, startQuoteRun } from "@/lib/shipping/runner";
-import { zonedParts } from "@/lib/timezone";
+import { isDue } from "@/lib/timezone";
 
 // Scheduled quote run: checked hourly by the app scheduler (src/lib/scheduler.ts). Runs weekly (on the
 // chosen day) or daily, at the configured hour in the configured time zone (the server clock is UTC),
@@ -13,25 +13,7 @@ export const SCHEDULE_ACTOR = { id: null, email: "quote schedule" } as const;
 /** Earlier name for scheduled runs, still pruned with them. */
 const OLD_SCHEDULE_ACTORS = ["nightly schedule"];
 
-export { TIMEZONES as SCHEDULE_TIMEZONES, zonedParts } from "@/lib/timezone";
-
-export function isDue(s: ShippingSchedule, at: Date) {
-  if (!s.enabled) return false;
-  const p = zonedParts(at, s.timezone);
-  return p.hour === s.hour && (s.frequency === "daily" || p.weekday === s.weekday);
-}
-
-/** The next time the schedule fires (top of the hour), for display. */
-export function nextRun(s: ShippingSchedule, from: Date): Date | null {
-  if (!s.enabled) return null;
-  const t = new Date(from);
-  t.setUTCMinutes(0, 0, 0);
-  for (let i = 0; i < 24 * 8 + 1; i++) {
-    t.setUTCHours(t.getUTCHours() + 1);
-    if (isDue(s, t)) return new Date(t);
-  }
-  return null;
-}
+export { TIMEZONES as SCHEDULE_TIMEZONES, zonedParts, isDue, nextRun } from "@/lib/timezone";
 
 const audit = (action: string, success: boolean, metadata: Record<string, unknown>, targetId?: string) =>
   logAudit({ action, category: "TOOL", actorEmail: SCHEDULE_ACTOR.email, success, targetType: targetId ? "ShippingQuoteRun" : undefined, targetId, metadata, ip: null, userAgent: null });

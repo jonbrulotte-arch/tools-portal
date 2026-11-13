@@ -103,6 +103,12 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - USPS rows have no zone. The zone is taken from our UPS shipments to the same city where there are any; otherwise it is estimated from the distance, using zone boundaries learned per warehouse from the UPS invoices.
 - Only totals per carrier, service, warehouse, zone and weight are stored. No names or addresses are kept.
 
+**Mango import.** Instead of downloading and uploading, **Import from Mango** on the Cost reports tab pulls a date range straight from Mango's Ship Cost History export (`…/exshipcost?from=&to=&limitedFields=false`, a plain GET on the internal network, no login).
+- Settings → **Mango cost import** sets the export URL and an automatic import: by default weekly on Monday at 12:00 AM Pacific, an hour before the scheduled quote run, covering the last 90 days. Older automatic imports beyond the number to keep are deleted; uploads and button imports are kept.
+- **Save & test Mango** downloads the last two days and checks that every required column is there, without saving anything.
+- The portal's Docker container must resolve `mango.jsproducts.com`. Docker uses the host's DNS, so this normally works; if the test says it couldn't connect (`ENOTFOUND`), add `extra_hosts: ["mango.jsproducts.com:<Mango's IP>"]` under the app service in `docker-compose.yml` and run `./deploy.sh update`.
+- Imports, tests, failures and clean-ups are in the Access Log as `shipping.mango_*`.
+
 **Quotes.** A run requests one rate per warehouse, zone (2–8) and weight. That means USPS Ground Advantage at 4/8/12/15.99 oz and 1–20 lb, plus UPS Ground commercial and residential at 1–150 lb (4,536 quotes with the defaults).
 - Each zone is quoted to one destination ZIP: the one set in Settings, else the city we ship to most in that zone according to the latest report, else a ZIP mid-way through the zone by distance.
 - Runs can be cancelled and exported to CSV.
