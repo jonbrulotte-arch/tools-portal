@@ -86,6 +86,9 @@ describe("carrier formats", () => {
     expect(r.ShipTo.Address).toMatchObject({ PostalCode: "10001", StateProvinceCode: "NY", ResidentialAddressIndicator: "Y" });
     expect(r.ShipFrom.Address).toEqual({ PostalCode: "89113", StateProvinceCode: "NV", CountryCode: "US" });
     expect(r.Shipper.Address.StateProvinceCode).toBe("NV");
+    // Rating needs only the shipper number (for negotiated rates); billing details are for labels.
+    expect(r.Shipper.ShipperNumber).toBe("796305");
+    expect(r).not.toHaveProperty("PaymentDetails");
     expect(r.Package.PackageWeight.Weight).toBe("5");
   });
   it("prefers the negotiated UPS total", () => {

@@ -99,7 +99,6 @@ export function buildUpsRateRequest(q: QuoteRequest, account: string) {
         Shipper: { ShipperNumber: account, Address: upsAddress(q.originZip) },
         ShipFrom: { Address: upsAddress(q.originZip) },
         ShipTo: { Address: { ...upsAddress(q.destZip), ...(q.service === "GROUND_RES" ? { ResidentialAddressIndicator: "Y" } : {}) } },
-        PaymentDetails: { ShipmentCharge: [{ Type: "01", BillShipper: { AccountNumber: account } }] },
         Service: { Code: "03", Description: "Ground" },
         ShipmentRatingOptions: { NegotiatedRatesIndicator: "Y" },
         NumOfPieces: "1",
@@ -146,7 +145,7 @@ async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<Quot
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as { response?: { errors?: { message?: string }[] } }).response?.errors?.map((e) => e.message).join("; ");
-    throw new Error(`UPS rate request failed (${res.status})${msg ? `: ${msg}` : ""}`);
+    throw new Error(`UPS rate request failed (${res.status}, account ${account})${msg ? `: ${msg}` : ""}`);
   }
   return parseUpsRateResponse(body);
 }
