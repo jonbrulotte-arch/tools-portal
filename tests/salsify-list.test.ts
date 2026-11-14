@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchSalsifyList, testSalsifyList } from "@/lib/salsify";
+import { fetchSalsifyList, listFilter, normalizeListId, testSalsifyList } from "@/lib/salsify";
 import { isDue } from "@/lib/timezone";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 
@@ -26,8 +26,15 @@ describe("Salsify list", () => {
     ]);
     const first = new URL(urls[0]);
     expect(first.pathname).toBe("/api/v1/orgs/s-org/products");
-    expect(first.searchParams.get("filter")).toBe("=list:12345");
+    expect(first.searchParams.get("filter")).toBe("=list:'12345'");
     expect(new URL(urls[1]).searchParams.get("cursor")).toBe("c2");
+  });
+
+  it("quotes the list ID and accepts a pasted Salsify address", () => {
+    expect(listFilter("s-b813b681-ac5e-453a-a060-e7adee716984")).toBe("=list:'s-b813b681-ac5e-453a-a060-e7adee716984'");
+    expect(normalizeListId("https://app.salsify.com/app/orgs/s-7231dcaa-b6b1-4f5d-85c3-7743ba479fee/product_lists/s-b813b681-ac5e-453a-a060-e7adee716984")).toBe("s-b813b681-ac5e-453a-a060-e7adee716984");
+    expect(normalizeListId("https://app.salsify.com/app/orgs/s-org/lists/12345?view=grid")).toBe("12345");
+    expect(normalizeListId("  s-b813b681-ac5e-453a-a060-e7adee716984 ")).toBe("s-b813b681-ac5e-453a-a060-e7adee716984");
   });
 
   it("explains a list Salsify can't read", async () => {

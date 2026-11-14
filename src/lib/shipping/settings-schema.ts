@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TIMEZONE_IDS } from "@/lib/timezone";
+import { normalizeListId } from "@/lib/salsify";
 
 const zip = z.string().regex(/^\d{5}$/, "ZIP codes must be 5 digits");
 
@@ -36,7 +37,11 @@ export const shippingSettingsSchema = z
     }),
     productRates: z.object({
       enabled: z.boolean(),
-      listId: z.string().trim().max(100).regex(/^[\w-]*$/, "List IDs are letters, digits and dashes"),
+      listId: z
+        .string()
+        .max(300)
+        .transform(normalizeListId)
+        .pipe(z.string().max(100).regex(/^[\w-]*$/, "Paste the list's Salsify address or its ID (letters, digits and dashes)")),
       keyUserId: z.string().max(40).nullable(),
       frequency: z.enum(["daily", "weekly"]),
       weekday: z.coerce.number().int().min(0).max(6),

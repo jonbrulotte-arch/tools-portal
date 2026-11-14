@@ -110,9 +110,19 @@ export async function testSalsifyKey(apiKey: string, orgId: string): Promise<{ p
   return { products: body.meta?.total_entries ?? null };
 }
 
+/** A list ID from a bare ID or a pasted Salsify list address (…/product_lists/<id> or …/lists/<id>). */
+export function normalizeListId(input: string): string {
+  const v = input.trim();
+  const m = v.match(/\/(?:product_lists|lists)\/([^/?#\s]+)/);
+  return (m ? decodeURIComponent(m[1]) : v).trim();
+}
+
+/** Salsify's list filter. The ID must be quoted: newer IDs look like s-1234abcd-… */
+export const listFilter = (listId: string) => `=list:'${listId.replace(/'/g, "\\'")}'`;
+
 /** One page of a Salsify list's products (Salsify's list filter, cursor paging). */
 async function listPage(apiKey: string, orgId: string, listId: string, cursor: string | null, perPage: number) {
-  const q = new URLSearchParams({ filter: `=list:${listId}`, per_page: String(perPage) });
+  const q = new URLSearchParams({ filter: listFilter(listId), per_page: String(perPage) });
   if (cursor) q.set("cursor", cursor);
   const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products?${q}`);
   if (res.status === 404 || res.status === 422) {

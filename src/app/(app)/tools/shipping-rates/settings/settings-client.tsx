@@ -606,14 +606,14 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
         <CardHeader>
           <CardTitle>Products (Salsify list)</CardTitle>
           <CardDescription>
-            The Products tab quotes every product on a Salsify list (42 quotes each) and keeps the results to browse. In Salsify, open the list: its ID is the number in the address bar (…/lists/<span className="font-mono">12345</span>). Weekly on Sunday at 1:00 AM keeps it clear of Monday&apos;s Mango import and quote run.
+            The Products tab quotes every product on a Salsify list (42 quotes each) and keeps the results to browse. Paste the list&apos;s Salsify address or just its ID (…/product_lists/<span className="font-mono">s-…</span>). A list of thousands of products takes most of a day, so schedule it well away from Monday&apos;s Mango import and quote run (for example Saturday morning). Each kept run adds about 42 rows per product to the database and backups; 2–4 runs is plenty.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 max-w-3xl">
             <div>
-              <Label htmlFor="prod-list">Salsify list ID</Label>
-              <Input id="prod-list" value={productRates.listId} onChange={(e) => setProductRates({ ...productRates, listId: e.target.value.trim() })} className="font-mono" placeholder="12345" />
+              <Label htmlFor="prod-list">Salsify list (address or ID)</Label>
+              <Input id="prod-list" value={productRates.listId} onChange={(e) => setProductRates({ ...productRates, listId: e.target.value.trim() })} className="font-mono text-xs" placeholder="s-b813b681-ac5e-453a-a060-e7adee716984" />
             </div>
             <div>
               <Label>Scheduled runs use the Salsify key of</Label>
