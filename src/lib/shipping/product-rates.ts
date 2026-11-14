@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { errorMessage } from "@/lib/api";
-import { fetchSalsifyList, type SalsifyProduct } from "@/lib/salsify";
+import { iterateSalsifyList, type SalsifyProduct } from "@/lib/salsify";
 import { getUserSecret } from "@/lib/user-credentials";
 import { billable } from "@/lib/shipping/dims";
 import type { ThrottleGate } from "@/lib/shipping/carriers";
@@ -102,32 +102,47 @@ async function executeProductRun(runId: string, s: ShippingRatesSettings, key: s
     logAudit({ action, category: "TOOL", actorId: actor.id, actorEmail: actor.email, success, targetType: "ProductRateRun", targetId: runId, metadata, ip: null, userAgent: null });
   try {
     await prisma.productRateRun.update({ where: { id: runId }, data: { status: "RUNNING", startedAt: new Date() } });
-    const products = await fetchSalsifyList(key, s.salsify.orgId, s.productRates.listId, s.salsify.fields);
-    await prisma.productRateRun.update({ where: { id: runId }, data: { total: products.length } });
     const gate: ThrottleGate = {};
-    let done = 0, failed = 0;
-    for (const [i, p] of products.entries()) {
-      // stop between products when cancelled
-      const cur = await prisma.productRateRun.findUnique({ where: { id: runId }, select: { status: true } });
-      if (cur?.status === "CANCELLED") {
-        await prisma.productRateRun.update({ where: { id: runId }, data: { finishedAt: new Date() } });
-        await audit("shipping.product_run_cancelled", true, { done, total: products.length });
-        return;
+    let done = 0, failed = 0, total: number | null = null, slowPages = 0, pages = 0;
+    try {
+      // read the list a page at a time and quote each page's products as it arrives
+      for await (const page of iterateSalsifyList(key, s.salsify.orgId, s.productRates.listId, s.salsify.fields)) {
+        pages++;
+        if (page.ms > 30_000) slowPages++;
+        if (total == null && page.total != null) {
+          total = page.total;
+          await prisma.productRateRun.update({ where: { id: runId }, data: { total } });
+        }
+        for (const p of page.products) {
+          // stop between products when cancelled
+          const cur = await prisma.productRateRun.findUnique({ where: { id: runId }, select: { status: true } });
+          if (cur?.status === "CANCELLED") {
+            await prisma.productRateRun.update({ where: { id: runId }, data: { finishedAt: new Date() } });
+            await audit("shipping.product_run_cancelled", true, { done, total, pages, slowPages });
+            return;
+          }
+          let result: "OK" | "NO_DATA" | "FAILED";
+          try {
+            result = await saveItem(runId, done, p, s, ctx, gate);
+          } catch (err) {
+            await prisma.productRateItem.create({ data: { runId, position: done, partNumber: p.partNumber, name: p.name, status: "FAILED", error: errorMessage(err).slice(0, 500) } });
+            result = "FAILED";
+          }
+          done++;
+          if (result !== "OK") failed++;
+          await prisma.productRateRun.update({ where: { id: runId }, data: { done, failed, ...(total == null || done > total ? { total: done } : {}) } });
+        }
       }
-      let result: "OK" | "NO_DATA" | "FAILED";
-      try {
-        result = await saveItem(runId, i, p, s, ctx, gate);
-      } catch (err) {
-        await prisma.productRateItem.create({ data: { runId, position: i, partNumber: p.partNumber, name: p.name, status: "FAILED", error: errorMessage(err).slice(0, 500) } });
-        result = "FAILED";
-      }
-      done++;
-      if (result !== "OK") failed++;
-      await prisma.productRateRun.update({ where: { id: runId }, data: { done, failed } });
+    } catch (err) {
+      // Salsify stopped answering part-way: keep what was quoted and say how far it got
+      const msg = done ? `Salsify stopped answering after ${done.toLocaleString("en-US")}${total ? ` of ${total.toLocaleString("en-US")}` : ""} products: ${errorMessage(err)}` : errorMessage(err);
+      await prisma.productRateRun.update({ where: { id: runId }, data: { status: "FAILED", error: msg.slice(0, 500), finishedAt: new Date() } });
+      await audit("shipping.product_run_failed", false, { error: errorMessage(err), done, total, pages, slowPages });
+      return;
     }
-    const status = products.length > 0 && failed === products.length ? "FAILED" : "READY";
-    await prisma.productRateRun.update({ where: { id: runId }, data: { status, finishedAt: new Date(), error: status === "FAILED" ? "No product could be quoted; see the errors in the list." : null } });
-    await audit(`shipping.product_run_${status.toLowerCase()}`, status !== "FAILED", { products: products.length, notQuoted: failed });
+    const status = done > 0 && failed === done ? "FAILED" : "READY";
+    await prisma.productRateRun.update({ where: { id: runId }, data: { status, total: done, finishedAt: new Date(), error: status === "FAILED" ? "No product could be quoted; see the errors in the list." : null } });
+    await audit(`shipping.product_run_${status.toLowerCase()}`, status !== "FAILED", { products: done, notQuoted: failed, pages, slowPages });
   } catch (err) {
     await prisma.productRateRun.update({ where: { id: runId }, data: { status: "FAILED", error: errorMessage(err).slice(0, 500), finishedAt: new Date() } });
     await audit("shipping.product_run_failed", false, { error: errorMessage(err) });

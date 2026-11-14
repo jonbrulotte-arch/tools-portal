@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchSalsifyList, listFilter, normalizeListId, testSalsifyList } from "@/lib/salsify";
+import { fetchSalsifyList, iterateSalsifyList, listFilter, normalizeListId, testSalsifyList } from "@/lib/salsify";
 import { isDue } from "@/lib/timezone";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 
@@ -37,9 +37,37 @@ describe("Salsify list", () => {
     expect(normalizeListId("  s-b813b681-ac5e-453a-a060-e7adee716984 ")).toBe("s-b813b681-ac5e-453a-a060-e7adee716984");
   });
 
+  it("retries a slow or busy page, then carries on", async () => {
+    const replies: (() => Response)[] = [
+      () => { throw Object.assign(new Error("aborted"), { name: "TimeoutError" }); },
+      () => new Response("busy", { status: 503 }),
+      () => new Response(JSON.stringify({ data: [product("A", shipping)], meta: { cursor: null, total_entries: 1 } })),
+    ];
+    vi.stubGlobal("fetch", vi.fn(async () => replies.shift()!()));
+    const waits: number[] = [];
+    const list = await fetchSalsifyList("key", "s-org", "s-list", fields, { wait: async (ms) => waits.push(ms) });
+    expect(list.map((p) => p.partNumber)).toEqual(["A"]);
+    expect(waits).toEqual([5000, 15000]);
+  });
+
+  it("gives up on a page after 5 tries and says so", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw Object.assign(new Error("aborted"), { name: "TimeoutError" }); }));
+    await expect(fetchSalsifyList("key", "s-org", "s-list", fields, { wait: async () => {} })).rejects.toThrow("Salsify didn't answer within 120s (gave up after 5 tries)");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(5);
+  });
+
+  it("streams a list page by page", async () => {
+    const pages = [{ data: [product("A", shipping), product("B", shipping)], meta: { cursor: "c2", total_entries: 3 } }, { data: [product("C", shipping)], meta: { cursor: null, total_entries: 3 } }];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(pages.shift()))));
+    const seen: [number, number | null][] = [];
+    for await (const page of iterateSalsifyList("key", "s-org", "s-list", fields)) seen.push([page.products.length, page.total]);
+    expect(seen).toEqual([[2, 3], [1, 3]]);
+  });
+
   it("explains a list Salsify can't read", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ errors: ["Filter is invalid"] }), { status: 422 })));
     await expect(fetchSalsifyList("key", "s-org", "999", fields)).rejects.toThrow("Salsify couldn't read list 999 (Filter is invalid)");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1); // a bad list isn't retried
     await expect(fetchSalsifyList("key", "s-org", "", fields)).rejects.toThrow("No Salsify list is set");
   });
 

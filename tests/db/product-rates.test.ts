@@ -49,6 +49,19 @@ describe.skipIf(!enabled)("Products runs (database)", async () => {
     expect((await loadProductPage(run.id, { filter: "nodata" }, {})).total).toBe(1);
   });
 
+  it("keeps products already quoted when Salsify stops answering part-way", async () => {
+    const page1 = { data: [{ "salsify:id": "Q1", ...ship("1", "8", "6", "4") }, { "salsify:id": "Q2", ...ship("2", "10", "8", "4") }], meta: { cursor: "next", total_entries: 4 } };
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => (++calls === 1 ? new Response(JSON.stringify(page1)) : new Response("{}", { status: 403 }))));
+    const { run, finished } = await startProductRun(user);
+    await finished;
+    const r = await prisma.productRateRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(r.status).toBe("FAILED");
+    expect(r.error).toMatch(/^Salsify stopped answering after 2 of 4 products/);
+    expect(await prisma.productRateItem.count({ where: { runId: run.id, status: "OK" } })).toBe(2);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(list))));
+  });
+
   it("refuses a second run while one is going, and marks interrupted runs failed", async () => {
     await prisma.productRateRun.create({ data: { mode: "simulated", status: "RUNNING", listId: "12345" } });
     await expect(startProductRun(user)).rejects.toThrow("already in progress");

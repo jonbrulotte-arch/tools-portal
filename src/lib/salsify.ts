@@ -5,7 +5,23 @@ import type { SalsifyFieldMap } from "@/lib/settings";
 
 // SALSIFY_API_BASE lets tests and local development point at a stand-in server.
 const BASE = process.env.SALSIFY_API_BASE?.replace(/\/$/, "") || "https://app.salsify.com/api/v1";
-const TIMEOUT_MS = 15_000;
+/** Single-product reads and key checks. */
+const TIMEOUT_MS = 30_000;
+/** List pages: Salsify works out list membership and returns full records, which can take a while. */
+const LIST_TIMEOUT_MS = 120_000;
+const LIST_PAGE_SIZE = 25;
+/** Waits before each retry of a list page (unless Salsify sends Retry-After). */
+const LIST_RETRY_MS = [5_000, 15_000, 30_000, 60_000];
+
+/** A Salsify failure worth trying again (timeout, connection error, 429/5xx). */
+class SalsifyRetryable extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+  }
+}
 
 export type SalsifyProduct = {
   partNumber: string;
@@ -21,13 +37,13 @@ export type SalsifyProduct = {
   fromFallback: ("weight" | "length" | "width" | "height")[];
 };
 
-async function salsifyFetch(apiKey: string, path: string) {
+async function salsifyFetch(apiKey: string, path: string, timeoutMs = TIMEOUT_MS) {
   try {
-    return await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
+    return await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
   } catch (err) {
     const e = err as Error & { cause?: { code?: string } };
-    if (e.name === "TimeoutError") throw new Error(`Salsify didn't answer within ${TIMEOUT_MS / 1000}s`);
-    throw new Error(`Couldn't connect to Salsify (${e.cause?.code ?? e.message})`);
+    if (e.name === "TimeoutError") throw new SalsifyRetryable(`Salsify didn't answer within ${timeoutMs / 1000}s`);
+    throw new SalsifyRetryable(`Couldn't connect to Salsify (${e.cause?.code ?? e.message})`);
   }
 }
 
@@ -120,11 +136,19 @@ export function normalizeListId(input: string): string {
 /** Salsify's list filter. The ID must be quoted: newer IDs look like s-1234abcd-… */
 export const listFilter = (listId: string) => `=list:'${listId.replace(/'/g, "\\'")}'`;
 
+type ListPage = { records: Record<string, unknown>[]; cursor: string | null; total: number | null };
+type Wait = (ms: number) => Promise<unknown>;
+const sleep: Wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /** One page of a Salsify list's products (Salsify's list filter, cursor paging). */
-async function listPage(apiKey: string, orgId: string, listId: string, cursor: string | null, perPage: number) {
+async function listPageOnce(apiKey: string, orgId: string, listId: string, cursor: string | null, perPage: number): Promise<ListPage> {
   const q = new URLSearchParams({ filter: listFilter(listId), per_page: String(perPage) });
   if (cursor) q.set("cursor", cursor);
-  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products?${q}`);
+  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products?${q}`, LIST_TIMEOUT_MS);
+  if (res.status === 429 || res.status >= 500) {
+    const ra = Number(res.headers.get("retry-after"));
+    throw new SalsifyRetryable(`Salsify list read failed (${res.status})`, Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 120_000) : null);
+  }
   if (res.status === 404 || res.status === 422) {
     const body = (await res.json().catch(() => ({}))) as { errors?: string[] };
     throw new Error(`Salsify couldn't read list ${listId}${body.errors?.length ? ` (${body.errors.join("; ")})` : ""}. Check the list ID in Settings → Products, and that it's a product list your key can see.`);
@@ -134,25 +158,50 @@ async function listPage(apiKey: string, orgId: string, listId: string, cursor: s
   return { records: body.data ?? [], cursor: body.meta?.cursor ?? null, total: body.meta?.total_entries != null ? Number(body.meta.total_entries) : null };
 }
 
-/** Every product on a Salsify list, mapped to weight and size (with the UPC fallback). */
-export async function fetchSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, maxProducts = 20_000): Promise<SalsifyProduct[]> {
+/** A list page, retried on timeouts, connection errors and 429/5xx (waits 5 s, 15 s, 30 s, 60 s). */
+async function listPage(apiKey: string, orgId: string, listId: string, cursor: string | null, perPage: number, wait: Wait = sleep): Promise<ListPage> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await listPageOnce(apiKey, orgId, listId, cursor, perPage);
+    } catch (err) {
+      if (!(err instanceof SalsifyRetryable)) throw err;
+      if (attempt >= LIST_RETRY_MS.length) throw new Error(`${err.message} (gave up after ${attempt + 1} tries)`);
+      await wait(err.retryAfterMs ?? LIST_RETRY_MS[attempt]);
+    }
+  }
+}
+
+/**
+ * Every product on a Salsify list, a page at a time, mapped to weight and size (with the UPC fallback).
+ * Salsify's cursor is a stateless "search after" marker, so pages can be read while quoting for hours.
+ */
+export async function* iterateSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, opts: { maxProducts?: number; wait?: Wait; pageSize?: number } = {}) {
   if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
   if (!listId) throw new Error("No Salsify list is set (tool Settings → Products).");
-  const out: SalsifyProduct[] = [];
+  const maxProducts = opts.maxProducts ?? 20_000;
   const seen = new Set<string>();
   let cursor: string | null = null;
-  for (let page = 0; page < 1000; page++) {
-    const r = await listPage(apiKey, orgId, listId, cursor, 100);
+  for (let page = 0; page < 5000; page++) {
+    const started = Date.now();
+    const r = await listPage(apiKey, orgId, listId, cursor, opts.pageSize ?? LIST_PAGE_SIZE, opts.wait);
+    const products: SalsifyProduct[] = [];
     for (const rec of r.records) {
       const id = plainValue(rec["salsify:id"]);
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      out.push(mapProduct(rec, fields, id));
+      products.push(mapProduct(rec, fields, id));
     }
-    if (out.length >= maxProducts) throw new Error(`The list has more than ${maxProducts.toLocaleString("en-US")} products; use a smaller list.`);
-    if (!r.cursor || !r.records.length) break;
+    if (seen.size > maxProducts) throw new Error(`The list has more than ${maxProducts.toLocaleString("en-US")} products; use a smaller list.`);
+    yield { products, total: r.total, ms: Date.now() - started };
+    if (!r.cursor || !r.records.length) return;
     cursor = r.cursor;
   }
+}
+
+/** Every product on a list at once (small lists and tests). */
+export async function fetchSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, opts: { maxProducts?: number; wait?: Wait; pageSize?: number } = {}): Promise<SalsifyProduct[]> {
+  const out: SalsifyProduct[] = [];
+  for await (const page of iterateSalsifyList(apiKey, orgId, listId, fields, opts)) out.push(...page.products);
   return out;
 }
 
@@ -160,6 +209,7 @@ export async function fetchSalsifyList(apiKey: string, orgId: string, listId: st
 export async function testSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap) {
   if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
   if (!listId) throw new Error("Enter the Salsify list ID first.");
-  const r = await listPage(apiKey, orgId, listId, null, 5);
+  // one try (up to 2 minutes): this answers a button click, so no long retry loop
+  const r = await listPageOnce(apiKey, orgId, listId, null, 5);
   return { total: r.total, sample: r.records.map((rec) => mapProduct(rec, fields, plainValue(rec["salsify:id"]) ?? "?")) };
 }
