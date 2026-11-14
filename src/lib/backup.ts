@@ -26,6 +26,9 @@ export const TABLE_ORDER = [
   "ShippingHistoryAgg",
   "ShippingQuoteRun",
   "ShippingQuote",
+  "ProductRateRun",
+  "ProductRateItem",
+  "ProductRateQuote",
   "AuditLog",
 ] as const;
 

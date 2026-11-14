@@ -14,20 +14,10 @@ import { apiFetch } from "@/lib/client-fetch";
 import { cn, formatDateTime } from "@/lib/utils";
 import type { QuoteCell } from "@/lib/shipping/analysis";
 import { weightLabel, ZONES } from "@/lib/shipping/weights";
+import { duration, elapsedMs } from "@/lib/format-duration";
 
 type Run = { id: string; mode: string; status: "PENDING" | "RUNNING" | "READY" | "FAILED" | "CANCELLED"; total: number; done: number; failed: number; error: string | null; startedBy: string | null; createdAt: string; startedAt: string; startDone: number; finishedAt: string | null };
 
-/** "4m 05s", "1h 02m" */
-function duration(ms: number) {
-  const s = Math.max(0, Math.round(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(sec).padStart(2, "0")}s`;
-}
-
-/** Elapsed time of a run's current pass (live while it runs). */
-function elapsedMs(r: Run, now: number) {
-  return (r.finishedAt ? Date.parse(r.finishedAt) : now) - Date.parse(r.startedAt);
-}
 const SERVICES = [
   { key: "GROUND_ADVANTAGE", label: "USPS Ground Advantage" },
   { key: "GROUND_COM", label: "UPS Ground — commercial" },

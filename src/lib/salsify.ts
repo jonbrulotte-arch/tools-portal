@@ -3,7 +3,8 @@ import type { SalsifyFieldMap } from "@/lib/settings";
 // Salsify REST API (v1): https://app.salsify.com/api/v1/orgs/{org_id}/products/{product_id}
 // Authenticated with the signed-in user's own API key (Bearer token), stored in their profile.
 
-const BASE = "https://app.salsify.com/api/v1";
+// SALSIFY_API_BASE lets tests and local development point at a stand-in server.
+const BASE = process.env.SALSIFY_API_BASE?.replace(/\/$/, "") || "https://app.salsify.com/api/v1";
 const TIMEOUT_MS = 15_000;
 
 export type SalsifyProduct = {
@@ -107,4 +108,48 @@ export async function testSalsifyKey(apiKey: string, orgId: string): Promise<{ p
   if (!res.ok) throw await failure(res, "Salsify test");
   const body = (await res.json().catch(() => ({}))) as { meta?: { total_entries?: number } };
   return { products: body.meta?.total_entries ?? null };
+}
+
+/** One page of a Salsify list's products (Salsify's list filter, cursor paging). */
+async function listPage(apiKey: string, orgId: string, listId: string, cursor: string | null, perPage: number) {
+  const q = new URLSearchParams({ filter: `=list:${listId}`, per_page: String(perPage) });
+  if (cursor) q.set("cursor", cursor);
+  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products?${q}`);
+  if (res.status === 404 || res.status === 422) {
+    const body = (await res.json().catch(() => ({}))) as { errors?: string[] };
+    throw new Error(`Salsify couldn't read list ${listId}${body.errors?.length ? ` (${body.errors.join("; ")})` : ""}. Check the list ID in Settings → Products, and that it's a product list your key can see.`);
+  }
+  if (!res.ok) throw await failure(res, "Salsify list read");
+  const body = (await res.json()) as { data?: Record<string, unknown>[]; meta?: { cursor?: string | null; total_entries?: number | string } };
+  return { records: body.data ?? [], cursor: body.meta?.cursor ?? null, total: body.meta?.total_entries != null ? Number(body.meta.total_entries) : null };
+}
+
+/** Every product on a Salsify list, mapped to weight and size (with the UPC fallback). */
+export async function fetchSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, maxProducts = 20_000): Promise<SalsifyProduct[]> {
+  if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
+  if (!listId) throw new Error("No Salsify list is set (tool Settings → Products).");
+  const out: SalsifyProduct[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  for (let page = 0; page < 1000; page++) {
+    const r = await listPage(apiKey, orgId, listId, cursor, 100);
+    for (const rec of r.records) {
+      const id = plainValue(rec["salsify:id"]);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(mapProduct(rec, fields, id));
+    }
+    if (out.length >= maxProducts) throw new Error(`The list has more than ${maxProducts.toLocaleString("en-US")} products; use a smaller list.`);
+    if (!r.cursor || !r.records.length) break;
+    cursor = r.cursor;
+  }
+  return out;
+}
+
+/** First page of a list, for the Settings test. */
+export async function testSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap) {
+  if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
+  if (!listId) throw new Error("Enter the Salsify list ID first.");
+  const r = await listPage(apiKey, orgId, listId, null, 5);
+  return { total: r.total, sample: r.records.map((rec) => mapProduct(rec, fields, plainValue(rec["salsify:id"]) ?? "?")) };
 }

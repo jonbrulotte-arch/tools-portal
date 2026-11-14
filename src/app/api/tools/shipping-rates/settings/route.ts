@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guard } from "@/lib/rbac";
-import { parseBody } from "@/lib/api";
+import { prisma } from "@/lib/prisma";
+import { jsonError, parseBody } from "@/lib/api";
 import { getSetting, setSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { encrypt } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
@@ -13,6 +14,10 @@ export async function PATCH(req: Request) {
   const body = await parseBody(req, shippingSettingsSchema);
   if (body instanceof NextResponse) return body;
   const before = await getSetting("shippingRates");
+  if (body.productRates.keyUserId) {
+    const keyUser = await prisma.userCredential.findUnique({ where: { userId_provider: { userId: body.productRates.keyUserId, provider: "salsify" } } });
+    if (!keyUser) return jsonError("The user chosen for scheduled Products runs has no saved Salsify key.");
+  }
   const value: ShippingRatesSettings = {
     origins: body.origins,
     upsAccounts: Object.fromEntries(Object.entries(body.upsAccounts).map(([k, v]) => [k.toUpperCase(), v])),
@@ -36,6 +41,7 @@ export async function PATCH(req: Request) {
     salsify: body.salsify,
     schedule: body.schedule,
     mangoImport: body.mangoImport,
+    productRates: body.productRates,
   };
   await setSetting("shippingRates", value);
   const redact = (s: typeof value) => ({

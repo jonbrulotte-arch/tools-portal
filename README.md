@@ -103,6 +103,18 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - USPS rows have no zone. The zone is taken from our UPS shipments to the same city where there are any; otherwise it is estimated from the distance, using zone boundaries learned per warehouse from the UPS invoices.
 - Only totals per carrier, service, warehouse, zone and weight are stored. No names or addresses are kept.
 
+**Products** (tab between Product quote and Cost reports) quotes every product on a Salsify list and keeps the results to browse.
+- Each product is read from Salsify (shipping weight and box, with the UPC fallback) and quoted one at a time. That's 42 live quotes: 2 warehouses × zones 2–8 × USPS Ground Advantage, UPS Ground commercial and UPS Ground residential. A 1,000-product list is about 42,000 quotes, so long lists take hours.
+- The tab shows each product's billable weights and, for each warehouse's most-used zone, the cheapest price for a home and for a business address. Search, filter (quoted / missing weight or size / failed), click a product for every zone, or export the run to CSV.
+- **Settings → Products (Salsify list):**
+  - the list ID (from the list's Salsify address);
+  - whose saved Salsify key scheduled runs use (**Run now** uses your own key if you have one);
+  - the schedule: weekly, default Sunday 1:00 AM Pacific, live mode only;
+  - how many runs to keep;
+  - **Save & test list**, which reads the first products.
+- Lists are read with Salsify's list filter (`=list:<id>`). If Salsify rejects it, the test says so.
+- Runs can be cancelled between products. Starts, finishes, skips and clean-ups are in the Access Log as `shipping.product_*`.
+
 **Mango import.** Instead of downloading and uploading, **Import from Mango** on the Cost reports tab pulls a date range straight from Mango's Ship Cost History export (`…/exshipcost?from=&to=&limitedFields=false`, a plain GET on the internal network, no login).
 - Settings → **Mango cost import** sets the export URL and an automatic import: by default weekly on Monday at 12:00 AM Pacific, an hour before the scheduled quote run, covering the last 90 days. Older automatic imports beyond the number to keep are deleted; uploads and button imports are kept.
 - **Save & test Mango** downloads the last two days and checks that every required column is there, without saving anything.

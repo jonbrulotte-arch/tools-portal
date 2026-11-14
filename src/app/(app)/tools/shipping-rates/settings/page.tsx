@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireTool } from "@/lib/rbac";
 import { getSetting } from "@/lib/settings";
+import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { automaticZips, latestZipSuggestions } from "@/lib/shipping/runner";
@@ -17,9 +18,12 @@ export default async function ShippingSettingsPage() {
   }
   const s = await getSetting("shippingRates");
   const autoZips = automaticZips(s, await latestZipSuggestions());
+  // users with a saved Salsify key (candidates for whose key scheduled Products runs use)
+  const keyUsers = (await prisma.userCredential.findMany({ where: { provider: "salsify", user: { status: "ACTIVE" } }, select: { user: { select: { id: true, name: true, email: true } } } })).map((c) => c.user);
   return (
     <ShippingSettingsClient
       autoZips={autoZips}
+      keyUsers={keyUsers}
       initial={{
         origins: s.origins,
         upsAccounts: s.upsAccounts,
@@ -33,6 +37,7 @@ export default async function ShippingSettingsPage() {
         salsify: s.salsify,
         schedule: s.schedule,
         mangoImport: s.mangoImport,
+        productRates: s.productRates,
       }}
     />
   );

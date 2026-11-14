@@ -11,15 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TableWrap, Th, Td, Tr } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { toCsv } from "@/lib/csv";
-import { cn } from "@/lib/utils";
 import { billable } from "@/lib/shipping/dims";
 import { weightLabel, ZONES } from "@/lib/shipping/weights";
 import type { SalsifyProduct } from "@/lib/salsify";
-import type { ProductQuoteResult, ProductQuoteRow } from "@/lib/shipping/product-quote";
+import type { ProductQuoteResult } from "@/lib/shipping/product-quote";
 import { ModeBadge } from "../quotes/quotes-client";
+import { ProductRatesTable } from "@/components/shipping/product-rates-table";
 
 type Origin = { code: string; name: string; zip: string };
 const SERVICES = [
@@ -28,8 +27,6 @@ const SERVICES = [
   { key: "GROUND_RES", label: "UPS Ground (residential)" },
 ] as const;
 
-const money = (v: number | null) => (v == null ? "—" : `$${v.toFixed(2)}`);
-const pct = (v: number | null) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
 
 export function ProductQuoteClient(props: { mode: string; origins: Origin[]; hasKey: boolean; orgSet: boolean; canManageSettings: boolean; runs: { id: string; label: string }[] }) {
@@ -120,18 +117,6 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
     a.click();
     URL.revokeObjectURL(a.href);
   }
-
-  const byOrigin = useMemo(() => {
-    if (!result) return [];
-    const codes = [...new Set(result.rows.map((r) => r.origin))];
-    return codes.map((code) => ({
-      code,
-      zones: ZONES.map((zone) => ({
-        zone,
-        rows: Object.fromEntries(result.rows.filter((r) => r.origin === code && r.zone === zone).map((r) => [r.service, r])) as Partial<Record<string, ProductQuoteRow>>,
-      })),
-    }));
-  }, [result]);
 
   const summary = useMemo(() => {
     if (!result) return null;
@@ -292,70 +277,7 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {byOrigin.map((o) => (
-              <div key={o.code} className="space-y-2">
-                <p className="text-sm font-semibold text-gray-900">{originName(o.code)}</p>
-                <TableWrap>
-                  <thead>
-                    <tr>
-                      <Th rowSpan={2}>Zone</Th>
-                      {SERVICES.map((s) => (
-                        <Th key={s.key} colSpan={3} className="text-center border-l border-gray-200">
-                          {s.label}
-                        </Th>
-                      ))}
-                      <Th rowSpan={2} className="text-center border-l border-gray-200">
-                        Cheapest
-                      </Th>
-                    </tr>
-                    <tr>
-                      {SERVICES.map((s) => (
-                        <Fragment key={s.key}>
-                          <Th className="text-right border-l border-gray-200">Quote</Th>
-                          <Th className="text-right">Chart</Th>
-                          <Th className="text-right">Diff</Th>
-                        </Fragment>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {o.zones.map(({ zone, rows }) => {
-                      const usps = rows.GROUND_ADVANTAGE?.live ?? null;
-                      const com = rows.GROUND_COM?.live ?? null;
-                      const res = rows.GROUND_RES?.live ?? null;
-                      const pick = (ups: number | null) => (usps == null && ups == null ? null : ups == null || (usps != null && usps <= ups) ? "USPS" : "UPS");
-                      const zip = rows.GROUND_ADVANTAGE?.destZip ?? rows.GROUND_COM?.destZip;
-                      return (
-                        <Tr key={zone}>
-                          <Td className="whitespace-nowrap">
-                            <span className="font-medium">Zone {zone}</span>
-                            {zip && <span className="block text-xs text-gray-500">to {zip}</span>}
-                          </Td>
-                          {SERVICES.map((s) => {
-                            const r = rows[s.key];
-                            return (
-                              <Fragment key={s.key}>
-                                <Td className="text-right border-l border-gray-100 font-medium text-gray-900" title={r?.error ?? undefined}>
-                                  {r?.error ? <span className="text-red-600">Failed</span> : money(r?.live ?? null)}
-                                </Td>
-                                <Td className="text-right text-gray-600">{money(r?.chart ?? null)}</Td>
-                                <Td className={cn("text-right", r?.diffPct != null && Math.abs(r.diffPct) > 5 ? "text-gray-900 font-medium" : "text-gray-500")}>{pct(r?.diffPct ?? null)}</Td>
-                              </Fragment>
-                            );
-                          })}
-                          <Td className="text-center border-l border-gray-100 whitespace-nowrap">
-                            <span className="text-xs text-gray-500">Business </span>
-                            {pick(com) ? <Badge variant={pick(com) === "UPS" ? "warning" : "default"}>{pick(com)}</Badge> : "—"}
-                            <span className="text-xs text-gray-500 ml-2">Home </span>
-                            {pick(res) ? <Badge variant={pick(res) === "UPS" ? "warning" : "default"}>{pick(res)}</Badge> : "—"}
-                          </Td>
-                        </Tr>
-                      );
-                    })}
-                  </tbody>
-                </TableWrap>
-              </div>
-            ))}
+            <ProductRatesTable rows={result.rows} originName={originName} />
             <p className="text-xs text-gray-500">
               Quotes include the package size, so the carrier applies dimensional weight. The chart is read at the billable weight: UPS {result.billable.ups} lb, USPS {weightLabel(result.billable.uspsTier)}. A failed quote shows its reason on hover and in the CSV.
             </p>

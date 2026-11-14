@@ -14,7 +14,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { MangoImportSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import type { MangoImportSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
@@ -34,6 +34,7 @@ type Initial = {
   salsify: { orgId: string; fields: SalsifyFieldMap };
   schedule: ShippingSchedule;
   mangoImport: MangoImportSettings;
+  productRates: ProductRatesSettings;
 };
 
 
@@ -62,7 +63,7 @@ function Choice({ checked, onClick, label, hint }: { checked: boolean; onClick: 
   );
 }
 
-export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial; autoZips: Record<string, Record<number, string>> }) {
+export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initial: Initial; autoZips: Record<string, Record<number, string>>; keyUsers: { id: string; name: string; email: string }[] }) {
   const router = useRouter();
   const [origins, setOrigins] = useState(initial.origins);
   const [accounts, setAccounts] = useState(Object.entries(initial.upsAccounts).map(([account, origin]) => ({ account, origin })));
@@ -81,6 +82,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
   const [salsify, setSalsify] = useState(initial.salsify);
   const [schedule, setSchedule] = useState(initial.schedule);
   const [mangoImport, setMangoImport] = useState(initial.mangoImport);
+  const [productRates, setProductRates] = useState(initial.productRates);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -107,6 +109,7 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
           salsify,
           schedule,
           mangoImport,
+          productRates,
         },
       });
       setUps((u) => ({ ...u, clientSecret: "", hasSecret: u.hasSecret || !!u.clientSecret }));
@@ -141,6 +144,17 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
       setTest((t) => ({ ...t, MANGO: { ok: true, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, MANGO: { ok: false, text: (err as Error).message } }));
+    }
+  }
+
+  async function testProducts() {
+    if (!(await save())) return;
+    setTest((t) => ({ ...t, PRODUCTS: "busy" }));
+    try {
+      const r = await apiFetch<{ message: string }>("/api/tools/shipping-rates/settings/products-test", { method: "POST" });
+      setTest((t) => ({ ...t, PRODUCTS: { ok: true, text: r.message } }));
+    } catch (err) {
+      setTest((t) => ({ ...t, PRODUCTS: { ok: false, text: (err as Error).message } }));
     }
   }
 
@@ -585,6 +599,116 @@ export function ShippingSettingsClient({ initial, autoZips }: { initial: Initial
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Products (Salsify list)</CardTitle>
+          <CardDescription>
+            The Products tab quotes every product on a Salsify list (42 quotes each) and keeps the results to browse. In Salsify, open the list: its ID is the number in the address bar (…/lists/<span className="font-mono">12345</span>). Weekly on Sunday at 1:00 AM keeps it clear of Monday&apos;s Mango import and quote run.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 max-w-3xl">
+            <div>
+              <Label htmlFor="prod-list">Salsify list ID</Label>
+              <Input id="prod-list" value={productRates.listId} onChange={(e) => setProductRates({ ...productRates, listId: e.target.value.trim() })} className="font-mono" placeholder="12345" />
+            </div>
+            <div>
+              <Label>Scheduled runs use the Salsify key of</Label>
+              <Select value={productRates.keyUserId ?? "none"} onValueChange={(v) => setProductRates({ ...productRates, keyUserId: v === "none" ? null : v })}>
+                <SelectTrigger className="[&>span]:truncate [&>span]:text-left">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nobody chosen</SelectItem>
+                  {keyUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">Only people who&apos;ve saved a Salsify key in My Profile are listed. &quot;Run now&quot; uses your own key if you have one.</p>
+            </div>
+          </div>
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={productRates.enabled} onCheckedChange={(v) => setProductRates({ ...productRates, enabled: v })} />
+            Run automatically
+          </label>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label>Frequency</Label>
+              <Select value={productRates.frequency} onValueChange={(v) => setProductRates({ ...productRates, frequency: v as ProductRatesSettings["frequency"] })} disabled={!productRates.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {productRates.frequency === "weekly" && (
+              <div>
+                <Label>Day</Label>
+                <Select value={String(productRates.weekday)} onValueChange={(v) => setProductRates({ ...productRates, weekday: Number(v) })} disabled={!productRates.enabled}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((d, i) => (
+                      <SelectItem key={d} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Start at</Label>
+              <Select value={String(productRates.hour)} onValueChange={(v) => setProductRates({ ...productRates, hour: Number(v) })} disabled={!productRates.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {hourLabel(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={productRates.timezone} onValueChange={(v) => setProductRates({ ...productRates, timezone: v })} disabled={!productRates.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="prod-keep">Keep this many runs</Label>
+              <Input id="prod-keep" type="number" min={1} max={26} value={productRates.keepRuns} onChange={(e) => setProductRates({ ...productRates, keepRuns: Number(e.target.value) })} />
+            </div>
+          </div>
+          {productRates.enabled && mode !== "live" && <Alert variant="warning">The tool is in simulated mode, so scheduled Products runs will be skipped until you switch Rates source to Live.</Alert>}
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="outline" onClick={testProducts} disabled={busy || test.PRODUCTS === "busy" || !productRates.listId}>
+              <Plug className="h-4 w-4" /> {test.PRODUCTS === "busy" ? "Testing…" : "Save & test list"}
+            </Button>
+          </div>
+          <TestResult carrier="PRODUCTS" />
         </CardContent>
       </Card>
 

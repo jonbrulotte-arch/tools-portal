@@ -142,4 +142,5 @@ export async function failInterruptedJobs() {
   const msg = "Interrupted by a server restart; start it again.";
   await prisma.shippingQuoteRun.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
   await prisma.shippingReport.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
+  await prisma.productRateRun.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
 }

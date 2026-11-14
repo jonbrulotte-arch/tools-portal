@@ -320,3 +320,74 @@ model ShippingQuote {
 
   @@index([runId, carrier, origin, zone])
 }
+
+// ─── Shipping Rates Generator: Products (weekly live rates for a Salsify list) ───
+
+enum ProductRateItemStatus {
+  OK
+  NO_DATA
+  FAILED
+}
+
+model ProductRateRun {
+  id            String            @id @default(cuid())
+  mode          String // live | simulated
+  status        ShippingJobStatus @default(PENDING)
+  startedById   String?
+  startedBy     String?
+  listId        String
+  total         Int               @default(0)
+  done          Int               @default(0)
+  failed        Int               @default(0)
+  error         String?
+  comparedRunId String?
+  createdAt     DateTime          @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  items         ProductRateItem[]
+
+  @@index([createdAt])
+}
+
+model ProductRateItem {
+  id           String                @id @default(cuid())
+  runId        String
+  run          ProductRateRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position     Int
+  partNumber   String
+  name         String?
+  packaging    String?
+  weight       Decimal?              @db.Decimal(8, 2)
+  length       Decimal?              @db.Decimal(8, 2)
+  width        Decimal?              @db.Decimal(8, 2)
+  height       Decimal?              @db.Decimal(8, 2)
+  sizeSource   String? // primary | fallback | mixed
+  upsBillable  Decimal?              @db.Decimal(8, 2)
+  uspsBillable Decimal?              @db.Decimal(8, 2)
+  status       ProductRateItemStatus
+  error        String?
+  createdAt    DateTime              @default(now())
+  quotes       ProductRateQuote[]
+
+  @@index([runId, partNumber])
+  @@index([partNumber])
+}
+
+model ProductRateQuote {
+  id         String          @id @default(cuid())
+  itemId     String
+  item       ProductRateItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  origin     String
+  zone       Int
+  carrier    String
+  service    String
+  destZip    String
+  amount     Decimal?        @db.Decimal(10, 2)
+  listAmount Decimal?        @db.Decimal(10, 2)
+  negotiated Boolean?
+  chart      Decimal?        @db.Decimal(10, 2)
+  diffPct    Decimal?        @db.Decimal(8, 1)
+  error      String?
+
+  @@index([itemId])
+}
