@@ -1,0 +1,36 @@
+import cron from "node-cron";
+import { createBackup, pruneScheduled } from "@/lib/backup";
+import { getSetting } from "@/lib/settings";
+import { logAudit } from "@/lib/audit";
+import { errorMessage } from "@/lib/api";
+import { runScheduledQuotes } from "@/lib/shipping/schedule";
+import { runScheduledMangoImport } from "@/lib/shipping/mango-import";
+import { runScheduledProductRates } from "@/lib/shipping/product-rates";
+import { zonedParts } from "@/lib/timezone";
+
+// Runs every hour on the hour and checks the backup, quote-run, Mango-import and Products schedules in settings,
+// so schedule changes apply without restarting the server.
+const g = globalThis as unknown as { __portalScheduler?: boolean };
+
+export function startScheduler() {
+  if (g.__portalScheduler) return;
+  g.__portalScheduler = true;
+  cron.schedule("0 * * * *", async () => {
+    // scheduled shipping quote runs go in the background (they can take an hour or more)
+    void runScheduledQuotes().catch((err) => console.error("[scheduler] scheduled quotes:", errorMessage(err)));
+    void runScheduledMangoImport().catch((err) => console.error("[scheduler] Mango import:", errorMessage(err)));
+    void runScheduledProductRates().catch((err) => console.error("[scheduler] Products run:", errorMessage(err)));
+    try {
+      const s = await getSetting("backup");
+      const now = zonedParts(new Date(), s.timezone);
+      if (s.schedule === "off" || now.hour !== s.hour) return;
+      if (s.schedule === "weekly" && now.weekday !== s.weekday) return;
+      const result = await createBackup("scheduled", null);
+      await pruneScheduled(s.retention);
+      await logAudit({ action: "backup.scheduled", category: "BACKUP", actorEmail: "system", targetId: result.name, metadata: result, ip: null, userAgent: null });
+    } catch (err) {
+      await logAudit({ action: "backup.scheduled", category: "BACKUP", actorEmail: "system", success: false, metadata: { error: errorMessage(err) }, ip: null, userAgent: null });
+    }
+  });
+  console.log("[scheduler] backup and quote-run scheduler started");
+}
