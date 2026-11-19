@@ -8,6 +8,7 @@ import { getUserSecret } from "@/lib/user-credentials";
 import { billable } from "@/lib/shipping/dims";
 import type { ThrottleGate } from "@/lib/shipping/carriers";
 import { prepareQuoteContext, quoteProductWith, type QuoteContext } from "@/lib/shipping/product-quote";
+import { flushApiUsage } from "@/lib/shipping/api-usage";
 import { isDue } from "@/lib/timezone";
 
 // Products tab: reads every product on a Salsify list, then quotes them one at a time (42 live quotes
@@ -54,7 +55,7 @@ async function saveItem(runId: string, position: number, p: SalsifyProduct, s: S
   }
   const dims = { length: p.length!, width: p.width!, height: p.height! };
   const b = billable(p.weight!, dims);
-  const { rows } = await quoteProductWith(ctx, s, { partNumber: p.partNumber, weight: p.weight!, dims, origins: s.origins.map((o) => o.code) }, gate);
+  const { rows } = await quoteProductWith(ctx, s, { partNumber: p.partNumber, weight: p.weight!, dims, origins: s.origins.map((o) => o.code) }, gate, "product_run");
   const failedAll = rows.every((r) => r.live == null);
   await prisma.productRateItem.create({
     data: {
@@ -146,6 +147,8 @@ async function executeProductRun(runId: string, s: ShippingRatesSettings, key: s
   } catch (err) {
     await prisma.productRateRun.update({ where: { id: runId }, data: { status: "FAILED", error: errorMessage(err).slice(0, 500), finishedAt: new Date() } });
     await audit("shipping.product_run_failed", false, { error: errorMessage(err) });
+  } finally {
+    await flushApiUsage();
   }
 }
 

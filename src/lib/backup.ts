@@ -29,6 +29,7 @@ export const TABLE_ORDER = [
   "ProductRateRun",
   "ProductRateItem",
   "ProductRateQuote",
+  "CarrierApiUsage",
   "AutoEmail",
   "AutoEmailSentKey",
   "AutoEmailLog",

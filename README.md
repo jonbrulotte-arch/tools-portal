@@ -149,6 +149,13 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - **Fallback fields** (default *UPC Weight (Pounds)* and *UPC Length/Width/Height (Inches)*) are used when a part doesn't have all four shipping values. They're used as a set, so weight and size describe the same package; if the fallback set is incomplete too, only the gaps are filled. Product quote flags parts that used fallback values.
 - Each user adds their **own Salsify API key** in **My Profile → Salsify API key**. The key is encrypted per user (`UserCredential` table), never sent back to the browser, and used only for that user's lookups. Saving, testing, removing and every lookup are recorded in the Access Log.
 
+**API Report** (managers): carrier API usage per account (each UPS account and the Endicia account):
+- what's counted: rate requests (every attempt, retries included), token requests, errors and throttling;
+- **average daily volume**, both over calendar days and per active day, plus the peak day;
+- a daily chart, a by-source split and a CSV export.
+
+Every live carrier call is counted in `src/lib/shipping/carriers.ts` (`recordApiCall`). Counts are buffered and written as per-day (Pacific) counters in `CarrierApiUsage`. On first start, earlier days are estimated from the live quote and Products runs still stored, and labelled *estimated*.
+
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
 
 ## Automated Emails (EDI)

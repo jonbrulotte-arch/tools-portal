@@ -75,6 +75,26 @@ Enter the **Mango export URL**, the **Date range** (days back from today, for ex
 - **Products (Salsify list)**: the list whose products are quoted on the Products tab. Paste the list's address or its ID (`s-…`). Choose whose Salsify key **scheduled runs use**, the schedule, and how many runs to keep.
 - Each product gets 42 quotes (2 warehouses × 7 zones × 3 services), so a big list takes a while; progress shows on the Products tab.
 
+## API Report
+
+The **API Report** tab (managers only) shows how many requests the tool sends to UPS and Endicia, for each account. Use it to check usage against the carriers' limits, and to spot an account that's being throttled or failing.
+
+![API Report: totals and requests per day by account](images/api-report.jpg)
+
+- **Period**: last 7, 30 or 90 days, or your own dates. Days run midnight to midnight, Pacific time.
+- **Rate requests**: every rate request sent. **Retries count**, because the carriers count every request they receive. **Token requests** (UPS sign-ins) are counted separately.
+- **Average daily volume**: rate requests ÷ every day in the period, including days with no requests. **Per active day** divides only by the days that had requests. Quote runs are weekly, so per active day is closer to what a single run asks of an account in one day. Compare the **Peak day** with the carrier's daily limit.
+- **Errors & throttled**: requests the carrier refused or failed. *Throttled* means the carrier asked us to slow down (429 or "busy"), or didn't answer in time.
+
+![By account](images/api-report-accounts.jpg)
+
+The **By account** table has one row per UPS account and one for the Endicia account. Each row shows:
+- **Quotes** marks the account each warehouse quotes with. A quoting account is listed even when it made no requests.
+- The line under each account splits its requests by what asked for them: quote runs, Products runs, Product quotes or Settings tests.
+- **Export CSV** saves the table for the period.
+
+> Note: Usage has been recorded since the API Report was added. Earlier days are **estimated** from the live quote runs and Products runs still stored: one request per saved quote, for the account that quotes for that warehouse today. They don't include retries, token requests, Product quotes or tests. Estimated days are faded in the chart. Nothing is counted in simulated mode, because no carrier is called.
+
 ## Checklist after a change
 
 - [ ] **Save & test this account** succeeds for each changed UPS account, and **Test** on each other changed card

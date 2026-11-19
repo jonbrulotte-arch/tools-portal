@@ -22,6 +22,7 @@ import { processReport } from "../../src/lib/shipping/report";
 import { startQuoteRun } from "../../src/lib/shipping/runner";
 import { startProductRun } from "../../src/lib/shipping/product-rates";
 import { runAutoEmail } from "../../src/lib/auto-emails/runner";
+import { usageDay } from "../../src/lib/shipping/api-usage";
 
 export const DEMO_PASSWORD = "DemoPassword2026";
 
@@ -82,6 +83,46 @@ async function main() {
   const upsCredentials = { "796305": { encClientId: encrypt("demo-lv-client-id-a38d"), encClientSecret: encrypt("demo") }, "9X0F53": { encClientId: encrypt("demo-gv-client-id-5e21"), encClientSecret: encrypt("demo") } };
   await setSetting("shippingRates", { mode: "simulated", upsCredentials, upsRatingAccounts: {}, salsify: { ...ship.salsify, orgId: "s-demo-org" }, productRates: { ...ship.productRates, listId: "s-demo-list", keyUserId: admin.id } });
   await setUserSecret(admin.id, "salsify", "demo-salsify-key-0000");
+  // API Report: 30 days of sample carrier usage (the first 9 days "estimated", as after an upgrade)
+  await setSetting("shippingRates", { endicia: { ...(await getSetting("shippingRates")).endicia, accountId: "2500123" } });
+  await prisma.carrierApiUsage.deleteMany({ where: { day: { lt: "2099-01-01" } } });
+  {
+    const rows: { day: string; carrier: string; account: string; source: string; kind: string; outcome: string; count: number }[] = [];
+    const add = (day: string, carrier: string, account: string, source: string, count: number, kind = "rate", outcome = "ok") => count > 0 && rows.push({ day, carrier, account, source, kind, outcome, count });
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86_400_000);
+      const day = usageDay(d);
+      const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+      const est = i >= 21;
+      if (weekday === 1) {
+        // Monday 1 AM: the weekly quote run
+        add(day, "UPS", "796305", est ? "estimate" : "quote_run", 2100);
+        add(day, "UPS", "9X0F53", est ? "estimate" : "quote_run", 2100);
+        add(day, "USPS", "2500123", est ? "estimate" : "quote_run", 336);
+        if (!est) {
+          add(day, "UPS", "796305", "quote_run", 14 + Math.round(rnd() * 20), "rate", "throttled");
+          add(day, "UPS", "796305", "quote_run", 1, "token");
+          add(day, "UPS", "9X0F53", "quote_run", 1, "token");
+        }
+      }
+      if (weekday === 0) {
+        // Sunday 1 AM: the Products run (25 products)
+        for (const [c, a] of [["UPS", "796305"], ["UPS", "9X0F53"], ["USPS", "2500123"]]) add(day, c, a, est ? "estimate" : "product_run", 350);
+        if (!est) for (const a of ["796305", "9X0F53"]) add(day, "UPS", a, "product_run", 1, "token");
+      }
+      if (!est && weekday >= 1 && weekday <= 5) {
+        const n = Math.round(rnd() * 3);
+        for (const [c, a] of [["UPS", "796305"], ["UPS", "9X0F53"], ["USPS", "2500123"]]) add(day, c, a, "product_quote", n * 14);
+        if (rnd() > 0.8) add(day, "USPS", "2500123", "product_quote", 1, "rate", "error");
+      }
+    }
+    add(usageDay(), "UPS", "W293F5", "settings_test", 2);
+    add(usageDay(), "UPS", "W293F5", "settings_test", 1, "token");
+    await prisma.carrierApiUsage.createMany({ data: rows });
+  }
+
   if (process.env.DOCS_SHIP_REPORT && !(await prisma.shippingReport.count())) {
     const report = await prisma.shippingReport.create({ data: { fileName: "Shipping_cost_2026-08-01_to_2026-11-10.xlsx", uploadedById: admin.id, uploadedBy: admin.email } });
     await processReport(report.id, readFileSync(process.env.DOCS_SHIP_REPORT));

@@ -3,6 +3,7 @@ import type { ShippingRatesSettings } from "@/lib/settings";
 import { tierOunces } from "@/lib/shipping/weights";
 import { billable, type Dims } from "@/lib/shipping/dims";
 import { stateForZip } from "@/lib/shipping/zip-state";
+import { outcomeFor, recordApiCall, type ApiCall, type ApiSource } from "@/lib/shipping/api-usage";
 
 // Rate quote providers. "live" calls UPS (Rating API, OAuth) and Endicia (Label Server,
 // CalculatePostageRate). "simulated" returns made-up but plausible prices so the tool can be
@@ -20,6 +21,8 @@ export type QuoteRequest = {
   dims?: Dims | null;
   /** UPS only: quote with this account instead of the warehouse's quoting account (Settings tests). */
   upsAccount?: string;
+  /** What asked for the quote, for the API Report (default: a quote run). */
+  source?: ApiSource;
 };
 export type QuoteResult = {
   amount: number;
@@ -55,11 +58,15 @@ function retryAfter(res: Response): number | null {
   return Number.isFinite(at) ? Math.min(Math.max(at - Date.now(), 0), 120_000) : null;
 }
 
-async function timedFetch(url: string, init: RequestInit, what: string) {
+/** A live carrier call; each attempt is counted for the API Report (`track`), whatever its outcome. */
+async function timedFetch(url: string, init: RequestInit, what: string, track: Omit<ApiCall, "outcome">) {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    recordApiCall({ ...track, outcome: outcomeFor(res.status) });
+    return res;
   } catch (err) {
     const e = err as Error & { cause?: { code?: string } };
+    recordApiCall({ ...track, outcome: e.name === "TimeoutError" ? "throttled" : "error" });
     if (e.name === "TimeoutError") throw new CarrierError(`${what}: no response from ${new URL(url).host} within ${TIMEOUT_MS / 1000}s`, true);
     throw new CarrierError(`${what}: couldn't connect to ${new URL(url).host} (${e.cause?.code ?? e.message})`, true);
   }
@@ -108,7 +115,7 @@ export const missingUpsCredentials = (account: string) => `UPS account ${account
 
 const tokenKey = (s: ShippingRatesSettings, account: string) => `${s.ups.environment}:${account}:${s.upsCredentials?.[account]?.encClientId ?? ""}`;
 
-async function upsAccessToken(s: ShippingRatesSettings, account: string): Promise<string> {
+async function upsAccessToken(s: ShippingRatesSettings, account: string, source: ApiSource): Promise<string> {
   const c = s.upsCredentials?.[account];
   if (!c?.encClientId || !c.encClientSecret) throw new Error(missingUpsCredentials(account));
   const key = tokenKey(s, account);
@@ -126,6 +133,7 @@ async function upsAccessToken(s: ShippingRatesSettings, account: string): Promis
       body: new URLSearchParams({ grant_type: "client_credentials" }),
     },
     "UPS token request",
+    { carrier: "UPS", account, source, kind: "token" },
   );
   const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: string | number; response?: { errors?: { message?: string }[] } };
   if (!res.ok || !body.access_token) throw new Error(`UPS token request failed for account ${account} (${res.status}): ${body.response?.errors?.[0]?.message ?? "no details"}`);
@@ -193,7 +201,8 @@ export function parseUpsRateResponse(body: unknown): QuoteResult {
 async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<QuoteResult> {
   const account = q.upsAccount ?? upsAccountFor(s, q.origin);
   if (!account) throw new Error(`No UPS account is mapped to origin ${q.origin}`);
-  const token = await upsAccessToken(s, account);
+  const source = q.source ?? "quote_run";
+  const token = await upsAccessToken(s, account, source);
   const res = await timedFetch(
     `${upsBase(s)}/api/rating/${encodeURIComponent(s.ups.apiVersion || "v2403")}/Rate`,
     {
@@ -202,6 +211,7 @@ async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<Quot
       body: JSON.stringify(buildUpsRateRequest(q, account)),
     },
     "UPS rate request",
+    { carrier: "UPS", account, source, kind: "rate" },
   );
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -267,6 +277,7 @@ async function endiciaQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<
       body: buildEndiciaRateRequest(s, decrypt(s.endicia.encPassPhrase), q),
     },
     "Endicia rate request",
+    { carrier: "USPS", account: s.endicia.accountId, source: q.source ?? "quote_run", kind: "rate" },
   );
   const xml = await res.text();
   if (!res.ok && !xml.includes("<Status>")) throw new CarrierError(`Endicia rate request failed (${res.status})`, RETRY_STATUSES.has(res.status), retryAfter(res));

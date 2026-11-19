@@ -164,6 +164,11 @@ const shots = {
   "shipping-rates-admin": async () => {
     const d = "shipping-rates-admin";
     const p = await as("logistics@demo.example");
+    await go(p, "/tools/shipping-rates/api-report", 1200);
+    await save(d, "api-report", p);
+    await scrollMain(p, 700);
+    await p.waitForTimeout(400);
+    await save(d, "api-report-accounts", p.locator("div.rounded-lg.border").filter({ has: p.locator("h3", { hasText: /^By account$/ }) }).first());
     await go(p, "/tools/shipping-rates/settings");
     for (const [name, title] of [
       ["rates-source", "Rates source"],

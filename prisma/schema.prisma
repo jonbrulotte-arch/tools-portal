@@ -463,3 +463,21 @@ model AutoEmailLog {
   @@index([createdAt])
   @@index([emailId, createdAt])
 }
+
+// ─── Shipping Rates Generator: carrier API usage (API Report tab) ───
+
+/// Real carrier API calls, counted per Pacific day. Every attempt counts (retries included), as the carriers count them.
+model CarrierApiUsage {
+  id        String   @id @default(cuid())
+  day       String   @db.VarChar(10) // YYYY-MM-DD, America/Los_Angeles
+  carrier   String // UPS | USPS
+  account   String // UPS shipper account, or the Endicia account ID
+  source    String // quote_run | product_run | product_quote | settings_test | estimate
+  kind      String // rate | token
+  outcome   String // ok | error | throttled
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, carrier, account, source, kind, outcome])
+  @@index([day])
+}

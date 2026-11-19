@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { getQuote, missingUpsCredentials, upsAccountFor, upsCredentialStatus } from "@/lib/shipping/carriers";
 import { latestZipSuggestions, quoteZipsFor } from "@/lib/shipping/runner";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
+import { flushApiUsage } from "@/lib/shipping/api-usage";
 
 // One real (live) 2 lb quote to each warehouse's zone-5 ZIP, to check credentials (and, for UPS,
 // that each warehouse's quoting account returns negotiated rates with its own credentials).
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   for (const o of origins) {
     const destZip = zips[o.code][5];
     const account = body.carrier === "UPS" ? (only ?? upsAccountFor(s, o.code)) : null;
-    const q = { carrier: body.carrier, service: body.carrier === "UPS" ? ("GROUND_COM" as const) : ("GROUND_ADVANTAGE" as const), origin: o.code, originZip: o.zip, destZip, zone: 5, weight: 2, upsAccount: account ?? undefined };
+    const q = { carrier: body.carrier, service: body.carrier === "UPS" ? ("GROUND_COM" as const) : ("GROUND_ADVANTAGE" as const), origin: o.code, originZip: o.zip, destZip, zone: 5, weight: 2, upsAccount: account ?? undefined, source: "settings_test" as const };
     const where = `${o.name}${account ? ` (account ${account})` : ""}`;
     const route = `2 lb ${o.zip} → ${destZip}`;
     try {
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
     }
   }
 
+  await flushApiUsage();
   const ok = results.every((r) => r.ok);
   await logAudit({
     action: "shipping.api_tested",

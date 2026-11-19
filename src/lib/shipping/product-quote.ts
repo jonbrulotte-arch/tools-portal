@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { flushApiUsage, type ApiSource } from "@/lib/shipping/api-usage";
 import type { ShippingRatesSettings } from "@/lib/settings";
 import { getQuoteWithRetry, type QuoteRequest, type ThrottleGate } from "@/lib/shipping/carriers";
 import { loadQuotes } from "@/lib/shipping/analysis";
@@ -53,7 +54,7 @@ export async function prepareQuoteContext(s: ShippingRatesSettings, runId?: stri
 }
 
 /** Quotes one product against a prepared context; `gate` paces calls across a whole batch. */
-export async function quoteProductWith(ctx: QuoteContext, s: ShippingRatesSettings, input: ProductQuoteInput, gate: ThrottleGate = {}) {
+export async function quoteProductWith(ctx: QuoteContext, s: ShippingRatesSettings, input: ProductQuoteInput, gate: ThrottleGate = {}, source: ApiSource = "product_quote") {
   const b = billable(input.weight, input.dims);
   const origins = s.origins.filter((o) => input.origins.includes(o.code));
   const jobs = origins.flatMap((o) => ZONES.flatMap((zone) => PRODUCT_SERVICES.map((sv) => ({ origin: o, zone, destZip: ctx.zips[o.code]?.[String(zone)] ?? "", ...sv }))));
@@ -72,7 +73,7 @@ export async function quoteProductWith(ctx: QuoteContext, s: ShippingRatesSettin
       else if (!j.destZip) row.error = "No destination ZIP for this zone";
       else {
         try {
-          const r = await getQuoteWithRetry(s, s.mode, { carrier: j.carrier, service: j.service, origin: j.origin.code, originZip: j.origin.zip, destZip: j.destZip, zone: j.zone, weight: input.weight, dims: input.dims }, gate);
+          const r = await getQuoteWithRetry(s, s.mode, { carrier: j.carrier, service: j.service, origin: j.origin.code, originZip: j.origin.zip, destZip: j.destZip, zone: j.zone, weight: input.weight, dims: input.dims, source }, gate);
           row.live = r.amount;
           row.listAmount = r.listAmount ?? null;
           row.negotiated = r.negotiated ?? null;
@@ -90,7 +91,7 @@ export async function quoteProductWith(ctx: QuoteContext, s: ShippingRatesSettin
 
 export async function quoteProduct(s: ShippingRatesSettings, input: ProductQuoteInput) {
   const ctx = await prepareQuoteContext(s, input.runId);
-  const { billable: b, rows } = await quoteProductWith(ctx, s, input);
+  const { billable: b, rows } = await quoteProductWith(ctx, s, input).finally(() => flushApiUsage());
   return {
     mode: s.mode,
     run: ctx.run ? { id: ctx.run.id, mode: ctx.run.mode, createdAt: ctx.run.createdAt.toISOString() } : null,

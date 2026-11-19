@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { flushApiUsage } from "@/lib/shipping/api-usage";
 import { prisma } from "@/lib/prisma";
 import { getSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
@@ -116,6 +117,8 @@ async function executeRun(runId: string, s: ShippingRatesSettings, grid: QuoteRe
     await logAudit({ action: `shipping.quote_run_${status.toLowerCase()}`, category: "TOOL", actorId: actor.id, actorEmail: actor.email, targetType: "ShippingQuoteRun", targetId: runId, success: status !== "FAILED", metadata: { mode: s.mode, total: grid.length, done, failed }, ip: null, userAgent: null });
   } catch (err) {
     await prisma.shippingQuoteRun.update({ where: { id: runId }, data: { status: "FAILED", error: err instanceof Error ? err.message : String(err), finishedAt: new Date(), done, failed } });
+  } finally {
+    await flushApiUsage();
   }
 }
 

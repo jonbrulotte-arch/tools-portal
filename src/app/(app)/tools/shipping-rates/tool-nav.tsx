@@ -14,7 +14,12 @@ export function ToolNav({ canManageSettings }: { canManageSettings: boolean }) {
     { href: `${BASE}/products`, label: "Products" },
     { href: `${BASE}/reports`, label: "Cost reports" },
     { href: `${BASE}/quotes`, label: "Quotes" },
-    ...(canManageSettings ? [{ href: `${BASE}/settings`, label: "Settings" }] : []),
+    ...(canManageSettings
+      ? [
+          { href: `${BASE}/api-report`, label: "API Report" },
+          { href: `${BASE}/settings`, label: "Settings" },
+        ]
+      : []),
   ];
   return (
     <div className="inline-flex h-9 items-center rounded-lg bg-gray-100 p-1 text-gray-500">
