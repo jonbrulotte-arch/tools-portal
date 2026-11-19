@@ -23,7 +23,7 @@ type Initial = {
   dateFormat: "MM/DD/YYYY" | "YYYY-MM-DD" | "DD/MM/YYYY";
   timezone: string;
   graph: { tenantId: SavedHint; clientId: SavedHint; hasSecret: boolean; senderAddress: string; senderName: string };
-  sql: { server: string; port: number; database: string; user: SavedHint; hasPassword: boolean; encrypt: boolean; trustServerCertificate: boolean };
+  sql: { server: string; port: number; database: string; authType: "sql" | "windows"; domain: string; user: SavedHint; hasPassword: boolean; encrypt: boolean; trustServerCertificate: boolean };
 };
 type SavedHint = { isSet: boolean; last4: string | null };
 
@@ -68,7 +68,7 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
           dateFormat: s.dateFormat,
           timezone: s.timezone,
           graph: { tenantId: graph.tenantId || undefined, clientId: graph.clientId || undefined, clientSecret: graph.clientSecret || undefined, senderAddress: graph.senderAddress, senderName: graph.senderName },
-          sql: { server: sql.server, port: sql.port, database: sql.database, user: sql.user || undefined, password: sql.password || undefined, encrypt: sql.encrypt, trustServerCertificate: sql.trustServerCertificate },
+          sql: { server: sql.server, port: sql.port, database: sql.database, authType: sql.authType, domain: sql.domain, user: sql.user || undefined, password: sql.password || undefined, encrypt: sql.encrypt, trustServerCertificate: sql.trustServerCertificate },
         },
       });
       const hint = (typed: string, h: SavedHint): SavedHint => (typed ? { isSet: true, last4: typed.length > 8 ? typed.slice(-4) : null } : h);
@@ -143,7 +143,7 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
         <CardHeader>
           <CardTitle>SQL Server</CardTitle>
           <CardDescription>
-            The database the automated emails query. Use a SQL login with <strong>read-only</strong> rights (e.g. only <span className="font-mono">db_datareader</span>); the tool also refuses any query that isn&apos;t a single SELECT. The password is encrypted and never shown again.
+            The database the automated emails query. Sign in with a SQL Server login or a Windows (domain) account, with <strong>read-only</strong> rights (e.g. only <span className="font-mono">db_datareader</span>); the tool also refuses any query that isn&apos;t a single SELECT. A dedicated account for this tool is better than a person&apos;s own. The account and password are encrypted and never shown again.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -164,7 +164,23 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
             <Field id="q-db" label="Database">
               <Input id="q-db" value={sql.database} onChange={(e) => setSql({ ...sql, database: e.target.value })} autoComplete="off" />
             </Field>
-            <Field id="q-user" label="SQL login">
+            <Field label="Sign in with">
+              <Select value={sql.authType} onValueChange={(v) => setSql({ ...sql, authType: v as "sql" | "windows" })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sql">SQL Server login</SelectItem>
+                  <SelectItem value="windows">Windows (domain) account</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            {sql.authType === "windows" && (
+              <Field id="q-domain" label="Domain" hint={"The Windows domain, e.g. STEELMANJS (or type DOMAIN\\account in the account box)."}>
+                <Input id="q-domain" value={sql.domain} onChange={(e) => setSql({ ...sql, domain: e.target.value.trim() })} placeholder="STEELMANJS" autoComplete="off" />
+              </Field>
+            )}
+            <Field id="q-user" label={sql.authType === "windows" ? "Windows account" : "SQL login"}>
               <Input id="q-user" type="password" autoComplete="new-password" value={sql.user} onChange={(e) => setSql({ ...sql, user: e.target.value })} placeholder={savedPlaceholder(saved.user)} />
             </Field>
             <Field id="q-pass" label="Password">

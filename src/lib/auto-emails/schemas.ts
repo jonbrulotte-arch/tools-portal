@@ -72,6 +72,8 @@ export const autoEmailSettingsSchema = z.object({
     server: z.string().trim().max(200),
     port: z.coerce.number().int().min(1).max(65535),
     database: z.string().trim().max(128),
+    authType: z.enum(["sql", "windows"]),
+    domain: z.string().trim().max(100).regex(/^[\w.-]*$/, "Enter just the domain, e.g. STEELMANJS"),
     user: z.string().trim().max(128).optional(),
     password: z.string().max(500).optional(),
     clearPassword: z.boolean().optional(),

@@ -157,7 +157,7 @@ Tabs: **Emails**, **Email log** and **Settings**. Creating and editing emails, r
 
 **Settings** (secrets encrypted, never shown again):
 - **Microsoft Graph:** an Entra ID app registration with the `Mail.Send` application permission (admin consented), its tenant ID, client ID and secret, and the mailbox to send from. This is separate from the portal's invitation email. **Save & send a test** emails you.
-- **SQL Server:** server, port, database, login and password. Use a login with read-only rights (e.g. only `db_datareader`). The portal server (Docker container) must reach SQL Server on its port (1433 by default). **Save & test connection** shows the server version and database.
+- **SQL Server:** server, port (default 1433; for a named instance enter `host\INSTANCE` and the port is found through SQL Browser on UDP 1434), database, and either a **SQL Server login** or a **Windows (domain) account** (domain + account + password, signed in with NTLM like SSMS "Windows Authentication"; typing `DOMAIN\account` fills in the domain). Use a login with read-only rights (e.g. only `db_datareader`). The portal server (Docker container) must reach SQL Server on its port (1433 by default). **Save & test connection** shows the server version and database.
 - **Schedule & limits:**
   - automatic sending on or off for every email;
   - how often to check (5/15/30/60 minutes; default 15);

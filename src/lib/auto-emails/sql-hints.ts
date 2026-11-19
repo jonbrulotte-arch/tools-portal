@@ -22,10 +22,15 @@ export function splitServer(server: string): { host: string; instance: string | 
 }
 
 /** A plain-English next step for a failed connection. */
-export function connectionHint(message: string, server: string, port: number): string {
+export function connectionHint(message: string, server: string, port: number, windowsDomain: string | null = null): string {
   const { host, instance } = splitServer(server);
   const m = message.toLowerCase();
-  if (m.includes("login failed")) return "Check the SQL login and password, and that the server allows SQL Server authentication (not only Windows logins).";
+  if (m.includes("login failed") && windowsDomain) {
+    return `Check the domain (${windowsDomain}), account and password, that the account isn't locked or expired, and that it has a login on this SQL Server (CREATE LOGIN [${windowsDomain}\\account] FROM WINDOWS) with read access to the database.`;
+  }
+  if (m.includes("login failed")) {
+    return 'Check the login and password. If this is a Windows/domain account (one you use with "Windows Authentication" in SSMS), choose "Windows (domain) account" and enter the domain. A SQL login also needs the server to allow SQL Server authentication.';
+  }
   if (m.includes("enotfound") || m.includes("getaddrinfo")) return `This server can't look up "${host}". Try its IP address, or ask IT to make the name resolvable from the portal server.`;
   if (instance && (m.includes("port for") || m.includes("instance") || m.includes("timeout") || m.includes("econnrefused"))) {
     return `For a named instance (${instance}) the SQL Browser service on ${host} must be reachable on UDP 1434. Otherwise ask the DBA for the instance's fixed port and enter "${host}" with that port instead.`;

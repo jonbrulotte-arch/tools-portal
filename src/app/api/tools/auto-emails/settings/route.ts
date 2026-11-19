@@ -24,6 +24,14 @@ export async function PATCH(req: Request) {
   const body = await parseBody(req, autoEmailSettingsSchema);
   if (body instanceof NextResponse) return body;
   const before = await getSetting("autoEmails");
+  // "DOMAIN\user" typed into the login box for a Windows account: split it
+  let domain = body.sql.domain;
+  let typedUser = body.sql.user;
+  if (body.sql.authType === "windows" && typedUser?.includes("\\")) {
+    const [d, ...u] = typedUser.split("\\");
+    domain = d.trim();
+    typedUser = u.join("\\").trim();
+  }
   const value: AutoEmailSettings = {
     enabled: body.enabled,
     intervalMinutes: body.intervalMinutes,
@@ -43,7 +51,9 @@ export async function PATCH(req: Request) {
       server: body.sql.server,
       port: body.sql.port,
       database: body.sql.database,
-      encUser: keepOr(body.sql.user, before.sql.encUser),
+      authType: body.sql.authType,
+      domain: body.sql.authType === "windows" ? domain : "",
+      encUser: keepOr(typedUser, before.sql.encUser),
       encPassword: body.sql.clearPassword ? null : body.sql.password ? encrypt(body.sql.password) : before.sql.encPassword,
       encrypt: body.sql.encrypt,
       trustServerCertificate: body.sql.trustServerCertificate,

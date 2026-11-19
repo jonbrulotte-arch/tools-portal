@@ -28,7 +28,7 @@ export default async function AutoEmailSettingsPage() {
         dateFormat: s.dateFormat,
         timezone: s.timezone,
         graph: { tenantId: savedHint(s.graph.encTenantId), clientId: savedHint(s.graph.encClientId), hasSecret: !!s.graph.encClientSecret, senderAddress: s.graph.senderAddress, senderName: s.graph.senderName },
-        sql: { server: s.sql.server, port: s.sql.port, database: s.sql.database, user: savedHint(s.sql.encUser), hasPassword: !!s.sql.encPassword, encrypt: s.sql.encrypt, trustServerCertificate: s.sql.trustServerCertificate },
+        sql: { server: s.sql.server, port: s.sql.port, database: s.sql.database, authType: s.sql.authType, domain: s.sql.domain, user: savedHint(s.sql.encUser), hasPassword: !!s.sql.encPassword, encrypt: s.sql.encrypt, trustServerCertificate: s.sql.trustServerCertificate },
       }}
     />
   );

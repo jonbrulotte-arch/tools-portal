@@ -88,7 +88,7 @@ describe("Graph message and validation", () => {
 });
 
 describe("SQL Server connection settings", () => {
-  const base = { server: "sql01.local", port: 1433, database: "Mango", encUser: "", encPassword: "", encrypt: true, trustServerCertificate: false };
+  const base = { server: "sql01.local", port: 1433, database: "Mango", authType: "sql" as const, domain: "", encUser: "", encPassword: "", encrypt: true, trustServerCertificate: false };
   const withCreds = () => ({ ...base, encUser: encrypt("edi_reader"), encPassword: encrypt("p") });
 
   it("connects to host + port, or to a named instance through SQL Browser", () => {
@@ -99,11 +99,20 @@ describe("SQL Server connection settings", () => {
     expect(splitServer(" sql01\\ ")).toEqual({ host: "sql01", instance: null });
   });
 
+  it("signs in with a Windows domain account (NTLM)", () => {
+    const win = poolConfig({ ...withCreds(), authType: "windows", domain: "STEELMANJS", encUser: encrypt("jlowell") });
+    expect(win).toMatchObject({ server: "sql01.local", domain: "STEELMANJS", user: "jlowell" });
+    expect(poolConfig(withCreds())).not.toHaveProperty("domain");
+    expect(() => poolConfig({ ...withCreds(), authType: "windows", domain: "" })).toThrow("Enter the Windows domain");
+    expect(connectionHint("Login failed for user 'jlowell'.", "10.150.10.53", 1433, "STEELMANJS")).toContain("CREATE LOGIN [STEELMANJS\\account] FROM WINDOWS");
+    expect(connectionHint("Login failed for user 'jlowell'.", "10.150.10.53", 1433)).toContain('choose "Windows (domain) account"');
+  });
+
   it("explains common connection failures", () => {
     const timeout = "Failed to connect to dmediprodsqlsvr.steelmanjs.local:3389 in 15000ms";
     expect(connectionHint(timeout, "dmediprodsqlsvr.steelmanjs.local", 3389)).toContain("Port 3389 is Remote Desktop, not SQL Server");
     expect(connectionHint(timeout.replace("3389", "1433"), "dmediprodsqlsvr.steelmanjs.local", 1433)).toContain("firewall lets the portal server reach dmediprodsqlsvr.steelmanjs.local on TCP 1433");
-    expect(connectionHint("Login failed for user 'edi_reader'.", "sql01", 1433)).toContain("SQL login and password");
+    expect(connectionHint("Login failed for user 'edi_reader'.", "sql01", 1433)).toContain("Check the login and password");
     expect(connectionHint("getaddrinfo ENOTFOUND sql01", "sql01", 1433)).toContain("can't look up \"sql01\"");
     expect(connectionHint("Port for EDI not found in sql01", "sql01\\EDI", 1433)).toContain("UDP 1434");
   });

@@ -100,7 +100,8 @@ export type AutoEmailSettings = {
   timezone: string;
   // tenant ID, client ID and SQL login are kept encrypted and never sent to the browser, like the secrets
   graph: { encTenantId: string | null; encClientId: string | null; encClientSecret: string | null; senderAddress: string; senderName: string };
-  sql: { server: string; port: number; database: string; encUser: string | null; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
+  /** authType "windows" signs in with a domain account (NTLM, like SSMS "Windows Authentication"); "sql" uses a SQL Server login. */
+  sql: { server: string; port: number; database: string; authType: "sql" | "windows"; domain: string; encUser: string | null; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
 };
 
 type SettingsMap = {
@@ -185,7 +186,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
     dateFormat: "MM/DD/YYYY",
     timezone: "America/Los_Angeles",
     graph: { encTenantId: null, encClientId: null, encClientSecret: null, senderAddress: "", senderName: "" },
-    sql: { server: "", port: 1433, database: "", encUser: null, encPassword: null, encrypt: true, trustServerCertificate: false },
+    sql: { server: "", port: 1433, database: "", authType: "sql", domain: "", encUser: null, encPassword: null, encrypt: true, trustServerCertificate: false },
   },
 };
 

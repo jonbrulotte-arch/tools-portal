@@ -81,6 +81,7 @@ function normalize(v: unknown): SqlValue {
 
 export function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
   if (!s.server || !s.database || !s.encUser || !s.encPassword) throw new Error("The SQL Server connection isn't set up (Automated Emails → Settings → SQL Server).");
+  if (s.authType === "windows" && !s.domain) throw new Error("Enter the Windows domain for the account (Automated Emails → Settings → SQL Server).");
   // host\INSTANCE: no port, so the driver asks SQL Browser (UDP 1434) where the instance listens
   const { host, instance } = splitServer(s.server);
   return {
@@ -88,6 +89,8 @@ export function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
     ...(instance ? {} : { port: s.port || 1433 }),
     database: s.database,
     user: decrypt(s.encUser),
+    // a domain switches the driver to Windows (NTLM) sign-in
+    ...(s.authType === "windows" ? { domain: s.domain } : {}),
     password: decrypt(s.encPassword),
     connectionTimeout: CONNECT_TIMEOUT_MS,
     requestTimeout: REQUEST_TIMEOUT_MS,
@@ -99,7 +102,7 @@ export function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
 const g = globalThis as unknown as { __autoEmailPool?: { key: string; pool: Promise<sql.ConnectionPool> } };
 
 async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool> {
-  const key = JSON.stringify([s.server, s.port, s.database, s.encUser, s.encPassword, s.encrypt, s.trustServerCertificate]);
+  const key = JSON.stringify([s.server, s.port, s.database, s.authType, s.domain, s.encUser, s.encPassword, s.encrypt, s.trustServerCertificate]);
   if (g.__autoEmailPool?.key !== key) {
     const old = g.__autoEmailPool;
     g.__autoEmailPool = { key, pool: new sql.ConnectionPool(poolConfig(s)).connect() };
@@ -112,7 +115,7 @@ async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool>
     return await g.__autoEmailPool.pool;
   } catch (err) {
     const message = (err as Error).message;
-    const hint = connectionHint(message, s.server, s.port);
+    const hint = connectionHint(message, s.server, s.port, s.authType === "windows" ? s.domain : null);
     throw new Error(`Couldn't connect to SQL Server ${s.server}: ${message}${hint ? ` ${hint}` : ""}`);
   }
 }
