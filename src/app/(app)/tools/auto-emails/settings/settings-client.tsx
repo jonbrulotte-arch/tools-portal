@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/client-fetch";
 import { TIMEZONES } from "@/lib/timezone";
+import { NOT_SQL_PORTS, splitServer } from "@/lib/auto-emails/sql-hints";
 
 type Initial = {
   enabled: boolean;
@@ -47,6 +48,7 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
   const [saved, setSaved] = useState({ tenantId: initial.graph.tenantId, clientId: initial.graph.clientId, user: initial.sql.user });
   const [graph, setGraph] = useState({ ...initial.graph, tenantId: "", clientId: "", clientSecret: "" });
   const [sql, setSql] = useState({ ...initial.sql, user: "", password: "" });
+  const namedInstance = splitServer(sql.server).instance !== null;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [tests, setTests] = useState<Record<"graph" | "sql", Result>>({ graph: undefined, sql: undefined });
@@ -147,12 +149,17 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <Field id="q-server" label="Server" hint="Host name or IP, e.g. sql01.jsproducts.local or 10.0.10.20 (named instances: host\\INSTANCE).">
+              <Field id="q-server" label="Server" hint={"Host name or IP, e.g. sql01.jsproducts.local or 10.0.10.20. For a named instance: host\\INSTANCE."}>
                 <Input id="q-server" value={sql.server} onChange={(e) => setSql({ ...sql, server: e.target.value })} autoComplete="off" />
               </Field>
             </div>
-            <Field id="q-port" label="Port">
-              <Input id="q-port" type="number" min={1} max={65535} value={sql.port} onChange={(e) => setSql({ ...sql, port: Number(e.target.value) })} />
+            <Field id="q-port" label="Port" hint={namedInstance ? "Not used for a named instance (found through SQL Browser)." : "SQL Server's default is 1433."}>
+              <Input id="q-port" type="number" min={1} max={65535} value={sql.port} disabled={namedInstance} onChange={(e) => setSql({ ...sql, port: Number(e.target.value) })} />
+              {!namedInstance && NOT_SQL_PORTS[sql.port] && (
+                <p className="text-xs text-amber-700 mt-1">
+                  Port {sql.port} is {NOT_SQL_PORTS[sql.port]}, not SQL Server. SQL Server normally uses 1433.
+                </p>
+              )}
             </Field>
             <Field id="q-db" label="Database">
               <Input id="q-db" value={sql.database} onChange={(e) => setSql({ ...sql, database: e.target.value })} autoComplete="off" />

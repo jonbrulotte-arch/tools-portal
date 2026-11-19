@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import sql from "mssql";
 import { decrypt } from "@/lib/crypto";
 import type { AutoEmailSettings } from "@/lib/settings";
+import { connectionHint, splitServer } from "@/lib/auto-emails/sql-hints";
 
 // SQL Server access for Automated Emails. Queries must be a single read-only SELECT (checked here,
 // on top of a read-only SQL login), run inside a transaction that is always rolled back, with a time
@@ -78,18 +79,20 @@ function normalize(v: unknown): SqlValue {
   return String(v);
 }
 
-function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
+export function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
   if (!s.server || !s.database || !s.encUser || !s.encPassword) throw new Error("The SQL Server connection isn't set up (Automated Emails → Settings → SQL Server).");
+  // host\INSTANCE: no port, so the driver asks SQL Browser (UDP 1434) where the instance listens
+  const { host, instance } = splitServer(s.server);
   return {
-    server: s.server,
-    port: s.port || 1433,
+    server: host,
+    ...(instance ? {} : { port: s.port || 1433 }),
     database: s.database,
     user: decrypt(s.encUser),
     password: decrypt(s.encPassword),
     connectionTimeout: CONNECT_TIMEOUT_MS,
     requestTimeout: REQUEST_TIMEOUT_MS,
     pool: { max: 3, min: 0, idleTimeoutMillis: 60_000 },
-    options: { encrypt: s.encrypt, trustServerCertificate: s.trustServerCertificate, appName: "tools-portal auto-emails" },
+    options: { encrypt: s.encrypt, trustServerCertificate: s.trustServerCertificate, appName: "tools-portal auto-emails", ...(instance ? { instanceName: instance } : {}) },
   };
 }
 
@@ -108,7 +111,9 @@ async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool>
   try {
     return await g.__autoEmailPool.pool;
   } catch (err) {
-    throw new Error(`Couldn't connect to SQL Server ${s.server}: ${(err as Error).message}`);
+    const message = (err as Error).message;
+    const hint = connectionHint(message, s.server, s.port);
+    throw new Error(`Couldn't connect to SQL Server ${s.server}: ${message}${hint ? ` ${hint}` : ""}`);
   }
 }
 

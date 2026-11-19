@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { assertReadOnly } from "@/lib/auto-emails/sql";
+import { assertReadOnly, poolConfig } from "@/lib/auto-emails/sql";
+import { connectionHint, splitServer } from "@/lib/auto-emails/sql-hints";
+import { encrypt } from "@/lib/crypto";
 import { buildEmail, buildSubject, formatCell, keyOf, resolveKeyColumns, textToHtml } from "@/lib/auto-emails/render";
 import { buildGraphMailMessage } from "@/lib/graph-mail";
 import { autoEmailSchema } from "@/lib/auto-emails/schemas";
@@ -82,5 +84,27 @@ describe("Graph message and validation", () => {
     expect(autoEmailSchema.safeParse({ ...base, enabled: false, to: [] }).success).toBe(true);
     expect(autoEmailSchema.safeParse({ ...base, sqlQuery: "DELETE FROM t" }).success).toBe(false);
     expect(autoEmailSchema.safeParse({ ...base, keyColumns: [] }).success).toBe(false);
+  });
+});
+
+describe("SQL Server connection settings", () => {
+  const base = { server: "sql01.local", port: 1433, database: "Mango", encUser: "", encPassword: "", encrypt: true, trustServerCertificate: false };
+  const withCreds = () => ({ ...base, encUser: encrypt("edi_reader"), encPassword: encrypt("p") });
+
+  it("connects to host + port, or to a named instance through SQL Browser", () => {
+    expect(poolConfig(withCreds())).toMatchObject({ server: "sql01.local", port: 1433, user: "edi_reader" });
+    const named = poolConfig({ ...withCreds(), server: "sql01.local\\EDI", port: 3389 });
+    expect(named).toMatchObject({ server: "sql01.local", options: { instanceName: "EDI" } });
+    expect(named).not.toHaveProperty("port");
+    expect(splitServer(" sql01\\ ")).toEqual({ host: "sql01", instance: null });
+  });
+
+  it("explains common connection failures", () => {
+    const timeout = "Failed to connect to dmediprodsqlsvr.steelmanjs.local:3389 in 15000ms";
+    expect(connectionHint(timeout, "dmediprodsqlsvr.steelmanjs.local", 3389)).toContain("Port 3389 is Remote Desktop, not SQL Server");
+    expect(connectionHint(timeout.replace("3389", "1433"), "dmediprodsqlsvr.steelmanjs.local", 1433)).toContain("firewall lets the portal server reach dmediprodsqlsvr.steelmanjs.local on TCP 1433");
+    expect(connectionHint("Login failed for user 'edi_reader'.", "sql01", 1433)).toContain("SQL login and password");
+    expect(connectionHint("getaddrinfo ENOTFOUND sql01", "sql01", 1433)).toContain("can't look up \"sql01\"");
+    expect(connectionHint("Port for EDI not found in sql01", "sql01\\EDI", 1433)).toContain("UDP 1434");
   });
 });
