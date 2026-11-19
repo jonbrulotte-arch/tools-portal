@@ -60,8 +60,9 @@ export const autoEmailSettingsSchema = z.object({
   dateFormat: z.enum(["MM/DD/YYYY", "YYYY-MM-DD", "DD/MM/YYYY"]),
   timezone: z.enum(TIMEZONE_IDS),
   graph: z.object({
-    tenantId: z.string().trim().max(100),
-    clientId: z.string().trim().max(100),
+    // blank keeps the saved (encrypted) value
+    tenantId: z.string().trim().max(100).optional(),
+    clientId: z.string().trim().max(100).optional(),
     clientSecret: z.string().max(500).optional(),
     clearSecret: z.boolean().optional(),
     senderAddress: z.union([z.literal(""), emailAddress]),
@@ -71,7 +72,7 @@ export const autoEmailSettingsSchema = z.object({
     server: z.string().trim().max(200),
     port: z.coerce.number().int().min(1).max(65535),
     database: z.string().trim().max(128),
-    user: z.string().trim().max(128),
+    user: z.string().trim().max(128).optional(),
     password: z.string().max(500).optional(),
     clearPassword: z.boolean().optional(),
     encrypt: z.boolean(),

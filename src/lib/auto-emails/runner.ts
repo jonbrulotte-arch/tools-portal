@@ -19,8 +19,8 @@ export const SCHEDULE_ACTOR: Actor = { id: null, email: "auto-emails schedule" }
 
 export function graphConfigFrom(s: AutoEmailSettings): GraphConfig {
   const g = s.graph;
-  if (!g.tenantId || !g.clientId || !g.encClientSecret || !g.senderAddress) throw new Error("Microsoft Graph isn't set up for Automated Emails (Settings → Microsoft Graph).");
-  return { tenantId: g.tenantId, clientId: g.clientId, clientSecret: decrypt(g.encClientSecret), senderAddress: g.senderAddress, senderName: g.senderName };
+  if (!g.encTenantId || !g.encClientId || !g.encClientSecret || !g.senderAddress) throw new Error("Microsoft Graph isn't set up for Automated Emails (Settings → Microsoft Graph).");
+  return { tenantId: decrypt(g.encTenantId), clientId: decrypt(g.encClientId), clientSecret: decrypt(g.encClientSecret), senderAddress: g.senderAddress, senderName: g.senderName };
 }
 
 /** Rows whose key hasn't been sent for this email (first occurrence only), with their keys. */

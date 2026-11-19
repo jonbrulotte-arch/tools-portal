@@ -18,7 +18,7 @@ export default async function AutoEmailsPage() {
   return (
     <EmailsClient
       canManage={user.can(AUTO_EMAILS_EDIT)}
-      schedule={{ enabled: s.enabled, intervalMinutes: s.intervalMinutes, graphReady: !!(s.graph.tenantId && s.graph.clientId && s.graph.encClientSecret && s.graph.senderAddress), sqlReady: !!(s.sql.server && s.sql.database && s.sql.user && s.sql.encPassword) }}
+      schedule={{ enabled: s.enabled, intervalMinutes: s.intervalMinutes, graphReady: !!(s.graph.encTenantId && s.graph.encClientId && s.graph.encClientSecret && s.graph.senderAddress), sqlReady: !!(s.sql.server && s.sql.database && s.sql.encUser && s.sql.encPassword) }}
       emails={emails.map((e) => ({
         id: e.id,
         name: e.name,

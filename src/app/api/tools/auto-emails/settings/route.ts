@@ -9,7 +9,14 @@ import { resetSqlPool } from "@/lib/auto-emails/sql";
 import { clearGraphTokenCache } from "@/lib/graph-mail";
 import { AUTO_EMAILS_EDIT, AUTO_EMAILS_TOOL } from "@/lib/auto-emails/access";
 
-const redact = (s: AutoEmailSettings) => ({ ...s, graph: { ...s.graph, encClientSecret: s.graph.encClientSecret ? "set" : null }, sql: { ...s.sql, encPassword: s.sql.encPassword ? "set" : null } });
+const set = (v: string | null) => (v ? "set" : null);
+const redact = (s: AutoEmailSettings) => ({
+  ...s,
+  graph: { ...s.graph, encTenantId: set(s.graph.encTenantId), encClientId: set(s.graph.encClientId), encClientSecret: set(s.graph.encClientSecret) },
+  sql: { ...s.sql, encUser: set(s.sql.encUser), encPassword: set(s.sql.encPassword) },
+});
+/** A newly typed value is encrypted; blank keeps what's saved. */
+const keepOr = (typed: string | undefined, saved: string | null) => (typed ? encrypt(typed) : saved);
 
 export async function PATCH(req: Request) {
   const actor = await guard({ tool: AUTO_EMAILS_TOOL, permission: AUTO_EMAILS_EDIT });
@@ -26,8 +33,8 @@ export async function PATCH(req: Request) {
     dateFormat: body.dateFormat,
     timezone: body.timezone,
     graph: {
-      tenantId: body.graph.tenantId,
-      clientId: body.graph.clientId,
+      encTenantId: keepOr(body.graph.tenantId, before.graph.encTenantId),
+      encClientId: keepOr(body.graph.clientId, before.graph.encClientId),
       encClientSecret: body.graph.clearSecret ? null : body.graph.clientSecret ? encrypt(body.graph.clientSecret) : before.graph.encClientSecret,
       senderAddress: body.graph.senderAddress,
       senderName: body.graph.senderName,
@@ -36,7 +43,7 @@ export async function PATCH(req: Request) {
       server: body.sql.server,
       port: body.sql.port,
       database: body.sql.database,
-      user: body.sql.user,
+      encUser: keepOr(body.sql.user, before.sql.encUser),
       encPassword: body.sql.clearPassword ? null : body.sql.password ? encrypt(body.sql.password) : before.sql.encPassword,
       encrypt: body.sql.encrypt,
       trustServerCertificate: body.sql.trustServerCertificate,

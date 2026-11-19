@@ -4,6 +4,8 @@ export async function register() {
     startScheduler();
     const { syncToolRegistry } = await import("@/lib/tools/sync");
     await syncToolRegistry().catch((err) => console.error("[tools] registry sync failed", err));
+    const { migrateAutoEmailCredentials } = await import("@/lib/settings");
+    await migrateAutoEmailCredentials().catch((err) => console.error("[auto-emails] couldn't encrypt saved credentials", err));
     const { failInterruptedJobs } = await import("@/lib/shipping/runner");
     await failInterruptedJobs().catch((err) => console.error("[shipping] couldn't mark interrupted jobs", err));
   }

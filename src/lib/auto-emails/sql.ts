@@ -79,12 +79,12 @@ function normalize(v: unknown): SqlValue {
 }
 
 function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
-  if (!s.server || !s.database || !s.user || !s.encPassword) throw new Error("The SQL Server connection isn't set up (Automated Emails → Settings → SQL Server).");
+  if (!s.server || !s.database || !s.encUser || !s.encPassword) throw new Error("The SQL Server connection isn't set up (Automated Emails → Settings → SQL Server).");
   return {
     server: s.server,
     port: s.port || 1433,
     database: s.database,
-    user: s.user,
+    user: decrypt(s.encUser),
     password: decrypt(s.encPassword),
     connectionTimeout: CONNECT_TIMEOUT_MS,
     requestTimeout: REQUEST_TIMEOUT_MS,
@@ -96,7 +96,7 @@ function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
 const g = globalThis as unknown as { __autoEmailPool?: { key: string; pool: Promise<sql.ConnectionPool> } };
 
 async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool> {
-  const key = JSON.stringify([s.server, s.port, s.database, s.user, s.encPassword, s.encrypt, s.trustServerCertificate]);
+  const key = JSON.stringify([s.server, s.port, s.database, s.encUser, s.encPassword, s.encrypt, s.trustServerCertificate]);
   if (g.__autoEmailPool?.key !== key) {
     const old = g.__autoEmailPool;
     g.__autoEmailPool = { key, pool: new sql.ConnectionPool(poolConfig(s)).connect() };

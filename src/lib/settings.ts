@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { encrypt } from "@/lib/crypto";
 
 export type BrandingSettings = {
   siteName: string;
@@ -97,8 +98,9 @@ export type AutoEmailSettings = {
   logRetentionDays: number;
   dateFormat: "MM/DD/YYYY" | "YYYY-MM-DD" | "DD/MM/YYYY";
   timezone: string;
-  graph: { tenantId: string; clientId: string; encClientSecret: string | null; senderAddress: string; senderName: string };
-  sql: { server: string; port: number; database: string; user: string; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
+  // tenant ID, client ID and SQL login are kept encrypted and never sent to the browser, like the secrets
+  graph: { encTenantId: string | null; encClientId: string | null; encClientSecret: string | null; senderAddress: string; senderName: string };
+  sql: { server: string; port: number; database: string; encUser: string | null; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
 };
 
 type SettingsMap = {
@@ -182,8 +184,8 @@ export const SETTING_DEFAULTS: SettingsMap = {
     logRetentionDays: 180,
     dateFormat: "MM/DD/YYYY",
     timezone: "America/Los_Angeles",
-    graph: { tenantId: "", clientId: "", encClientSecret: null, senderAddress: "", senderName: "" },
-    sql: { server: "", port: 1433, database: "", user: "", encPassword: null, encrypt: true, trustServerCertificate: false },
+    graph: { encTenantId: null, encClientId: null, encClientSecret: null, senderAddress: "", senderName: "" },
+    sql: { server: "", port: 1433, database: "", encUser: null, encPassword: null, encrypt: true, trustServerCertificate: false },
   },
 };
 
@@ -191,10 +193,7 @@ export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<S
   const row = await prisma.setting.findUnique({ where: { key } });
   const stored = (row?.value ?? {}) as Partial<SettingsMap[K]>;
   const merged = { ...SETTING_DEFAULTS[key], ...stored };
-  if (key === "autoEmails") {
-    const d = SETTING_DEFAULTS.autoEmails, a = merged as AutoEmailSettings;
-    return { ...a, graph: { ...d.graph, ...a.graph }, sql: { ...d.sql, ...a.sql } } as SettingsMap[K];
-  }
+  if (key === "autoEmails") return normalizeAutoEmails(merged as AutoEmailSettings) as SettingsMap[K];
   return (key === "shippingRates" ? withShippingDefaults(merged as ShippingRatesSettings) : merged) as SettingsMap[K];
 }
 
@@ -243,4 +242,30 @@ export function splitSiteName(b: Pick<BrandingSettings, "siteName" | "accentWord
     return [name.slice(0, name.length - accent.length), accent];
   }
   return [name, ""];
+}
+
+type LegacyAutoEmailCreds = { graph?: { tenantId?: string; clientId?: string }; sql?: { user?: string } };
+const encOrNull = (v: string | undefined) => (v && v.trim() ? encrypt(v.trim()) : null);
+
+/** Fills nested defaults and moves values saved before they were encrypted (tenant ID, client ID, SQL login) into encrypted fields. */
+export function normalizeAutoEmails(a: AutoEmailSettings): AutoEmailSettings {
+  const d = SETTING_DEFAULTS.autoEmails;
+  const legacy = a as AutoEmailSettings & LegacyAutoEmailCreds;
+  const { tenantId, clientId, ...graph } = { ...d.graph, ...legacy.graph } as AutoEmailSettings["graph"] & { tenantId?: string; clientId?: string };
+  const { user, ...sql } = { ...d.sql, ...legacy.sql } as AutoEmailSettings["sql"] & { user?: string };
+  return {
+    ...a,
+    graph: { ...graph, encTenantId: graph.encTenantId ?? encOrNull(tenantId), encClientId: graph.encClientId ?? encOrNull(clientId) },
+    sql: { ...sql, encUser: sql.encUser ?? encOrNull(user) },
+  };
+}
+
+/** Run at startup: re-saves Automated Emails settings that still hold plain-text credentials, encrypting them. */
+export async function migrateAutoEmailCredentials(): Promise<boolean> {
+  const row = await prisma.setting.findUnique({ where: { key: "autoEmails" } });
+  const stored = (row?.value ?? null) as LegacyAutoEmailCreds | null;
+  if (!stored || (stored.graph?.tenantId === undefined && stored.graph?.clientId === undefined && stored.sql?.user === undefined)) return false;
+  const value = await getSetting("autoEmails"); // normalised: plain values moved into encrypted fields
+  await prisma.setting.update({ where: { key: "autoEmails" }, data: { value: value as object } });
+  return true;
 }

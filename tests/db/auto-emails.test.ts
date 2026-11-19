@@ -29,7 +29,7 @@ describe.skipIf(!enabled)("Automated Emails (database)", async () => {
     await setSetting("autoEmails", {
       ...SETTING_DEFAULTS.autoEmails,
       maxRowsPerEmail: 3,
-      graph: { tenantId: "t", clientId: "c", encClientSecret: encrypt("s"), senderAddress: "edi@example.com", senderName: "EDI" },
+      graph: { encTenantId: encrypt("t"), encClientId: encrypt("c"), encClientSecret: encrypt("s"), senderAddress: "edi@example.com", senderName: "EDI" },
     });
     clearGraphTokenCache();
     vi.stubGlobal(
@@ -107,6 +107,34 @@ describe.skipIf(!enabled)("Automated Emails (database)", async () => {
     await prisma.autoEmail.update({ where: { id: emailId }, data: { keyColumns: ["PO", "Line"] } });
     setRows([], "SQL Server: Invalid object name 'Orders'.");
     expect((await runAutoEmail(emailId, "SCHEDULE")).error).toContain("Invalid object name");
+  });
+
+  it("encrypts credentials that were saved in plain text, and shows only their last 4 characters", async () => {
+    const { migrateAutoEmailCredentials, getSetting } = await import("@/lib/settings");
+    const { decrypt } = await import("@/lib/crypto");
+    const { savedHint } = await import("@/lib/auto-emails/saved-hint");
+    const before = await prisma.setting.findUniqueOrThrow({ where: { key: "autoEmails" } });
+    const tenant = "0c23e6db-32a4-44db-af48-b11718c8a38d", client = "e3aefad6-e702-4bf7-a29f-e6663014b2ae";
+    // a value saved by the earlier version: plain tenant ID, client ID and SQL login
+    const legacy = { ...(before.value as object), graph: { tenantId: tenant, clientId: client, encClientSecret: encrypt("s"), senderAddress: "edi@example.com", senderName: "" }, sql: { server: "sql01", port: 1433, database: "Mango", user: "edi_reader", encPassword: encrypt("p"), encrypt: true, trustServerCertificate: false } };
+    await prisma.setting.update({ where: { key: "autoEmails" }, data: { value: legacy } });
+
+    const s = await getSetting("autoEmails"); // works before the migration too
+    expect(decrypt(s.graph.encTenantId!)).toBe(tenant);
+    expect(await migrateAutoEmailCredentials()).toBe(true);
+    const raw = JSON.stringify((await prisma.setting.findUniqueOrThrow({ where: { key: "autoEmails" } })).value);
+    expect(raw).not.toContain(tenant);
+    expect(raw).not.toContain(client);
+    expect(raw).not.toContain("edi_reader");
+    const after = await getSetting("autoEmails");
+    expect([decrypt(after.graph.encClientId!), decrypt(after.sql.encUser!)]).toEqual([client, "edi_reader"]);
+    expect(await migrateAutoEmailCredentials()).toBe(false); // nothing left to move
+
+    expect(savedHint(after.graph.encClientId)).toEqual({ isSet: true, last4: "b2ae" });
+    expect(savedHint(after.sql.encUser)).toEqual({ isSet: true, last4: "ader" });
+    expect(savedHint(encrypt("short"))).toEqual({ isSet: true, last4: null }); // too short to show any of it
+    expect(savedHint(null)).toEqual({ isSet: false, last4: null });
+    await prisma.setting.update({ where: { key: "autoEmails" }, data: { value: before.value as object } });
   });
 
   it("forgets old sent records and log entries", async () => {

@@ -21,9 +21,13 @@ type Initial = {
   logRetentionDays: number;
   dateFormat: "MM/DD/YYYY" | "YYYY-MM-DD" | "DD/MM/YYYY";
   timezone: string;
-  graph: { tenantId: string; clientId: string; hasSecret: boolean; senderAddress: string; senderName: string };
-  sql: { server: string; port: number; database: string; user: string; hasPassword: boolean; encrypt: boolean; trustServerCertificate: boolean };
+  graph: { tenantId: SavedHint; clientId: SavedHint; hasSecret: boolean; senderAddress: string; senderName: string };
+  sql: { server: string; port: number; database: string; user: SavedHint; hasPassword: boolean; encrypt: boolean; trustServerCertificate: boolean };
 };
+type SavedHint = { isSet: boolean; last4: string | null };
+
+/** Placeholder for a hidden saved value. */
+const savedPlaceholder = (h: SavedHint, empty = "") => (h.isSet ? `•••••••• saved${h.last4 ? ` (…${h.last4})` : ""}, leave blank to keep` : empty);
 type Result = { ok: boolean; text: string } | "busy" | undefined;
 
 function Field({ id, label, children, hint }: { id?: string; label: string; children: React.ReactNode; hint?: string }) {
@@ -39,8 +43,10 @@ function Field({ id, label, children, hint }: { id?: string; label: string; chil
 export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initial; userEmail: string }) {
   const router = useRouter();
   const [s, setS] = useState(initial);
-  const [graph, setGraph] = useState({ ...initial.graph, clientSecret: "" });
-  const [sql, setSql] = useState({ ...initial.sql, password: "" });
+  // hidden fields start empty: typing a value replaces the saved one
+  const [saved, setSaved] = useState({ tenantId: initial.graph.tenantId, clientId: initial.graph.clientId, user: initial.sql.user });
+  const [graph, setGraph] = useState({ ...initial.graph, tenantId: "", clientId: "", clientSecret: "" });
+  const [sql, setSql] = useState({ ...initial.sql, user: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [tests, setTests] = useState<Record<"graph" | "sql", Result>>({ graph: undefined, sql: undefined });
@@ -59,12 +65,14 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
           logRetentionDays: s.logRetentionDays,
           dateFormat: s.dateFormat,
           timezone: s.timezone,
-          graph: { tenantId: graph.tenantId, clientId: graph.clientId, clientSecret: graph.clientSecret || undefined, senderAddress: graph.senderAddress, senderName: graph.senderName },
-          sql: { server: sql.server, port: sql.port, database: sql.database, user: sql.user, password: sql.password || undefined, encrypt: sql.encrypt, trustServerCertificate: sql.trustServerCertificate },
+          graph: { tenantId: graph.tenantId || undefined, clientId: graph.clientId || undefined, clientSecret: graph.clientSecret || undefined, senderAddress: graph.senderAddress, senderName: graph.senderName },
+          sql: { server: sql.server, port: sql.port, database: sql.database, user: sql.user || undefined, password: sql.password || undefined, encrypt: sql.encrypt, trustServerCertificate: sql.trustServerCertificate },
         },
       });
-      setGraph((g) => ({ ...g, clientSecret: "", hasSecret: g.hasSecret || !!g.clientSecret }));
-      setSql((x) => ({ ...x, password: "", hasPassword: x.hasPassword || !!x.password }));
+      const hint = (typed: string, h: SavedHint): SavedHint => (typed ? { isSet: true, last4: typed.length > 8 ? typed.slice(-4) : null } : h);
+      setSaved((h) => ({ tenantId: hint(graph.tenantId, h.tenantId), clientId: hint(graph.clientId, h.clientId), user: hint(sql.user, h.user) }));
+      setGraph((g) => ({ ...g, tenantId: "", clientId: "", clientSecret: "", hasSecret: g.hasSecret || !!g.clientSecret }));
+      setSql((x) => ({ ...x, user: "", password: "", hasPassword: x.hasPassword || !!x.password }));
       setMsg({ type: "success", text: "Settings saved." });
       router.refresh();
       return true;
@@ -107,10 +115,10 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="g-tenant" label="Tenant (directory) ID">
-              <Input id="g-tenant" value={graph.tenantId} onChange={(e) => setGraph({ ...graph, tenantId: e.target.value })} className="font-mono text-xs" autoComplete="off" />
+              <Input id="g-tenant" type="password" autoComplete="new-password" value={graph.tenantId} onChange={(e) => setGraph({ ...graph, tenantId: e.target.value })} placeholder={savedPlaceholder(saved.tenantId, "Directory (tenant) ID")} />
             </Field>
             <Field id="g-client" label="Client (application) ID">
-              <Input id="g-client" value={graph.clientId} onChange={(e) => setGraph({ ...graph, clientId: e.target.value })} className="font-mono text-xs" autoComplete="off" />
+              <Input id="g-client" type="password" autoComplete="new-password" value={graph.clientId} onChange={(e) => setGraph({ ...graph, clientId: e.target.value })} placeholder={savedPlaceholder(saved.clientId, "Application (client) ID")} />
             </Field>
             <Field id="g-secret" label="Client secret">
               <Input id="g-secret" type="password" autoComplete="new-password" value={graph.clientSecret} onChange={(e) => setGraph({ ...graph, clientSecret: e.target.value })} placeholder={graph.hasSecret ? "•••••••• (saved, leave blank to keep)" : "Secret value"} />
@@ -150,7 +158,7 @@ export function AutoEmailSettingsClient({ initial, userEmail }: { initial: Initi
               <Input id="q-db" value={sql.database} onChange={(e) => setSql({ ...sql, database: e.target.value })} autoComplete="off" />
             </Field>
             <Field id="q-user" label="SQL login">
-              <Input id="q-user" value={sql.user} onChange={(e) => setSql({ ...sql, user: e.target.value })} autoComplete="off" />
+              <Input id="q-user" type="password" autoComplete="new-password" value={sql.user} onChange={(e) => setSql({ ...sql, user: e.target.value })} placeholder={savedPlaceholder(saved.user)} />
             </Field>
             <Field id="q-pass" label="Password">
               <Input id="q-pass" type="password" autoComplete="new-password" value={sql.password} onChange={(e) => setSql({ ...sql, password: e.target.value })} placeholder={sql.hasPassword ? "•••••••• (saved, leave blank to keep)" : ""} />

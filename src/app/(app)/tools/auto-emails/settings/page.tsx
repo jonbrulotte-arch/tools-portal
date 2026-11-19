@@ -4,6 +4,7 @@ import { requireTool } from "@/lib/rbac";
 import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { AUTO_EMAILS_EDIT, AUTO_EMAILS_TOOL } from "@/lib/auto-emails/access";
+import { savedHint } from "@/lib/auto-emails/saved-hint";
 import { AutoEmailSettingsClient } from "./settings-client";
 
 export const metadata: Metadata = { title: "Automated email settings" };
@@ -26,8 +27,8 @@ export default async function AutoEmailSettingsPage() {
         logRetentionDays: s.logRetentionDays,
         dateFormat: s.dateFormat,
         timezone: s.timezone,
-        graph: { tenantId: s.graph.tenantId, clientId: s.graph.clientId, hasSecret: !!s.graph.encClientSecret, senderAddress: s.graph.senderAddress, senderName: s.graph.senderName },
-        sql: { server: s.sql.server, port: s.sql.port, database: s.sql.database, user: s.sql.user, hasPassword: !!s.sql.encPassword, encrypt: s.sql.encrypt, trustServerCertificate: s.sql.trustServerCertificate },
+        graph: { tenantId: savedHint(s.graph.encTenantId), clientId: savedHint(s.graph.encClientId), hasSecret: !!s.graph.encClientSecret, senderAddress: s.graph.senderAddress, senderName: s.graph.senderName },
+        sql: { server: s.sql.server, port: s.sql.port, database: s.sql.database, user: savedHint(s.sql.encUser), hasPassword: !!s.sql.encPassword, encrypt: s.sql.encrypt, trustServerCertificate: s.sql.trustServerCertificate },
       }}
     />
   );
