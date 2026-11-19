@@ -17,6 +17,7 @@ Built on the Sympl design-system starter: Next.js 16 (App Router), React 19, Pri
 | **Settings** | Admin → Settings | `admin.settings`. Branding (site name, accent word, tagline, logo), Microsoft Graph email, sign-in security, backup schedule. |
 | **Shopify Discount Code Generator** | `/tools/shopify-discounts` | Users granted the tool. Create discount codes on connected Shopify stores; every attempt is kept in the tool's discount log. |
 | **Shipping Rates Generator** | `/tools/shipping-rates` | Users granted the tool. Upload the ship cost history report, quote UPS Ground and USPS Ground Advantage from each warehouse for zones 2–8, find the most-used zone and the weight where UPS becomes cheaper, and check quotes against actual costs. |
+| **Automated Emails (EDI)** | `/tools/auto-emails` | Users granted the tool can view emails and the log; Super Admins and roles with *Automated Emails (EDI): manage tool settings* create, edit and send them. Each email runs a read-only SQL query every 15 minutes and emails only records it hasn't sent before. |
 
 Effective tool access = tools of the user's role + user "Grant" overrides − user "Deny" overrides. Disabled tools are hidden from everyone.
 
@@ -149,6 +150,33 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - Each user adds their **own Salsify API key** in **My Profile → Salsify API key**. The key is encrypted per user (`UserCredential` table), never sent back to the browser, and used only for that user's lookups. Saving, testing, removing and every lookup are recorded in the Access Log.
 
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
+
+## Automated Emails (EDI)
+
+Tabs: **Emails**, **Email log** and **Settings**. Creating and editing emails, running queries, sending and changing settings need *Automated Emails (EDI): manage tool settings* (or Super Admin). Anyone with the tool can view the emails and the log.
+
+**Settings** (secrets encrypted, never shown again):
+- **Microsoft Graph:** an Entra ID app registration with the `Mail.Send` application permission (admin consented), its tenant ID, client ID and secret, and the mailbox to send from. This is separate from the portal's invitation email. **Save & send a test** emails you.
+- **SQL Server:** server, port, database, login and password. Use a login with read-only rights (e.g. only `db_datareader`). The portal server (Docker container) must reach SQL Server on its port (1433 by default). **Save & test connection** shows the server version and database.
+- **Schedule & limits:**
+  - automatic sending on or off for every email;
+  - how often to check (5/15/30/60 minutes; default 15);
+  - most records in one email (the rest go in the next run);
+  - date format and time zone for the subject date;
+  - how long to remember sent records (default 120 days, which must be longer than any query's look-back) and to keep the log (default 180 days).
+
+**An automated email** has these parts:
+- **Contacts:** To and CC.
+- **Subject:** optionally followed by " - <send date>".
+- **Intro text.**
+- **SQL query:** a single read-only `SELECT` or `WITH … SELECT`. The tool refuses anything that writes or executes, runs the query in a transaction that's always rolled back, and stops after 60 seconds or 20,000 rows. **Test query** shows the columns, the first 50 rows and how many are new.
+- **Key columns:** the column(s) that identify a record, e.g. PO number + line.
+- **Closing text.**
+- **Preview** shows the email as it would be sent, and **Save & send test to me** sends it to you only (`[TEST]` in the subject) without marking anything as sent.
+
+**How sending works:** every check runs the query and drops rows whose key was already emailed. If anything is new, it sends one email with those rows, then records their keys. Keys are recorded only after Microsoft accepts the email, so a failed send is retried on the next check. A row is sent once per key; later changes to it aren't re-sent. **Forget sent records** (in the editor) clears an email's history so it sends everything again.
+
+**Email log:** every send and failure (checks that found nothing new aren't logged), with the recipients, the records, the exact email body and the error with Microsoft's request ID. You can filter it and export it to CSV. Everything is also in the Access Log as `auto_email.*`.
 
 ## Backups
 

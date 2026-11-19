@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/api";
 import { runScheduledQuotes } from "@/lib/shipping/schedule";
 import { runScheduledMangoImport } from "@/lib/shipping/mango-import";
 import { runScheduledProductRates } from "@/lib/shipping/product-rates";
+import { runScheduledAutoEmails } from "@/lib/auto-emails/runner";
 import { zonedParts } from "@/lib/timezone";
 
 // Runs every hour on the hour and checks the backup, quote-run, Mango-import and Products schedules in settings,
@@ -31,6 +32,10 @@ export function startScheduler() {
     } catch (err) {
       await logAudit({ action: "backup.scheduled", category: "BACKUP", actorEmail: "system", success: false, metadata: { error: errorMessage(err) }, ip: null, userAgent: null });
     }
+  });
+  // Automated Emails: checked every 5 minutes, sent on the tool's own interval (default 15)
+  cron.schedule("*/5 * * * *", () => {
+    void runScheduledAutoEmails().catch((err) => console.error("[scheduler] auto-emails:", errorMessage(err)));
   });
   console.log("[scheduler] backup and quote-run scheduler started");
 }

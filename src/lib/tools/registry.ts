@@ -34,6 +34,16 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     sortOrder: 20,
     settingsDescription: "Open the tool's Settings tab: warehouses, UPS account-to-warehouse mapping, quote ZIPs per zone, weight ranges, and the UPS and Endicia API credentials.",
   },
+  {
+    slug: "auto-emails",
+    name: "Automated Emails (EDI)",
+    description: "Scheduled emails that pull new records from our SQL database and send them to partners as a table, without sending the same record twice.",
+    usage:
+      "Each automated email runs a SQL query (typically the last 2 weeks of orders, shipments or invoices) every 15 minutes and emails only the records it hasn't sent before, with an intro, the data table and a closing. The email log shows every send and failure.",
+    icon: "Mail",
+    sortOrder: 30,
+    settingsDescription: "Create, edit and send automated emails (including their SQL queries), and manage the tool's Microsoft Graph sender and SQL Server connection.",
+  },
 ];
 
 export function toolHref(slug: string) {

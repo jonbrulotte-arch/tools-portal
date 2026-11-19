@@ -88,6 +88,19 @@ export type SalsifyFieldMap = SalsifySizeFields & {
   fallback: SalsifySizeFields;
 };
 
+/** Automated Emails (EDI): its own Microsoft Graph sender and one SQL Server connection (secrets encrypted). */
+export type AutoEmailSettings = {
+  enabled: boolean;
+  intervalMinutes: number;
+  maxRowsPerEmail: number;
+  keyRetentionDays: number;
+  logRetentionDays: number;
+  dateFormat: "MM/DD/YYYY" | "YYYY-MM-DD" | "DD/MM/YYYY";
+  timezone: string;
+  graph: { tenantId: string; clientId: string; encClientSecret: string | null; senderAddress: string; senderName: string };
+  sql: { server: string; port: number; database: string; user: string; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
+};
+
 type SettingsMap = {
   branding: BrandingSettings;
   email: EmailSettings;
@@ -95,6 +108,7 @@ type SettingsMap = {
   backup: BackupSettings;
   shopifyDiscountForm: ShopifyDiscountFormSettings;
   shippingRates: ShippingRatesSettings;
+  autoEmails: AutoEmailSettings;
 };
 
 export const SETTING_DEFAULTS: SettingsMap = {
@@ -160,12 +174,27 @@ export const SETTING_DEFAULTS: SettingsMap = {
       },
     },
   },
+  autoEmails: {
+    enabled: true,
+    intervalMinutes: 15,
+    maxRowsPerEmail: 500,
+    keyRetentionDays: 120,
+    logRetentionDays: 180,
+    dateFormat: "MM/DD/YYYY",
+    timezone: "America/Los_Angeles",
+    graph: { tenantId: "", clientId: "", encClientSecret: null, senderAddress: "", senderName: "" },
+    sql: { server: "", port: 1433, database: "", user: "", encPassword: null, encrypt: true, trustServerCertificate: false },
+  },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<SettingsMap[K]> {
   const row = await prisma.setting.findUnique({ where: { key } });
   const stored = (row?.value ?? {}) as Partial<SettingsMap[K]>;
   const merged = { ...SETTING_DEFAULTS[key], ...stored };
+  if (key === "autoEmails") {
+    const d = SETTING_DEFAULTS.autoEmails, a = merged as AutoEmailSettings;
+    return { ...a, graph: { ...d.graph, ...a.graph }, sql: { ...d.sql, ...a.sql } } as SettingsMap[K];
+  }
   return (key === "shippingRates" ? withShippingDefaults(merged as ShippingRatesSettings) : merged) as SettingsMap[K];
 }
 

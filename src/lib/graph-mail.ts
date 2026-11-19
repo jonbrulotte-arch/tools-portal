@@ -10,9 +10,14 @@ export class EmailNotConfiguredError extends Error {
   }
 }
 
-type GraphConfig = { tenantId: string; clientId: string; clientSecret: string; senderAddress: string; senderName: string };
+export type GraphConfig = { tenantId: string; clientId: string; clientSecret: string; senderAddress: string; senderName: string };
 
-let tokenCache: { key: string; token: string; expiresAt: number } | null = null;
+// Tokens per app registration (platform mail and tools such as Automated Emails can use different apps).
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+// GRAPH_LOGIN_BASE / GRAPH_API_BASE let tests and local development use a stand-in server.
+const LOGIN_BASE = () => process.env.GRAPH_LOGIN_BASE?.replace(/\/$/, "") || "https://login.microsoftonline.com";
+const API_BASE = () => process.env.GRAPH_API_BASE?.replace(/\/$/, "") || "https://graph.microsoft.com";
 
 export async function resolveGraphConfig(settings?: EmailSettings): Promise<GraphConfig | null> {
   const s = settings ?? (await getSetting("email"));
@@ -64,9 +69,10 @@ export function describeGraphError(what: string, res: Pick<Response, "status" | 
 
 async function getGraphToken(cfg: GraphConfig): Promise<string> {
   const key = `${cfg.tenantId}:${cfg.clientId}:${cfg.clientSecret.length}`;
-  if (tokenCache && tokenCache.key === key && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.token;
+  const cached = tokenCache.get(key);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
   const res = await graphFetch(
-    `https://login.microsoftonline.com/${encodeURIComponent(cfg.tenantId)}/oauth2/v2.0/token`,
+    `${LOGIN_BASE()}/${encodeURIComponent(cfg.tenantId)}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -84,32 +90,41 @@ async function getGraphToken(cfg: GraphConfig): Promise<string> {
   if (!res.ok || !body.access_token) {
     throw new Error(describeGraphError("Microsoft identity token request", res, body));
   }
-  tokenCache = { key, token: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 };
+  tokenCache.set(key, { token: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 });
   return body.access_token;
 }
 
-export function buildGraphMessage(cfg: Pick<GraphConfig, "senderAddress" | "senderName">, to: { email: string; name?: string }, subject: string, html: string) {
+type Recipient = { email: string; name?: string };
+const recipient = (r: Recipient) => ({ emailAddress: { address: r.email, ...(r.name ? { name: r.name } : {}) } });
+
+/** Graph sendMail body for any number of To and CC recipients. */
+export function buildGraphMailMessage(cfg: Pick<GraphConfig, "senderAddress" | "senderName">, mail: { to: Recipient[]; cc?: Recipient[]; subject: string; html: string }) {
   return {
     message: {
-      subject,
-      body: { contentType: "HTML", content: html },
-      toRecipients: [{ emailAddress: { address: to.email, ...(to.name ? { name: to.name } : {}) } }],
+      subject: mail.subject,
+      body: { contentType: "HTML", content: mail.html },
+      toRecipients: mail.to.map(recipient),
+      ...(mail.cc?.length ? { ccRecipients: mail.cc.map(recipient) } : {}),
       ...(cfg.senderName ? { from: { emailAddress: { address: cfg.senderAddress, name: cfg.senderName } } } : {}),
     },
     saveToSentItems: true,
   };
 }
 
-export async function sendMail(to: { email: string; name?: string }, subject: string, html: string, settings?: EmailSettings): Promise<void> {
-  const cfg = await resolveGraphConfig(settings);
-  if (!cfg) throw new EmailNotConfiguredError();
+/** Single-recipient form used by platform mail (invites, password resets). */
+export function buildGraphMessage(cfg: Pick<GraphConfig, "senderAddress" | "senderName">, to: Recipient, subject: string, html: string) {
+  return buildGraphMailMessage(cfg, { to: [to], subject, html });
+}
+
+/** Sends through Graph with an explicit app registration and sender (e.g. a tool's own settings). */
+export async function sendGraphMail(cfg: GraphConfig, mail: { to: Recipient[]; cc?: Recipient[]; subject: string; html: string }): Promise<void> {
   const token = await getGraphToken(cfg);
   const res = await graphFetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.senderAddress)}/sendMail`,
+    `${API_BASE()}/v1.0/users/${encodeURIComponent(cfg.senderAddress)}/sendMail`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(buildGraphMessage(cfg, to, subject, html)),
+      body: JSON.stringify(buildGraphMailMessage(cfg, mail)),
     },
     SEND_TIMEOUT_MS,
     "Microsoft Graph sendMail",
@@ -120,6 +135,12 @@ export async function sendMail(to: { email: string; name?: string }, subject: st
   }
 }
 
+export async function sendMail(to: Recipient, subject: string, html: string, settings?: EmailSettings): Promise<void> {
+  const cfg = await resolveGraphConfig(settings);
+  if (!cfg) throw new EmailNotConfiguredError();
+  await sendGraphMail(cfg, { to: [to], subject, html });
+}
+
 export function clearGraphTokenCache() {
-  tokenCache = null;
+  tokenCache.clear();
 }

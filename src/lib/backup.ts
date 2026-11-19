@@ -29,6 +29,9 @@ export const TABLE_ORDER = [
   "ProductRateRun",
   "ProductRateItem",
   "ProductRateQuote",
+  "AutoEmail",
+  "AutoEmailSentKey",
+  "AutoEmailLog",
   "AuditLog",
 ] as const;
 

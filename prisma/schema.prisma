@@ -391,3 +391,75 @@ model ProductRateQuote {
 
   @@index([itemId])
 }
+
+// ─── Automated Emails (EDI) ───
+
+enum AutoEmailTrigger {
+  SCHEDULE
+  MANUAL
+  TEST
+}
+
+enum AutoEmailStatus {
+  SENT
+  FAILED
+}
+
+model AutoEmail {
+  id            String             @id @default(cuid())
+  name          String
+  enabled       Boolean            @default(false)
+  to            String[]
+  cc            String[]
+  subject       String
+  appendDate    Boolean            @default(true)
+  introText     String             @default("")
+  sqlQuery      String             @default("")
+  keyColumns    String[]
+  closingText   String             @default("")
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  lastCheckedAt DateTime?
+  lastSentAt    DateTime?
+  lastStatus    String?
+  lastError     String?
+  sentKeys      AutoEmailSentKey[]
+  logs          AutoEmailLog[]
+}
+
+model AutoEmailSentKey {
+  id      String    @id @default(cuid())
+  emailId String
+  email   AutoEmail @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  keyHash String
+  keyText String
+  sentAt  DateTime  @default(now())
+  logId   String?
+
+  @@unique([emailId, keyHash])
+  @@index([sentAt])
+}
+
+model AutoEmailLog {
+  id         String           @id @default(cuid())
+  emailId    String?
+  email      AutoEmail?       @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  emailName  String
+  trigger    AutoEmailTrigger
+  status     AutoEmailStatus
+  to         String[]
+  cc         String[]
+  subject    String
+  rowCount   Int              @default(0)
+  keys       Json?
+  html       String?
+  error      String?
+  durationMs Int?
+  actorEmail String?
+  createdAt  DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([emailId, createdAt])
+}
