@@ -1,3 +1,4 @@
+import { ToolHelpLink } from "@/components/help/tool-help-link";
 import { requireTool } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { ToolIcon } from "@/components/tool-icon";
@@ -19,7 +20,10 @@ export default async function AutoEmailsLayout({ children }: { children: React.R
             <p className="text-sm text-gray-500 mt-1">{tool?.description}</p>
           </div>
         </div>
-        <AutoEmailsNav canManage={user.can(AUTO_EMAILS_EDIT)} />
+        <div className="flex items-center gap-2">
+          <AutoEmailsNav canManage={user.can(AUTO_EMAILS_EDIT)} />
+          <ToolHelpLink user={user} toolSlug={AUTO_EMAILS_TOOL} />
+        </div>
       </div>
       {children}
     </div>

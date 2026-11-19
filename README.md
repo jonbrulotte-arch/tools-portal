@@ -178,6 +178,18 @@ Tabs: **Emails**, **Email log** and **Settings**. Creating and editing emails, r
 
 **Email log:** every send and failure (checks that found nothing new aren't logged), with the recipients, the records, the exact email body and the error with Microsoft's request ID. You can filter it and export it to CSV. Everything is also in the Access Log as `auto_email.*`.
 
+## Help & Docs
+
+**Help & Docs** (sidebar → Support) holds the guides and SOPs, and each tool's header has a **Help** link to its guide. Each person sees only the guides for what they can access:
+- **Getting started**: everyone.
+- **A tool's user guide**: anyone with that tool.
+- **A tool's manager guide**: people with the tool's *manage tool settings* permission. One example is the **EDI Admin SOP** for Automated Emails (EDI).
+- **Admin guides**: people with the matching admin permission.
+
+Super Admins see every guide. A disabled tool's guides are hidden. Opening a guide you can't see returns "not found" and is recorded in the Access Log.
+
+The guides are Markdown in `src/content/help/<slug>.md`, registered (with their audience) in `src/lib/help/registry.ts`. Their screenshots are in `src/content/help/images/<slug>/`. Images are served only through `/api/help/image/…` to people who may read the guide, never from `public/`. The screenshots use sample data from a separate demo database; see `scripts/docs/README.md` for how to retake them after a UI change.
+
 ## Backups
 
 - **Create backup now** writes `backup-YYYYMMDD-HHMMSS-manual.json.gz` to the backups volume. Scheduled backups (Settings → Backup schedule, daily at 02:00 by default, keeping 14) are pruned automatically; manual ones are never pruned.
@@ -216,3 +228,4 @@ Checks: `npm run lint`, `npm run typecheck`, `npm test`. Database integration te
 3. Put APIs under `src/app/api/tools/<slug>/`, guarded with `guard({ tool: "<slug>" })`, and record actions with `logAudit(...)`.
 4. Every tool automatically gets a *"<tool>: manage tool settings"* permission (`toolSettingsPermission(slug)` in `src/lib/permissions.ts`); guard the tool's settings pages and APIs with it, and describe what it covers in the registry's `settingsDescription`. Extra capabilities go in `EXTRA_TOOL_PERMISSIONS`; both appear in the role editor automatically.
 5. Add any new Prisma models to `TABLE_ORDER` in `src/lib/backup.ts` (backups fail loudly if one is missing).
+6. Add its guides to `src/lib/help/registry.ts` and `src/content/help/` (a user guide for `{ tool }`, and a manager guide for `{ toolManager }` if it has settings), and put `<ToolHelpLink>` in its layout header.

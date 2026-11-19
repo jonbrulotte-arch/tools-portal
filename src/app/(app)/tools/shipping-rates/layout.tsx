@@ -1,3 +1,4 @@
+import { ToolHelpLink } from "@/components/help/tool-help-link";
 import { requireTool } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { ToolIcon } from "@/components/tool-icon";
@@ -19,7 +20,10 @@ export default async function ShippingRatesLayout({ children }: { children: Reac
             <p className="text-sm text-gray-500 mt-1">{tool?.description}</p>
           </div>
         </div>
-        <ToolNav canManageSettings={user.can(SHIPPING_SETTINGS_PERMISSION)} />
+        <div className="flex items-center gap-2">
+          <ToolNav canManageSettings={user.can(SHIPPING_SETTINGS_PERMISSION)} />
+          <ToolHelpLink user={user} toolSlug={SHIPPING_TOOL} />
+        </div>
       </div>
       {children}
     </div>

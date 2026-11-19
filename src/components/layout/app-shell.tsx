@@ -25,7 +25,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   ]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50 print:block print:h-auto print:overflow-visible print:bg-white">
       <PageViewTracker />
       <Sidebar
         brand={{ siteName: branding.siteName, accentWord: branding.accentWord, logoUrl: logoUrl(branding) }}
@@ -34,7 +34,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         adminItems={ADMIN_NAV.filter((i) => user.can(i.permission)).map((i) => i.key)}
       />
       {/* relative: absolutely positioned descendants (e.g. Radix checkbox/switch hidden inputs) stay inside the scroll area instead of stretching the page */}
-      <main className="relative flex-1 overflow-y-auto">{children}</main>
+      <main className="relative flex-1 overflow-y-auto print:overflow-visible">{children}</main>
     </div>
   );
 }

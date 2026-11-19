@@ -16,6 +16,7 @@ import {
   ScrollText,
   DatabaseBackup,
   UserCircle,
+  LifeBuoy,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { BrandMark, type BrandInfo } from "@/components/brand";
@@ -73,7 +74,7 @@ export function Sidebar({
   );
 
   return (
-    <aside className={cn("flex flex-col h-screen bg-gray-900 text-white transition-all duration-200 shrink-0", collapsed ? "w-16" : "w-56")}>
+    <aside className={cn("flex flex-col h-screen bg-gray-900 text-white transition-all duration-200 shrink-0 print:hidden", collapsed ? "w-16" : "w-56")}>
       <div className="flex items-center h-14 px-4 border-b border-gray-700">
         {collapsed ? (
           <span className="text-lg font-bold text-white mx-auto">{brand.siteName.trim().charAt(0).toUpperCase() || "T"}</span>
@@ -101,6 +102,8 @@ export function Sidebar({
             })}
           </>
         )}
+        {section("Support")}
+        {renderItem({ href: "/help", label: "Help & Docs", icon: <LifeBuoy className="h-5 w-5 shrink-0" /> })}
       </nav>
 
       <div className="border-t border-gray-700 p-3">

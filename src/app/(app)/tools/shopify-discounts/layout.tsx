@@ -1,3 +1,4 @@
+import { ToolHelpLink } from "@/components/help/tool-help-link";
 import { requireTool } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { ToolIcon } from "@/components/tool-icon";
@@ -19,7 +20,10 @@ export default async function ShopifyToolLayout({ children }: { children: React.
             <p className="text-sm text-gray-500 mt-1">{tool?.description}</p>
           </div>
         </div>
-        <ToolNav canManageStores={user.isAdmin} canManageSettings={user.can(toolSettingsPermission("shopify-discounts"))} />
+        <div className="flex items-center gap-2">
+          <ToolNav canManageStores={user.isAdmin} canManageSettings={user.can(toolSettingsPermission("shopify-discounts"))} />
+          <ToolHelpLink user={user} toolSlug={"shopify-discounts"} />
+        </div>
       </div>
       {children}
     </div>
