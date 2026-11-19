@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Loader2, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,24 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
   const [service, setService] = useState("GROUND_ADVANTAGE");
   const active = runs.find((r) => r.status === "RUNNING" || r.status === "PENDING");
   const selected = runs.find((r) => r.id === selectedId);
+
+  // "View": show that run's rates (below the runs list) and scroll down to them, so the click is visible.
+  const ratesRef = useRef<HTMLDivElement>(null);
+  const pendingScroll = useRef(false);
+  const [scrollTick, setScrollTick] = useState(0);
+  const [loadingRun, startLoadingRun] = useTransition();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const view = (r: Run) => {
+    pendingScroll.current = true;
+    if (r.id === selectedId) return setScrollTick((t) => t + 1); // already shown: just go to it
+    setLoadingId(r.id);
+    startLoadingRun(() => router.push(`/tools/shipping-rates/quotes?run=${r.id}`, { scroll: false }));
+  };
+  useEffect(() => {
+    if (!pendingScroll.current || !ratesRef.current) return;
+    pendingScroll.current = false;
+    ratesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedId, scrollTick]);
 
   useEffect(() => {
     if (!active) return;
@@ -209,8 +227,22 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
                     <RotateCcw className="h-3.5 w-3.5" /> Retry failed
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" onClick={() => router.push(`/tools/shipping-rates/quotes?run=${r.id}`)}>
-                  View
+                <Button
+                  size="sm"
+                  variant={r.id === selectedId ? "secondary" : "ghost"}
+                  onClick={() => view(r)}
+                  disabled={loadingRun && loadingId === r.id}
+                  title={r.id === selectedId ? "These rates are shown below" : "Show this run's rates"}
+                >
+                  {loadingRun && loadingId === r.id ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+                    </>
+                  ) : r.id === selectedId ? (
+                    "Viewing"
+                  ) : (
+                    "View"
+                  )}
                 </Button>
                 <a href={`/api/tools/shipping-rates/runs/${r.id}/export`} className="inline-flex p-1.5 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Export CSV">
                   <Download className="h-4 w-4" />
@@ -221,6 +253,22 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
         </tbody>
       </TableWrap>
 
+      <div ref={ratesRef} className="scroll-mt-4">
+      {selected && quotes.length === 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Rates · {formatDateTime(selected.createdAt)}</CardTitle>
+              <ModeBadge mode={selected.mode} />
+            </div>
+            <CardDescription>
+              {selected.status === "RUNNING" || selected.status === "PENDING"
+                ? "Quotes appear here as the run progresses."
+                : `This run has no saved quotes${selected.error ? `: ${selected.error}` : "."}`}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
       {selected && quotes.length > 0 && (
         <Card>
           <CardHeader>
@@ -313,6 +361,7 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }
