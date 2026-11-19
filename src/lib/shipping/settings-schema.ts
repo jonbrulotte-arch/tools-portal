@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { TIMEZONE_IDS } from "@/lib/timezone";
 import { normalizeListId } from "@/lib/salsify";
+import { encrypt } from "@/lib/crypto";
+import type { UpsCredentials } from "@/lib/settings";
 
 const zip = z.string().regex(/^\d{5}$/, "ZIP codes must be 5 digits");
 
@@ -12,6 +14,10 @@ export const shippingSettingsSchema = z
       .max(10),
     upsAccounts: z.record(z.string().regex(/^[A-Z0-9]{6}$/i, "UPS accounts are 6 characters"), z.string()),
     upsRatingAccounts: z.record(z.string(), z.string().max(6)).default({}),
+    /** Per-account API credentials: a blank value keeps the saved one, `clear` removes both. */
+    upsCredentials: z
+      .record(z.string(), z.object({ clientId: z.string().trim().max(200).optional(), clientSecret: z.string().trim().max(500).optional(), clear: z.boolean().optional() }))
+      .default({}),
     schedule: z.object({
       enabled: z.boolean(),
       frequency: z.enum(["daily", "weekly"]),
@@ -54,9 +60,6 @@ export const shippingSettingsSchema = z
     upsMaxLb: z.coerce.number().int().min(1).max(150),
     mode: z.enum(["simulated", "live"]),
     ups: z.object({
-      clientId: z.string().max(200),
-      clientSecret: z.string().max(500).optional(),
-      clearSecret: z.boolean().optional(),
       environment: z.enum(["production", "test"]),
       apiVersion: z.string().regex(/^v\d{1,4}$/, "Looks like v2403"),
     }),
@@ -94,3 +97,28 @@ export const shippingSettingsSchema = z
       if (mapped !== origin) ctx.addIssue({ code: "custom", path: ["upsRatingAccounts", origin], message: `The quoting account ${acct} must be one of that warehouse's UPS accounts` });
     }
   });
+
+type CredentialEdits = Record<string, { clientId?: string; clientSecret?: string; clear?: boolean }>;
+
+/**
+ * Applies the form's credential edits to what's saved, per account: a new value is encrypted, a blank one keeps the
+ * saved value, `clear` removes both. Accounts no longer in the list (removed or renamed) lose their credentials.
+ */
+export function mergeUpsCredentials(saved: Record<string, UpsCredentials>, edits: CredentialEdits, accounts: string[]): Record<string, UpsCredentials> {
+  const byAccount = new Map(Object.entries(edits).map(([a, e]) => [a.toUpperCase(), e]));
+  const out: Record<string, UpsCredentials> = {};
+  for (const account of accounts) {
+    const was = saved[account] ?? { encClientId: null, encClientSecret: null };
+    const e = byAccount.get(account);
+    const next = e?.clear
+      ? { encClientId: null, encClientSecret: null }
+      : { encClientId: e?.clientId ? encrypt(e.clientId) : was.encClientId, encClientSecret: e?.clientSecret ? encrypt(e.clientSecret) : was.encClientSecret };
+    if (next.encClientId || next.encClientSecret) out[account] = next;
+  }
+  return out;
+}
+
+/** For the audit log: which accounts have which credentials, never the values. */
+export function redactUpsCredentials(c: Record<string, UpsCredentials>) {
+  return Object.fromEntries(Object.entries(c).map(([a, v]) => [a, { clientId: v.encClientId ? "set" : null, secret: v.encClientSecret ? "set" : null }]));
+}

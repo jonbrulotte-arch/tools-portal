@@ -5,7 +5,7 @@ import { jsonError, parseBody } from "@/lib/api";
 import { getSetting, setSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { encrypt } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
-import { shippingSettingsSchema } from "@/lib/shipping/settings-schema";
+import { mergeUpsCredentials, redactUpsCredentials, shippingSettingsSchema } from "@/lib/shipping/settings-schema";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 
 export async function PATCH(req: Request) {
@@ -18,20 +18,17 @@ export async function PATCH(req: Request) {
     const keyUser = await prisma.userCredential.findUnique({ where: { userId_provider: { userId: body.productRates.keyUserId, provider: "salsify" } } });
     if (!keyUser) return jsonError("The user chosen for scheduled Products runs has no saved Salsify key.");
   }
+  const upsAccounts = Object.fromEntries(Object.entries(body.upsAccounts).map(([k, v]) => [k.toUpperCase(), v]));
   const value: ShippingRatesSettings = {
     origins: body.origins,
-    upsAccounts: Object.fromEntries(Object.entries(body.upsAccounts).map(([k, v]) => [k.toUpperCase(), v])),
+    upsAccounts,
+    upsCredentials: mergeUpsCredentials(before.upsCredentials, body.upsCredentials, Object.keys(upsAccounts)),
     upsRatingAccounts: Object.fromEntries(Object.entries(body.upsRatingAccounts).map(([k, v]) => [k, v.toUpperCase()])),
     quoteZips: body.quoteZips,
     uspsMaxLb: body.uspsMaxLb,
     upsMaxLb: body.upsMaxLb,
     mode: body.mode,
-    ups: {
-      clientId: body.ups.clientId,
-      encClientSecret: body.ups.clearSecret ? null : body.ups.clientSecret ? encrypt(body.ups.clientSecret) : before.ups.encClientSecret,
-      environment: body.ups.environment,
-      apiVersion: body.ups.apiVersion,
-    },
+    ups: { environment: body.ups.environment, apiVersion: body.ups.apiVersion },
     endicia: {
       requesterId: body.endicia.requesterId,
       accountId: body.endicia.accountId,
@@ -46,7 +43,7 @@ export async function PATCH(req: Request) {
   await setSetting("shippingRates", value);
   const redact = (s: typeof value) => ({
     ...s,
-    ups: { ...s.ups, encClientSecret: s.ups.encClientSecret ? "set" : null },
+    upsCredentials: redactUpsCredentials(s.upsCredentials),
     endicia: { ...s.endicia, encPassPhrase: s.endicia.encPassPhrase ? "set" : null },
   });
   await logAudit({

@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 
 export type BrandingSettings = {
   siteName: string;
@@ -47,14 +48,17 @@ export type ShippingRatesSettings = {
   origins: ShippingOrigin[];
   /** UPS shipper account (6 chars after "1Z" in tracking numbers) → origin code. */
   upsAccounts: Record<string, string>;
-  /** Warehouse code → the UPS account used for live quotes (must be linked to the UPS developer app). Default: the first mapped account. */
+  /** Warehouse code → the UPS account used for live quotes. Default: the first mapped account. */
   upsRatingAccounts: Record<string, string>;
+  /** Each UPS account's own API credentials (its developer.ups.com app), encrypted. */
+  upsCredentials: Record<string, UpsCredentials>;
   /** Destination ZIP to quote per origin and zone; missing entries use an automatic choice. */
   quoteZips: Record<string, Record<string, string>>;
   uspsMaxLb: number;
   upsMaxLb: number;
   mode: "simulated" | "live";
-  ups: { clientId: string; encClientSecret: string | null; environment: "production" | "test"; apiVersion: string };
+  /** Shared UPS options; credentials are per account in upsCredentials. */
+  ups: { environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; encPassPhrase: string | null; endpoint: string };
   /** Automatic quote run (weekly or daily). */
   schedule: ShippingSchedule;
@@ -65,6 +69,7 @@ export type ShippingRatesSettings = {
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
+export type UpsCredentials = { encClientId: string | null; encClientSecret: string | null };
 /** Automatic Ship Cost History import from Mango's export (rolling date range, on a schedule). */
 export type MangoImportSettings = { enabled: boolean; url: string; days: number; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string; keepReports: number };
 /** Products tab: weekly live rates for every product on a Salsify list. */
@@ -157,7 +162,8 @@ export const SETTING_DEFAULTS: SettingsMap = {
     uspsMaxLb: 20,
     upsMaxLb: 150,
     mode: "simulated",
-    ups: { clientId: "", encClientSecret: null, environment: "production", apiVersion: "v2403" },
+    upsCredentials: {},
+    ups: { environment: "production", apiVersion: "v2403" },
     endicia: { requesterId: "", accountId: "", encPassPhrase: null, endpoint: "https://elstestserver.endicia.com/LabelService/EwsLabelService.asmx" },
     salsify: {
       orgId: "",
@@ -198,12 +204,51 @@ export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<S
   return (key === "shippingRates" ? withShippingDefaults(merged as ShippingRatesSettings) : merged) as SettingsMap[K];
 }
 
+type LegacyUps = ShippingRatesSettings["ups"] & { clientId?: string; encClientSecret?: string | null };
+
+/** The account that quotes for a warehouse: the chosen one if it's mapped there, else the first mapped (same rule as upsAccountFor). */
+function quotingAccount(s: Pick<ShippingRatesSettings, "upsAccounts" | "upsRatingAccounts">, origin: string): string | null {
+  const chosen = s.upsRatingAccounts?.[origin];
+  if (chosen && s.upsAccounts?.[chosen] === origin) return chosen;
+  return Object.entries(s.upsAccounts ?? {}).find(([, o]) => o === origin)?.[0] ?? null;
+}
+
+/**
+ * Credentials used to be one shared pair on `ups`. Each account now has its own, so the old pair moves to the first
+ * warehouse's quoting account (the one it was used for), only while no account has credentials yet.
+ */
+function moveLegacyUpsCredentials(s: ShippingRatesSettings): Pick<ShippingRatesSettings, "ups" | "upsCredentials"> {
+  const { clientId, encClientSecret, ...ups } = { ...SETTING_DEFAULTS.shippingRates.ups, ...s.ups } as LegacyUps;
+  const upsCredentials = { ...s.upsCredentials };
+  const account = s.origins?.[0] ? quotingAccount(s, s.origins[0].code) : null;
+  if ((clientId?.trim() || encClientSecret) && account && !Object.keys(upsCredentials).length) {
+    upsCredentials[account] = { encClientId: encOrNull(clientId), encClientSecret: encClientSecret ?? null };
+  }
+  return { ups, upsCredentials };
+}
+
+/** Run at startup: moves the old shared UPS credentials onto their account and saves the result. Returns that account. */
+export async function migrateUpsCredentials(): Promise<string | null> {
+  const row = await prisma.setting.findUnique({ where: { key: "shippingRates" } });
+  const stored = (row?.value ?? null) as { ups?: LegacyUps; upsCredentials?: Record<string, UpsCredentials> } | null;
+  if (!stored?.ups || (stored.ups.clientId === undefined && stored.ups.encClientSecret === undefined)) return null;
+  const before = new Set(Object.keys(stored.upsCredentials ?? {}));
+  const value = await getSetting("shippingRates");
+  await prisma.setting.update({ where: { key: "shippingRates" }, data: { value: value as object } });
+  const account = Object.keys(value.upsCredentials).find((a) => !before.has(a)) ?? null;
+  await logAudit({ action: "shipping.ups_credentials_migrated", category: "SETTINGS", actorEmail: "system", targetType: "Setting", targetId: "shippingRates", metadata: { account }, ip: null, userAgent: null });
+  return account;
+}
+
 /** Fills nested settings added after a value was first saved (e.g. the Salsify fallback fields). */
 function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
   const d = SETTING_DEFAULTS.shippingRates.salsify;
   const fields = { ...d.fields, ...s.salsify?.fields };
+  const { ups, upsCredentials } = moveLegacyUpsCredentials(s);
   return {
     ...s,
+    ups,
+    upsCredentials,
     schedule: { ...SETTING_DEFAULTS.shippingRates.schedule, ...s.schedule },
     mangoImport: { ...SETTING_DEFAULTS.shippingRates.mangoImport, ...s.mangoImport },
     productRates: { ...SETTING_DEFAULTS.shippingRates.productRates, ...s.productRates },

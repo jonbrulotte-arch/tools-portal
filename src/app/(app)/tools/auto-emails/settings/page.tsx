@@ -4,7 +4,7 @@ import { requireTool } from "@/lib/rbac";
 import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { AUTO_EMAILS_EDIT, AUTO_EMAILS_TOOL } from "@/lib/auto-emails/access";
-import { savedHint } from "@/lib/auto-emails/saved-hint";
+import { savedHint } from "@/lib/saved-hint";
 import { AutoEmailSettingsClient } from "./settings-client";
 
 export const metadata: Metadata = { title: "Automated email settings" };

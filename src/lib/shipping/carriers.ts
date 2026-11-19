@@ -18,6 +18,8 @@ export type QuoteRequest = {
   weight: number; // lb: a chart tier (USPS sub-pound tiers 0.25/0.5/0.75/0.99) or a product's actual weight
   /** Package size in inches (product quotes); carriers then apply dimensional weight. */
   dims?: Dims | null;
+  /** UPS only: quote with this account instead of the warehouse's quoting account (Settings tests). */
+  upsAccount?: string;
 };
 export type QuoteResult = {
   amount: number;
@@ -81,9 +83,11 @@ export function simulatedQuote(req: QuoteRequest): QuoteResult {
 
 // ─── UPS ────────────────────────────────────────────────────────────────────
 
-let upsToken: { key: string; token: string; expiresAt: number } | null = null;
+/** OAuth tokens per environment + account + app, so each account is quoted with its own credentials. */
+const upsTokens = new Map<string, { token: string; expiresAt: number }>();
 
 function upsBase(s: ShippingRatesSettings) {
+  if (process.env.UPS_API_BASE) return process.env.UPS_API_BASE; // a stand-in server for tests and docs
   return s.ups.environment === "test" ? "https://wwwcie.ups.com" : "https://onlinetools.ups.com";
 }
 
@@ -94,10 +98,22 @@ export function upsAccountFor(s: ShippingRatesSettings, origin: string): string 
   return Object.entries(s.upsAccounts).find(([, o]) => o === origin)?.[0] ?? null;
 }
 
+/** Whether a UPS account has both halves of its own API credentials saved. */
+export function upsCredentialStatus(s: ShippingRatesSettings, account: string): "ready" | "missing" {
+  const c = s.upsCredentials?.[account];
+  return c?.encClientId && c.encClientSecret ? "ready" : "missing";
+}
+
+export const missingUpsCredentials = (account: string) => `UPS account ${account} has no API credentials (Settings → UPS accounts → warehouse).`;
+
+const tokenKey = (s: ShippingRatesSettings, account: string) => `${s.ups.environment}:${account}:${s.upsCredentials?.[account]?.encClientId ?? ""}`;
+
 async function upsAccessToken(s: ShippingRatesSettings, account: string): Promise<string> {
-  if (!s.ups.clientId || !s.ups.encClientSecret) throw new Error("UPS client ID and secret aren't set (tool Settings → UPS)");
-  const key = `${s.ups.environment}:${s.ups.clientId}`;
-  if (upsToken?.key === key && upsToken.expiresAt > Date.now() + 60_000) return upsToken.token;
+  const c = s.upsCredentials?.[account];
+  if (!c?.encClientId || !c.encClientSecret) throw new Error(missingUpsCredentials(account));
+  const key = tokenKey(s, account);
+  const cached = upsTokens.get(key);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
   const res = await timedFetch(
     `${upsBase(s)}/security/v1/oauth/token`,
     {
@@ -105,15 +121,15 @@ async function upsAccessToken(s: ShippingRatesSettings, account: string): Promis
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "x-merchant-id": account,
-        Authorization: `Basic ${Buffer.from(`${s.ups.clientId}:${decrypt(s.ups.encClientSecret)}`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${decrypt(c.encClientId)}:${decrypt(c.encClientSecret)}`).toString("base64")}`,
       },
       body: new URLSearchParams({ grant_type: "client_credentials" }),
     },
     "UPS token request",
   );
   const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: string | number; response?: { errors?: { message?: string }[] } };
-  if (!res.ok || !body.access_token) throw new Error(`UPS token request failed (${res.status}): ${body.response?.errors?.[0]?.message ?? "no details"}`);
-  upsToken = { key, token: body.access_token, expiresAt: Date.now() + Number(body.expires_in ?? 3600) * 1000 };
+  if (!res.ok || !body.access_token) throw new Error(`UPS token request failed for account ${account} (${res.status}): ${body.response?.errors?.[0]?.message ?? "no details"}`);
+  upsTokens.set(key, { token: body.access_token, expiresAt: Date.now() + Number(body.expires_in ?? 3600) * 1000 });
   return body.access_token;
 }
 
@@ -175,7 +191,7 @@ export function parseUpsRateResponse(body: unknown): QuoteResult {
 }
 
 async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<QuoteResult> {
-  const account = upsAccountFor(s, q.origin);
+  const account = q.upsAccount ?? upsAccountFor(s, q.origin);
   if (!account) throw new Error(`No UPS account is mapped to origin ${q.origin}`);
   const token = await upsAccessToken(s, account);
   const res = await timedFetch(
@@ -190,7 +206,7 @@ async function upsQuote(s: ShippingRatesSettings, q: QuoteRequest): Promise<Quot
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as { response?: { errors?: { message?: string }[] } }).response?.errors?.map((e) => e.message).join("; ");
-    if (res.status === 401) upsToken = null; // expired or revoked token: get a new one on the retry
+    if (res.status === 401) upsTokens.delete(tokenKey(s, account)); // expired or revoked token: get a new one on the retry
     const text = `UPS rate request failed (${res.status}${res.status === 429 ? " too many requests" : ""}, account ${account})${msg ? `: ${msg}` : ""}`;
     throw new CarrierError(text, RETRY_STATUSES.has(res.status) || res.status === 401, retryAfter(res));
   }

@@ -112,7 +112,7 @@ describe.skipIf(!enabled)("Automated Emails (database)", async () => {
   it("encrypts credentials that were saved in plain text, and shows only their last 4 characters", async () => {
     const { migrateAutoEmailCredentials, getSetting } = await import("@/lib/settings");
     const { decrypt } = await import("@/lib/crypto");
-    const { savedHint } = await import("@/lib/auto-emails/saved-hint");
+    const { savedHint } = await import("@/lib/saved-hint");
     const before = await prisma.setting.findUniqueOrThrow({ where: { key: "autoEmails" } });
     const tenant = "0c23e6db-32a4-44db-af48-b11718c8a38d", client = "e3aefad6-e702-4bf7-a29f-e6663014b2ae";
     // a value saved by the earlier version: plain tenant ID, client ID and SQL login

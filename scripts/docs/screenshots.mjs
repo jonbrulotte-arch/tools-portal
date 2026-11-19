@@ -181,6 +181,12 @@ const shots = {
         await save(d, name, c);
       }
     }
+    // one account's API credentials dialog
+    await card(p, "UPS accounts → warehouse").locator("tbody tr").first().getByRole("button", { name: /Change|Set credentials/ }).click();
+    await p.waitForSelector("[role=dialog]");
+    await p.waitForTimeout(300);
+    await save(d, "ups-credentials", p.locator("[role=dialog]"));
+    await p.keyboard.press("Escape");
   },
 
   admin: async () => {

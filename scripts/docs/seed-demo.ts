@@ -78,7 +78,9 @@ async function main() {
 
   // ── Shipping Rates Generator ──
   const ship = await getSetting("shippingRates");
-  await setSetting("shippingRates", { mode: "simulated", salsify: { ...ship.salsify, orgId: "s-demo-org" }, productRates: { ...ship.productRates, listId: "s-demo-list", keyUserId: admin.id } });
+  // demo API credentials for one account per warehouse (each UPS account has its own)
+  const upsCredentials = { "796305": { encClientId: encrypt("demo-lv-client-id-a38d"), encClientSecret: encrypt("demo") }, "9X0F53": { encClientId: encrypt("demo-gv-client-id-5e21"), encClientSecret: encrypt("demo") } };
+  await setSetting("shippingRates", { mode: "simulated", upsCredentials, upsRatingAccounts: {}, salsify: { ...ship.salsify, orgId: "s-demo-org" }, productRates: { ...ship.productRates, listId: "s-demo-list", keyUserId: admin.id } });
   await setUserSecret(admin.id, "salsify", "demo-salsify-key-0000");
   if (process.env.DOCS_SHIP_REPORT && !(await prisma.shippingReport.count())) {
     const report = await prisma.shippingReport.create({ data: { fileName: "Shipping_cost_2026-08-01_to_2026-11-10.xlsx", uploadedById: admin.id, uploadedBy: admin.email } });

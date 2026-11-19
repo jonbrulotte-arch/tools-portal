@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plug, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Plug, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { SavedHint } from "@/lib/saved-hint";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
@@ -29,7 +32,9 @@ type Initial = {
   uspsMaxLb: number;
   upsMaxLb: number;
   mode: "simulated" | "live";
-  ups: { clientId: string; hasSecret: boolean; environment: "production" | "test"; apiVersion: string };
+  /** Per UPS account: hints only (never the values). */
+  upsCredentials: Record<string, CredentialHint>;
+  ups: { environment: "production" | "test"; apiVersion: string };
   endicia: { requesterId: string; accountId: string; hasPassPhrase: boolean; endpoint: string };
   salsify: { orgId: string; fields: SalsifyFieldMap };
   schedule: ShippingSchedule;
@@ -37,6 +42,87 @@ type Initial = {
   productRates: ProductRatesSettings;
 };
 
+type CredentialHint = { clientId: SavedHint; hasSecret: boolean };
+type CredentialEdit = { clientId?: string; clientSecret?: string; clear?: boolean };
+const NO_HINT: CredentialHint = { clientId: { isSet: false, last4: null }, hasSecret: false };
+
+/** What a saved value will look like after an edit, for the badge and the "missing" warning. */
+function effectiveHint(hint: CredentialHint | undefined, edit: CredentialEdit | undefined): CredentialHint {
+  if (edit?.clear) return NO_HINT;
+  const h = hint ?? NO_HINT;
+  const id = edit?.clientId?.trim();
+  return { clientId: id ? { isSet: true, last4: id.length > 8 ? id.slice(-4) : null } : h.clientId, hasSecret: h.hasSecret || !!edit?.clientSecret?.trim() };
+}
+const isReady = (h: CredentialHint) => h.clientId.isSet && h.hasSecret;
+
+function CredentialBadge({ hint, pending, quoting }: { hint: CredentialHint; pending: boolean; quoting: boolean }) {
+  if (!isReady(hint)) return <Badge variant={quoting ? "warning" : "secondary"}>{hint.clientId.isSet || hint.hasSecret ? "Incomplete" : "Not set"}</Badge>;
+  return (
+    <Badge variant="success">
+      {pending ? "Ready to save" : "Saved"}
+      {hint.clientId.last4 ? ` (…${hint.clientId.last4})` : ""}
+    </Badge>
+  );
+}
+
+/** Enter one UPS account's own API credentials; values are write-only. */
+function CredentialsDialog({
+  account,
+  hint,
+  onClose,
+  onApply,
+  onApplyAndTest,
+}: {
+  account: string;
+  hint: CredentialHint;
+  onClose: () => void;
+  onApply: (edit: CredentialEdit) => void;
+  onApplyAndTest: (edit: CredentialEdit) => void;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const edit = { clientId: clientId.trim() || undefined, clientSecret: clientSecret.trim() || undefined };
+  const saved = (h: SavedHint) => (h.isSet ? `•••••••• saved${h.last4 ? ` (…${h.last4})` : ""}, leave blank to keep` : "");
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>API credentials for UPS account {account}</DialogTitle>
+          <DialogDescription>
+            From this account&apos;s own app at developer.ups.com (with the Rating product), linked to account {account}. They&apos;re encrypted when saved and never shown again.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="cred-id">Client ID</Label>
+            <Input id="cred-id" type="password" autoComplete="off" value={clientId} placeholder={saved(hint.clientId)} onChange={(e) => setClientId(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="cred-secret">Client secret</Label>
+            <Input id="cred-secret" type="password" autoComplete="off" value={clientSecret} placeholder={hint.hasSecret ? "•••••••• saved, leave blank to keep" : ""} onChange={(e) => setClientSecret(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between">
+          {hint.clientId.isSet || hint.hasSecret ? (
+            <Button type="button" variant="outline" className="text-red-600" onClick={() => confirm(`Remove the API credentials for UPS account ${account}? It can't be quoted until new ones are saved.`) && onApply({ clear: true })}>
+              Remove credentials
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onApply(edit)}>
+              Done
+            </Button>
+            <Button type="button" onClick={() => onApplyAndTest(edit)}>
+              <Plug className="h-4 w-4" /> Save &amp; test this account
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const SALSIFY_FALLBACK: { key: keyof SalsifySizeFields; label: string }[] = [
   { key: "weight", label: "Fallback weight (lb)" },
@@ -77,7 +163,12 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
   const [uspsMaxLb, setUspsMaxLb] = useState(initial.uspsMaxLb);
   const [upsMaxLb, setUpsMaxLb] = useState(initial.upsMaxLb);
   const [mode, setMode] = useState(initial.mode);
-  const [ups, setUps] = useState({ ...initial.ups, clientSecret: "" });
+  const [ups, setUps] = useState(initial.ups);
+  const [credHints, setCredHints] = useState(initial.upsCredentials);
+  const [credEdits, setCredEdits] = useState<Record<string, CredentialEdit>>({});
+  const [credFor, setCredFor] = useState<string | null>(null);
+  const hintFor = (account: string, edits = credEdits) => effectiveHint(credHints[account], edits[account]);
+  const missingQuoting = origins.map((o) => quotingAccount(o.code)).filter((a): a is string => !!a && !isReady(hintFor(a)));
   const [endicia, setEndicia] = useState({ ...initial.endicia, passPhrase: "" });
   const [salsify, setSalsify] = useState(initial.salsify);
   const [schedule, setSchedule] = useState(initial.schedule);
@@ -89,7 +180,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
 
   const setZip = (origin: string, zone: number, zip: string) => setQuoteZips((q) => ({ ...q, [origin]: { ...(q[origin] ?? {}), [String(zone)]: zip.replace(/\D/g, "").slice(0, 5) } }));
 
-  async function save(e?: React.FormEvent) {
+  async function save(e?: React.FormEvent, edits: Record<string, CredentialEdit> = credEdits) {
     e?.preventDefault();
     setBusy(true);
     setMsg(null);
@@ -100,11 +191,12 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           origins,
           upsAccounts: Object.fromEntries(accounts.filter((a) => a.account.trim()).map((a) => [a.account.trim().toUpperCase(), a.origin])),
           upsRatingAccounts: Object.fromEntries(origins.map((o) => [o.code, quotingAccount(o.code)]).filter(([, a]) => a)),
+          upsCredentials: edits,
           quoteZips,
           uspsMaxLb,
           upsMaxLb,
           mode,
-          ups: { clientId: ups.clientId, clientSecret: ups.clientSecret || undefined, environment: ups.environment, apiVersion: ups.apiVersion },
+          ups: { environment: ups.environment, apiVersion: ups.apiVersion },
           endicia: { requesterId: endicia.requesterId, accountId: endicia.accountId, passPhrase: endicia.passPhrase || undefined, endpoint: endicia.endpoint },
           salsify,
           schedule,
@@ -112,7 +204,9 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           productRates,
         },
       });
-      setUps((u) => ({ ...u, clientSecret: "", hasSecret: u.hasSecret || !!u.clientSecret }));
+      const kept = new Set(accounts.map((a) => a.account.trim().toUpperCase()).filter(Boolean));
+      setCredHints((h) => Object.fromEntries([...kept].map((a) => [a, effectiveHint(h[a], edits[a])]).filter(([, x]) => (x as CredentialHint).clientId.isSet || (x as CredentialHint).hasSecret)));
+      setCredEdits({});
       setEndicia((x) => ({ ...x, passPhrase: "", hasPassPhrase: x.hasPassPhrase || !!x.passPhrase }));
       setMsg({ type: "success", text: "Settings saved. New quote runs use them." });
       router.refresh();
@@ -125,16 +219,26 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
     }
   }
 
-  async function runTest(carrier: "UPS" | "USPS") {
-    if (!(await save())) return;
-    setTest((t) => ({ ...t, [carrier]: "busy" }));
+  /** Saves, then runs a live test; `account` tests one UPS account (its result shows under the accounts table). */
+  async function runTest(carrier: "UPS" | "USPS", account?: string, edits = credEdits) {
+    if (!(await save(undefined, edits))) return;
+    const key = account ? "ACCOUNT" : carrier;
+    setTest((t) => ({ ...t, [key]: "busy" }));
     try {
-      const r = await apiFetch<{ message: string; negotiated: boolean | null }>("/api/tools/shipping-rates/settings/test", { method: "POST", json: { carrier } });
-      setTest((t) => ({ ...t, [carrier]: { ok: true, warn: r.negotiated === false, text: r.message } }));
+      const r = await apiFetch<{ message: string; negotiated: boolean | null }>("/api/tools/shipping-rates/settings/test", { method: "POST", json: { carrier, account } });
+      setTest((t) => ({ ...t, [key]: { ok: true, warn: r.negotiated === false, text: r.message } }));
     } catch (err) {
-      setTest((t) => ({ ...t, [carrier]: { ok: false, text: (err as Error).message } }));
+      setTest((t) => ({ ...t, [key]: { ok: false, text: (err as Error).message } }));
     }
   }
+
+  const applyCredentials = (account: string, edit: CredentialEdit) => {
+    const next = { ...credEdits, [account]: { ...credEdits[account], ...edit, ...(edit.clear ? {} : { clear: undefined }) } };
+    if (edit.clear) next[account] = { clear: true };
+    setCredEdits(next);
+    setCredFor(null);
+    return next;
+  };
 
   async function testMango() {
     if (!(await save())) return;
@@ -389,15 +493,23 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
       <Card>
         <CardHeader>
           <CardTitle>UPS accounts → warehouse</CardTitle>
-          <CardDescription>The UPS invoice rarely shows the origin, so each package is placed by its shipper account: the 6 characters after &quot;1Z&quot; in the tracking number. Live quotes use the account ticked under &quot;Quote with&quot; for each warehouse, so they reflect that account&apos;s negotiated rates. It must be linked to your UPS developer app (developer.ups.com → Apps → Billing Account Number).</CardDescription>
+          <CardDescription>
+            The UPS invoice rarely shows the origin, so each package is placed by its shipper account: the 6 characters after &quot;1Z&quot; in the tracking number. Live quotes use the account ticked under &quot;Quote with&quot; for each warehouse, so they reflect that account&apos;s negotiated rates. Each account quotes with its <strong>own API credentials</strong>: the client ID and secret of an app at developer.ups.com (Rating product) linked to that account number.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {mode === "live" && missingQuoting.length > 0 && (
+            <Alert variant="warning">
+              Live quotes need API credentials for {missingQuoting.length === 1 ? "account" : "accounts"} {missingQuoting.join(", ")}. Until they&apos;re saved, UPS quotes from {missingQuoting.length === 1 ? "that warehouse" : "those warehouses"} fail.
+            </Alert>
+          )}
           <TableWrap>
             <thead>
               <tr>
                 <Th>UPS account</Th>
                 <Th>Warehouse</Th>
                 <Th className="text-center">Quote with</Th>
+                <Th>API credentials</Th>
                 <Th />
               </tr>
             </thead>
@@ -429,6 +541,18 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
                       onCheckedChange={(c) => c && setRatingAccounts((r) => ({ ...r, [a.origin]: a.account.trim().toUpperCase() }))}
                     />
                   </Td>
+                  <Td>
+                    {a.account.trim().length === 6 ? (
+                      <div className="flex items-center gap-2">
+                        <CredentialBadge hint={hintFor(a.account.trim())} pending={!!credEdits[a.account.trim()]} quoting={quotingAccount(a.origin) === a.account.trim()} />
+                        <Button type="button" variant="outline" size="sm" onClick={() => setCredFor(a.account.trim())}>
+                          <KeyRound className="h-4 w-4" /> {isReady(hintFor(a.account.trim())) ? "Change" : "Set credentials"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">Enter the 6-character account first</span>
+                    )}
+                  </Td>
                   <Td className="text-right">
                     <RowAction danger title="Remove" onClick={() => setAccounts((l) => l.filter((_, j) => j !== i))}>
                       <Trash2 className="h-4 w-4" />
@@ -441,6 +565,17 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           <Button type="button" variant="outline" size="sm" onClick={() => setAccounts((l) => [...l, { account: "", origin: origins[0]?.code ?? "" }])}>
             <Plus className="h-4 w-4" /> Add account
           </Button>
+          {test.ACCOUNT === "busy" && <p className="text-sm text-gray-500">Testing…</p>}
+          <TestResult carrier="ACCOUNT" />
+          {credFor && (
+            <CredentialsDialog
+              account={credFor}
+              hint={hintFor(credFor)}
+              onClose={() => setCredFor(null)}
+              onApply={(edit) => applyCredentials(credFor, edit)}
+              onApplyAndTest={(edit) => void runTest("UPS", credFor, applyCredentials(credFor, edit))}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -490,18 +625,10 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
       <Card>
         <CardHeader>
           <CardTitle>UPS API</CardTitle>
-          <CardDescription>From an app at developer.ups.com with the Rating product. Rates are requested with your negotiated (account) pricing.</CardDescription>
+          <CardDescription>Options shared by every UPS account. Each account&apos;s own client ID and secret are set in &quot;UPS accounts → warehouse&quot; above. Rates are requested with each account&apos;s negotiated pricing.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="ups-id">Client ID</Label>
-              <Input id="ups-id" value={ups.clientId} onChange={(e) => setUps({ ...ups, clientId: e.target.value })} autoComplete="off" />
-            </div>
-            <div>
-              <Label htmlFor="ups-secret">Client secret</Label>
-              <Input id="ups-secret" type="password" autoComplete="off" value={ups.clientSecret} placeholder={ups.hasSecret ? "•••••••• (saved, leave blank to keep)" : ""} onChange={(e) => setUps({ ...ups, clientSecret: e.target.value })} />
-            </div>
             <div>
               <Label>Environment</Label>
               <Select value={ups.environment} onValueChange={(v) => setUps({ ...ups, environment: v as "production" | "test" })}>
@@ -521,7 +648,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           </div>
           <div className="flex items-center gap-3">
             <Button type="button" variant="outline" onClick={() => runTest("UPS")} disabled={busy || test.UPS === "busy"}>
-              <Plug className="h-4 w-4" /> {test.UPS === "busy" ? "Testing…" : "Save & test UPS"}
+              <Plug className="h-4 w-4" /> {test.UPS === "busy" ? "Testing…" : "Save & test every warehouse"}
             </Button>
           </div>
           <TestResult carrier="UPS" />
