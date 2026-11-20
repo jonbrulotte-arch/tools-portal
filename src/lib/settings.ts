@@ -68,6 +68,8 @@ export type ShippingRatesSettings = {
   productRates: ProductRatesSettings;
   /** Stock and recent shipments per item, read from Mango's inventory page (for the blended shipping cost). */
   mangoInventory: MangoInventorySettings;
+  /** Weekly push of the blended cost to a Salsify property (one multi-value property: cost, note, date). */
+  salsifyPush: SalsifyPushSettings;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
 };
@@ -75,6 +77,8 @@ export type UpsCredentials = { encClientId: string | null; encClientSecret: stri
 /** Automatic Ship Cost History import from Mango's export (rolling date range, on a schedule). */
 /** Mango inventory page import: URL, which Mango site number is which warehouse, and a daily/weekly schedule. */
 export type MangoInventorySettings = { enabled: boolean; url: string; sites: Record<string, string>; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string };
+/** Blended cost → Salsify: the property and the schedule. */
+export type SalsifyPushSettings = { enabled: boolean; property: string; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string };
 export type MangoImportSettings = { enabled: boolean; url: string; days: number; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string; keepReports: number };
 /** Products tab: weekly live rates for every product on a Salsify list. */
 export type ProductRatesSettings = {
@@ -163,6 +167,8 @@ export const SETTING_DEFAULTS: SettingsMap = {
     // Sunday 1:00 AM, away from Monday's Mango import (12 AM) and quote run (1 AM)
     productRates: { enabled: false, listId: "", keyUserId: null, frequency: "weekly", weekday: 0, hour: 1, timezone: "America/Los_Angeles", keepRuns: 4 },
     // Site 0 is Las Vegas (Montessouri St), Site 3 is Ohio (Groveport); Site 1 Buffalo doesn't ship parcels
+    // Monday 6 AM: after the Sunday Products run, the Monday Mango import and quote run, and the nightly inventory read
+    salsifyPush: { enabled: false, property: "", frequency: "weekly", weekday: 1, hour: 6, timezone: "America/Los_Angeles" },
     mangoInventory: { enabled: true, url: "http://mango.jsproducts.com/orders/project-mango/current_inventory", sites: { LV: "0", GV: "3" }, frequency: "daily", weekday: 0, hour: 2, timezone: "America/Los_Angeles" },
     quoteZips: {},
     uspsMaxLb: 20,
@@ -259,6 +265,7 @@ function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
     mangoImport: { ...SETTING_DEFAULTS.shippingRates.mangoImport, ...s.mangoImport },
     productRates: { ...SETTING_DEFAULTS.shippingRates.productRates, ...s.productRates },
     mangoInventory: { ...SETTING_DEFAULTS.shippingRates.mangoInventory, ...s.mangoInventory },
+    salsifyPush: { ...SETTING_DEFAULTS.shippingRates.salsifyPush, ...s.salsifyPush },
     salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } },
   };
 }

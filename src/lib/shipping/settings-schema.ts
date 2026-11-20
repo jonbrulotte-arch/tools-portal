@@ -41,6 +41,14 @@ export const shippingSettingsSchema = z
       timezone: z.enum(TIMEZONE_IDS),
       keepReports: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
     }),
+    salsifyPush: z.object({
+      enabled: z.boolean(),
+      property: z.string().trim().max(200),
+      frequency: z.enum(["daily", "weekly"]),
+      weekday: z.coerce.number().int().min(0).max(6),
+      hour: z.coerce.number().int().min(0).max(23),
+      timezone: z.enum(TIMEZONE_IDS),
+    }),
     mangoInventory: z.object({
       enabled: z.boolean(),
       url: z
@@ -101,6 +109,7 @@ export const shippingSettingsSchema = z
     }),
   })
   .superRefine((s, ctx) => {
+    if (s.salsifyPush.enabled && !s.salsifyPush.property) ctx.addIssue({ code: "custom", path: ["salsifyPush", "property"], message: "Enter the Salsify property to push the blended cost to" });
     const codes = new Set(s.origins.map((o) => o.code));
     if (codes.size !== s.origins.length) ctx.addIssue({ code: "custom", path: ["origins"], message: "Warehouse codes must be unique" });
     for (const [acct, origin] of Object.entries(s.upsAccounts)) {

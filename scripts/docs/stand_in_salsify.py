@@ -2,7 +2,7 @@
 Usage: python3 scripts/docs/stand_in_salsify.py"""
 import json, random
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 random.seed(7)
 NAMES = ["Tire Inner Liner Scraper", "Valve Core Tool", "Lug Nut Socket Set", "Brake Bleeder Kit", "Magnetic Pickup Tool", "Hose Clamp Pliers",
@@ -23,9 +23,31 @@ for i, name in enumerate(NAMES):
         rec.update({"Shipping Weight (Pounds)": f"{w:.2f}", "Shipping Length (Inches)": f"{l:.2f}", "Shipping Width (Inches)": f"{wd:.2f}", "Shipping Height (Inches)": f"{h:.2f}"})
     products.append(rec)
 
+# a text, multi-value property for the blended cost push
+PROPERTIES = {"Blended Shipping Cost": {"salsify:id": "Blended Shipping Cost", "salsify:name": "Blended Shipping Cost", "salsify:data_type": "string", "salsify:is_multi_valued": True}}
+BY_ID = {p["salsify:id"]: p for p in products}
+
+def send_json(h, code, obj):
+    body = json.dumps(obj).encode()
+    h.send_response(code); h.send_header("content-type", "application/json"); h.end_headers(); h.wfile.write(body)
+
 class H(BaseHTTPRequestHandler):
+    def do_PUT(self):
+        # PUT /orgs/{org}/products/{id} {property: values}: stored in memory
+        part = urlparse(self.path).path.rsplit("/", 1)[-1]
+        n = int(self.headers.get("content-length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
+        if part not in BY_ID: return send_json(self, 404, {"errors": ["Product not found"]})
+        BY_ID[part].update(body)
+        send_json(self, 200, BY_ID[part])
+
     def do_GET(self):
         u = urlparse(self.path); q = parse_qs(u.query)
+        if "/properties/" in u.path:
+            pid = unquote(u.path.rsplit("/", 1)[-1])
+            return send_json(self, 200, PROPERTIES[pid]) if pid in PROPERTIES else send_json(self, 404, {"errors": ["Property not found"]})
+        if "/products/" in u.path:
+            part = unquote(u.path.rsplit("/", 1)[-1])
+            return send_json(self, 200, BY_ID[part]) if part in BY_ID else send_json(self, 404, {"errors": ["Product not found"]})
         if not u.path.endswith("/products") or not q.get("filter", [""])[0].startswith("=list:"):
             self.send_response(404); self.end_headers(); return
         per = int(q.get("per_page", ["100"])[0]); per = min(per, 10)

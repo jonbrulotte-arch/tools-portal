@@ -147,4 +147,5 @@ export async function failInterruptedJobs() {
   await prisma.shippingReport.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
   await prisma.productRateRun.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
   await prisma.inventoryImportRun.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
+  await prisma.salsifyPushRun.updateMany({ where: { status: { in: ["PENDING", "RUNNING"] } }, data: { status: "FAILED", error: msg, finishedAt: new Date() } });
 }

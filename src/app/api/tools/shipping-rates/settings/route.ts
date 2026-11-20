@@ -39,6 +39,7 @@ export async function PATCH(req: Request) {
     schedule: body.schedule,
     mangoImport: body.mangoImport,
     productRates: body.productRates,
+    salsifyPush: body.salsifyPush,
     mangoInventory: { ...body.mangoInventory, sites: Object.fromEntries(Object.entries(body.mangoInventory.sites).filter(([, v]) => v !== "")) },
   };
   await setSetting("shippingRates", value);

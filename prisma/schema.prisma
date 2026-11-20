@@ -517,3 +517,38 @@ model InventoryImportRun {
 
   @@index([createdAt])
 }
+
+// ─── Shipping Rates Generator: blended cost pushed to Salsify ───
+
+/// What was last written to Salsify per product, so only changed values are written.
+model SalsifyPush {
+  partNumber  String    @id
+  cost        String?
+  note        String?
+  pushedAt    DateTime?
+  lastError   String?
+  lastErrorAt DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model SalsifyPushRun {
+  id           String            @id @default(cuid())
+  status       ShippingJobStatus @default(PENDING)
+  startedById  String?
+  startedBy    String?
+  property     String
+  productRunId String?
+  products     Int               @default(0)
+  done         Int               @default(0)
+  written      Int               @default(0)
+  unchanged    Int               @default(0)
+  skipped      Int               @default(0)
+  failed       Int               @default(0)
+  /// [{ partNumber, reason }] for skipped and failed products (capped)
+  problems     Json              @default("[]")
+  error        String?
+  createdAt    DateTime          @default(now())
+  finishedAt   DateTime?
+
+  @@index([createdAt])
+}

@@ -156,6 +156,8 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - **Reality check**: a card on the Products tab compares the method with what was actually paid, by weight band.
 - **Blended costs CSV**: one row per product.
 
+**Push to Salsify** (`src/lib/shipping/salsify-push.ts`): on a schedule (weekly, Monday 6 AM by default) or **Push now**, each product's blended cost is written to the Salsify property set in Settings, as three text values `[cost, note, date]`. Only changed cost/note values are written (`SalsifyPush` remembers the last value). Simulated prices are never pushed. It uses the Products runs' Salsify key, which needs edit rights.
+
 **API Report** (managers): carrier API usage per account (each UPS account and the Endicia account):
 - what's counted: rate requests (every attempt, retries included), token requests, errors and throttling;
 - **average daily volume**, both over calendar days and per active day, plus the peak day;

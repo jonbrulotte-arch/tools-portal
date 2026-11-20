@@ -32,6 +32,8 @@ export const TABLE_ORDER = [
   "CarrierApiUsage",
   "ProductInventory",
   "InventoryImportRun",
+  "SalsifyPush",
+  "SalsifyPushRun",
   "AutoEmail",
   "AutoEmailSentKey",
   "AutoEmailLog",

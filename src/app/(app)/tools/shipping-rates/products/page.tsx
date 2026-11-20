@@ -6,6 +6,7 @@ import { nextRun, timezoneLabel } from "@/lib/timezone";
 import { busiestZones, loadProductPage, loadProductRuns, type ProductFilter } from "@/lib/shipping/product-rates-view";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { inventoryStatus } from "@/lib/shipping/mango-inventory";
+import { salsifyPushStatus } from "@/lib/shipping/salsify-push";
 import { loadRealityCheck } from "@/lib/shipping/blended-view";
 import { ProductsClient } from "./products-client";
 
@@ -16,7 +17,7 @@ const FILTERS: ProductFilter[] = ["all", "ok", "nodata", "failed"];
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ run?: string; q?: string; filter?: string; page?: string }> }) {
   const user = await requireTool(SHIPPING_TOOL);
   const sp = await searchParams;
-  const [s, runs, zones, creds, inventory, reality] = await Promise.all([getSetting("shippingRates"), loadProductRuns(), busiestZones(), credentialStatus(user.id), inventoryStatus(), loadRealityCheck()]);
+  const [s, runs, zones, creds, inventory, reality, push] = await Promise.all([getSetting("shippingRates"), loadProductRuns(), busiestZones(), credentialStatus(user.id), inventoryStatus(), loadRealityCheck(), salsifyPushStatus()]);
   const selected = runs.find((r) => r.id === sp.run) ?? runs[0] ?? null;
   const filter = FILTERS.includes(sp.filter as ProductFilter) ? (sp.filter as ProductFilter) : "all";
   const page = selected ? await loadProductPage(selected.id, { q: sp.q, filter, page: Number(sp.page) || 1 }, zones) : null;
@@ -36,6 +37,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       page={page}
       inventory={inventory}
       reality={reality}
+      push={push}
     />
   );
 }

@@ -37,9 +37,15 @@ export type SalsifyProduct = {
   fromFallback: ("weight" | "length" | "width" | "height")[];
 };
 
-async function salsifyFetch(apiKey: string, path: string, timeoutMs = TIMEOUT_MS) {
+async function salsifyFetch(apiKey: string, path: string, timeoutMs = TIMEOUT_MS, write?: { method: "PUT"; body: unknown }) {
   try {
-    return await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+    return await fetch(`${BASE}${path}`, {
+      method: write?.method ?? "GET",
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json", ...(write ? { "Content-Type": "application/json" } : {}) },
+      body: write ? JSON.stringify(write.body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+    });
   } catch (err) {
     const e = err as Error & { cause?: { code?: string } };
     if (e.name === "TimeoutError") throw new SalsifyRetryable(`Salsify didn't answer within ${timeoutMs / 1000}s`);
@@ -212,4 +218,65 @@ export async function testSalsifyList(apiKey: string, orgId: string, listId: str
   // one try (up to 2 minutes): this answers a button click, so no long retry loop
   const r = await listPageOnce(apiKey, orgId, listId, null, 5);
   return { total: r.total, sample: r.records.map((rec) => mapProduct(rec, fields, plainValue(rec["salsify:id"]) ?? "?")) };
+}
+
+// ─── Writes (blended cost push) ──────────────────────────────────────────────
+
+export type SalsifyPropertyInfo = { id: string; name: string | null; dataType: string | null; multiValued: boolean | null };
+
+/** A property's definition (does it exist, its type, whether it holds several values). Null if it doesn't exist. */
+export async function getSalsifyProperty(apiKey: string, orgId: string, propertyId: string): Promise<SalsifyPropertyInfo | null> {
+  if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
+  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/properties/${encodeURIComponent(propertyId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await failure(res, "Salsify property lookup");
+  const p = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const multiKey = Object.keys(p).find((k) => /multi|many/i.test(k));
+  return {
+    id: String(p["salsify:id"] ?? propertyId),
+    name: typeof p["salsify:name"] === "string" ? (p["salsify:name"] as string) : null,
+    dataType: typeof p["salsify:data_type"] === "string" ? (p["salsify:data_type"] as string) : null,
+    multiValued: multiKey ? Boolean(p[multiKey]) : null,
+  };
+}
+
+const WRITE_RETRY_MS = [2_000, 5_000, 15_000, 30_000];
+
+/**
+ * Sets one property on a product (PUT replaces just that property's values). Retries throttling and
+ * temporary errors; 404 = no such product, 401/403 = the key can't edit. `wait` is for tests.
+ */
+export async function updateSalsifyProduct(apiKey: string, orgId: string, partNumber: string, property: string, values: string[], wait: Wait = sleep) {
+  const path = `/orgs/${encodeURIComponent(orgId)}/products/${encodeURIComponent(partNumber)}`;
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await salsifyFetch(apiKey, path, TIMEOUT_MS, { method: "PUT", body: { [property]: values } });
+    } catch (err) {
+      if (attempt < WRITE_RETRY_MS.length) {
+        await wait(WRITE_RETRY_MS[attempt]);
+        continue;
+      }
+      throw err;
+    }
+    if (res.ok) return;
+    if (res.status === 404) throw new Error(`Product ${partNumber} isn't in Salsify`);
+    if (res.status === 401 || res.status === 403) throw new Error(`The Salsify key can't edit product ${partNumber} (HTTP ${res.status}); it needs edit rights in Salsify`);
+    if ((res.status === 429 || res.status >= 500) && attempt < WRITE_RETRY_MS.length) {
+      const after = Number(res.headers.get("retry-after"));
+      await wait(Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 120_000) : WRITE_RETRY_MS[attempt]);
+      continue;
+    }
+    throw await failure(res, `Salsify update of ${partNumber}`);
+  }
+}
+
+/** A product's current values for one property (to confirm a write), or null if the product doesn't exist. */
+export async function readSalsifyValues(apiKey: string, orgId: string, partNumber: string, property: string): Promise<string[] | null> {
+  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products/${encodeURIComponent(partNumber)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await failure(res, "Salsify product lookup");
+  const v = ((await res.json()) as Record<string, unknown>)[property];
+  if (v == null) return [];
+  return (Array.isArray(v) ? v : [v]).map((x) => plainValue(x) ?? "");
 }

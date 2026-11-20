@@ -20,6 +20,7 @@ import { duration, elapsedMs, pace } from "@/lib/format-duration";
 import type { ProductPage } from "@/lib/shipping/product-rates-view";
 import type { BlendDetail } from "@/lib/shipping/blended-view";
 import type { InventoryStatus } from "@/lib/shipping/mango-inventory";
+import type { SalsifyPushStatus } from "@/lib/shipping/salsify-push";
 import type { RealityCheckView } from "@/lib/shipping/blended-view";
 import { BlendedCell, BlendedPanel } from "@/components/shipping/blended-cost";
 import { ModeBadge } from "../quotes/quotes-client";
@@ -64,6 +65,7 @@ export function ProductsClient(props: {
   page: ProductPage | null;
   inventory: InventoryStatus;
   reality: RealityCheckView | null;
+  push: SalsifyPushStatus;
 }) {
   const { runs, page } = props;
   const router = useRouter();
@@ -72,7 +74,7 @@ export function ProductsClient(props: {
   const [q, setQ] = useState(props.query.q);
   const [detail, setDetail] = useState<{ item: Item; data: Detail | null; error?: string } | null>(null);
   const active = runs.find((r) => r.status === "RUNNING" || r.status === "PENDING");
-  const inventoryRunning = props.inventory.last?.status === "RUNNING" || props.inventory.last?.status === "PENDING";
+  const inventoryRunning = ["RUNNING", "PENDING"].includes(props.inventory.last?.status ?? "") || ["RUNNING", "PENDING"].includes(props.push.last?.status ?? "");
   const selected = runs.find((r) => r.id === props.selectedId) ?? null;
   const originName = (code: string) => props.origins.find((o) => o.code === code)?.name ?? code;
   const busiest = props.origins.filter((o) => props.zones[o.code]);
@@ -117,6 +119,17 @@ export function ProductsClient(props: {
     setError(null);
     try {
       await apiFetch("/api/tools/shipping-rates/inventory", { method: "POST" });
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function pushNow() {
+    if (!confirm(`Push blended costs to the Salsify property "${props.push.property}"? Only products whose cost or note changed are written.`)) return;
+    setError(null);
+    try {
+      await apiFetch("/api/tools/shipping-rates/salsify-push", { method: "POST" });
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -386,6 +399,7 @@ export function ProductsClient(props: {
       )}
 
       <InventoryCard status={props.inventory} canRun={props.canManageSettings} onRun={runInventory} />
+      <PushCard status={props.push} canRun={props.canManageSettings} onRun={pushNow} />
       {props.reality && <RealityCheckCard r={props.reality} />}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
@@ -538,6 +552,67 @@ function RealityCheckCard({ r }: { r: RealityCheckView }) {
               ? "The simple version looks reliable: across weights, the method lands within 10% of what we paid on average."
               : "The method is more than 10% off on average. Consider the re-zoned version for products stocked in one warehouse, and check surcharges on the bands that are off."}
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Blended cost → Salsify: the last push and "Push now". */
+function PushCard({ status, canRun, onRun }: { status: SalsifyPushStatus; canRun: boolean; onRun: () => void }) {
+  const last = status.last;
+  const running = last?.status === "RUNNING" || last?.status === "PENDING";
+  const n = (v: number) => v.toLocaleString();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Salsify push</CardTitle>
+        <CardDescription>
+          {status.property ? (
+            <>
+              Writes each product&apos;s blended cost to the Salsify property <span className="font-mono">{status.property}</span> as three values: cost, note, date pushed. {status.enabled ? "Runs on the schedule in Settings." : "Automatic push is off (Settings)."}
+            </>
+          ) : (
+            "Not set up: choose the Salsify property in Settings → Push blended cost to Salsify."
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+          {last ? (
+            <>
+              <Badge variant={STATUS[last.status].variant}>{STATUS[last.status].label}</Badge>
+              <span>
+                {running ? `Pushing: ${n(last.done)} of ${n(last.products)} products checked` : `Last push ${formatDateTime(last.finishedAt ?? last.createdAt)}`}
+                {" · "}
+                {n(last.written)} written · {n(last.unchanged)} unchanged · {n(last.skipped)} skipped
+                {last.failed > 0 && <span className="text-red-700"> · {n(last.failed)} failed</span>}
+              </span>
+              {last.startedBy && <span className="text-xs text-gray-500">by {last.startedBy}</span>}
+            </>
+          ) : (
+            <span>Nothing pushed yet.</span>
+          )}
+          {canRun && status.property && (
+            <Button size="sm" variant="outline" className="ml-auto" onClick={onRun} disabled={running}>
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {running ? "Pushing…" : "Push now"}
+            </Button>
+          )}
+        </div>
+        {last?.error && <Alert variant="error">{last.error}</Alert>}
+        {last && last.problems.length > 0 && (
+          <details className="text-sm text-gray-600">
+            <summary className="cursor-pointer">
+              {n(last.skipped + last.failed)} product{last.skipped + last.failed === 1 ? "" : "s"} not written (skipped or failed)
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {last.problems.map((p) => (
+                <li key={p.partNumber}>
+                  <span className="font-mono">{p.partNumber}</span>: {p.reason}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </CardContent>
     </Card>
   );

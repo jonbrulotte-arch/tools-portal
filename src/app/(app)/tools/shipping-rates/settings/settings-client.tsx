@@ -17,7 +17,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { MangoImportSettings, MangoInventorySettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import type { MangoImportSettings, MangoInventorySettings, SalsifyPushSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
@@ -40,6 +40,7 @@ type Initial = {
   schedule: ShippingSchedule;
   mangoImport: MangoImportSettings;
   mangoInventory: MangoInventorySettings;
+  salsifyPush: SalsifyPushSettings;
   productRates: ProductRatesSettings;
 };
 
@@ -177,6 +178,9 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
   const [productRates, setProductRates] = useState(initial.productRates);
   const [mangoInventory, setMangoInventory] = useState(initial.mangoInventory);
   const [invPart, setInvPart] = useState("");
+  const [salsifyPush, setSalsifyPush] = useState(initial.salsifyPush);
+  const [pushPart, setPushPart] = useState("");
+  const [canWriteOne, setCanWriteOne] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -206,6 +210,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           mangoImport,
           productRates,
           mangoInventory,
+          salsifyPush,
         },
       });
       const kept = new Set(accounts.map((a) => a.account.trim().toUpperCase()).filter(Boolean));
@@ -263,6 +268,20 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
       setTest((t) => ({ ...t, INVENTORY: { ok: true, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, INVENTORY: { ok: false, text: (err as Error).message } }));
+    }
+  }
+
+  async function testPush(write: boolean) {
+    if (write && !confirm(`Write the blended cost for ${pushPart} to Salsify now?`)) return;
+    if (!(await save())) return;
+    setTest((t) => ({ ...t, PUSH: "busy" }));
+    try {
+      const r = await apiFetch<{ ok: boolean; message: string; canWrite?: boolean }>("/api/tools/shipping-rates/settings/salsify-push-test", { method: "POST", json: { partNumber: pushPart, write } });
+      setTest((t) => ({ ...t, PUSH: { ok: true, warn: !r.ok, text: r.message } }));
+      if (!write) setCanWriteOne(!!r.canWrite);
+    } catch (err) {
+      setTest((t) => ({ ...t, PUSH: { ok: false, text: (err as Error).message } }));
+      setCanWriteOne(false);
     }
   }
 
@@ -577,6 +596,101 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
             </Button>
           </div>
           <TestResult carrier="INVENTORY" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Push blended cost to Salsify</CardTitle>
+          <CardDescription>
+            Writes each product&apos;s blended shipping cost to a Salsify property on a schedule. The property holds three values, in this order: the cost (amount only, e.g. 17.12), a note (&quot;OK: …&quot; or the issue with the price), and the date it was pushed. Only products whose cost or note changed are written. Simulated prices are never pushed. Uses the Salsify key chosen under Products, which needs edit rights in Salsify.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={salsifyPush.enabled} onCheckedChange={(v) => setSalsifyPush({ ...salsifyPush, enabled: v })} />
+            Push automatically
+          </label>
+          <div className="max-w-xl">
+            <Label htmlFor="push-prop">Salsify property</Label>
+            <Input id="push-prop" value={salsifyPush.property} onChange={(e) => { setSalsifyPush({ ...salsifyPush, property: e.target.value }); setCanWriteOne(false); }} placeholder="e.g. Blended Shipping Cost" />
+            <p className="text-xs text-gray-500 mt-1">The property&apos;s ID exactly as Salsify shows it: a text property that allows multiple values.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label>Frequency</Label>
+              <Select value={salsifyPush.frequency} onValueChange={(v) => setSalsifyPush({ ...salsifyPush, frequency: v as SalsifyPushSettings["frequency"] })} disabled={!salsifyPush.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {salsifyPush.frequency === "weekly" && (
+              <div>
+                <Label>Day</Label>
+                <Select value={String(salsifyPush.weekday)} onValueChange={(v) => setSalsifyPush({ ...salsifyPush, weekday: Number(v) })} disabled={!salsifyPush.enabled}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((d, i) => (
+                      <SelectItem key={d} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Start at</Label>
+              <Select value={String(salsifyPush.hour)} onValueChange={(v) => setSalsifyPush({ ...salsifyPush, hour: Number(v) })} disabled={!salsifyPush.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {hourLabel(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={salsifyPush.timezone} onValueChange={(v) => setSalsifyPush({ ...salsifyPush, timezone: v })} disabled={!salsifyPush.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">Monday 6:00 AM runs after the Sunday Products run, the Monday Mango import and quote run, and the nightly inventory read.</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-40">
+              <Label htmlFor="push-part">Part number to test</Label>
+              <Input id="push-part" value={pushPart} onChange={(e) => { setPushPart(e.target.value.trim()); setCanWriteOne(false); }} placeholder="e.g. 56831" />
+            </div>
+            <Button type="button" variant="outline" onClick={() => testPush(false)} disabled={busy || !pushPart || !salsifyPush.property || test.PUSH === "busy"}>
+              <Plug className="h-4 w-4" /> {test.PUSH === "busy" ? "Working…" : "Save & test"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => testPush(true)} disabled={busy || !canWriteOne || test.PUSH === "busy"} title={canWriteOne ? "Write this product's value to Salsify now and read it back" : "Test first (needs live prices)"}>
+              Write this one product
+            </Button>
+          </div>
+          <TestResult carrier="PUSH" />
         </CardContent>
       </Card>
 
