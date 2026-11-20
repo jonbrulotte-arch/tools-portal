@@ -118,9 +118,9 @@ The note is never empty, so the cost is always the 1st value and the date the 3r
 
 ### Each push
 
-- **Which products:** every product in the **newest live Products run**.
+- **Which products:** every product in the **newest completed live Products run**. Cancelled and failed runs only hold the products they got through, so they're skipped: the push uses the last run that finished.
 - **Only changed values are written.** A product is written when its cost (to the cent) or its note changed since the last push; otherwise it's left alone, date included. To re-write one product anyway, use **Write this one product**.
-- **Never simulated prices.** It won't run while the tool is in simulated mode, or if the newest Products run used simulated prices.
+- **Never simulated prices.** It won't run while the tool is in simulated mode, and simulated Products runs are never used.
 - **The Products tab shows the last push:**
   - **written**: the value changed and was saved to Salsify;
   - **unchanged**: same cost and note as last time, so nothing was sent;
@@ -139,8 +139,8 @@ The note is never empty, so the cost is always the 1st value and the date the 3r
 | "…" is a number property … use a text property | The property is numeric, but the note and date are text | Use a text property that allows multiple values. |
 | Check it: it holds a single value … | The property only keeps one value | Allow multiple values on the property in Salsify. |
 | The tool is in simulated mode … | Rates source is Simulated | Switch to Live once UPS and Endicia test successfully. |
-| The newest Products run used simulated prices … | The last Products run ran in simulated mode | Run Products again in live mode (Products tab → Run now). |
-| … isn't in the newest Products run | The part isn't on the Salsify list, or the run is older than the list change | Check the part is on the list; run Products again. |
+| … isn't in the Products run of …, the newest completed live run | The part isn't on the Salsify list, or was added after that run finished | Check the part is on the list; run Products again and let it finish. |
+| There's no completed Products run … | Every Products run so far was cancelled or failed (or simulated) | Run Products in live mode and let it finish. |
 | … wasn't quoted: … | Missing weight or size in Salsify | Fill in the weight and box size in Salsify; run Products again. |
 | No zone could be priced, so there's no cost | Every quote failed (e.g. over every carrier's limit) | Check the product's weight and size; see its quotes on the Products tab. |
 | The Salsify key can't edit product … | That user's key has read-only rights | Give the user edit rights in Salsify, or choose another user's key under Products. A push stops after a few of these. |

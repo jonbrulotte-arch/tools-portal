@@ -115,7 +115,7 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
   it("explains why one product can't be written instead of greying the button out", async () => {
     const { getSetting } = await import("@/lib/settings");
     const s = await getSetting("shippingRates");
-    await expect(pushOne(s, user, "NOT-ON-LIST")).rejects.toThrow("NOT-ON-LIST isn't in the newest Products run");
+    await expect(pushOne(s, user, "NOT-ON-LIST")).rejects.toThrow(/NOT-ON-LIST isn't in the Products run of .*, the newest completed live run/);
     await expect(pushOne(s, user, "N1")).rejects.toThrow("N1 wasn't quoted: Salsify has no weight");
     await expect(pushOne({ ...s, salsifyPush: { ...s.salsifyPush, property: "Nope" } }, user, "A1")).rejects.toThrow('Salsify has no property "Nope"');
     await expect(pushOne({ ...s, mode: "simulated" }, user, "A1")).rejects.toThrow(/simulated mode/);
@@ -129,8 +129,24 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
     await setSetting("shippingRates", { mode: "simulated" });
     await expect(startSalsifyPush(user)).rejects.toThrow(/simulated mode; simulated prices are never pushed/);
     await setSetting("shippingRates", { mode: "live" });
-    await prisma.productRateRun.create({ data: { mode: "simulated", status: "READY", listId: "s-list", done: 1, items: { create: [{ partNumber: "A1", position: 0, status: "OK" }] } } });
-    await expect(startSalsifyPush(user)).rejects.toThrow(/newest Products run used simulated prices/);
     expect((await getSetting("shippingRates")).mode).toBe("live");
+  });
+
+  it("uses the newest COMPLETED live run: a newer cancelled, failed or simulated run doesn't hide products", async () => {
+    const { getSetting } = await import("@/lib/settings");
+    // newer runs without A1: one cancelled part-way, one failed, one simulated
+    for (const [status, mode] of [["CANCELLED", "live"], ["FAILED", "live"], ["READY", "simulated"]] as const) {
+      await prisma.productRateRun.create({ data: { mode, status, listId: "s-list", done: 1, items: { create: [{ partNumber: "N1", position: 0, status: "NO_DATA" }] } } });
+    }
+    const t = await testSalsifyPush(await getSetting("shippingRates"), user, "A1");
+    expect(t.message).toMatch(/A1 would get: "16.00"/);
+    expect(t.writeBlocker).toBeNull();
+    const nope = await testSalsifyPush(await getSetting("shippingRates"), user, "ZZZ");
+    expect(nope.writeBlocker).toMatch(/ZZZ isn't in the Products run of \w{3} \d+, \d{4}, the newest completed live run \(cancelled and failed runs aren't used\)/);
+  });
+
+  it("explains when no live run has completed", async () => {
+    await prisma.productRateRun.updateMany({ where: { mode: "live", status: "READY" }, data: { status: "CANCELLED" } });
+    await expect(startSalsifyPush(user)).rejects.toThrow(/no completed Products run with live prices yet/);
   });
 });

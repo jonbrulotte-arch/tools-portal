@@ -24,17 +24,26 @@ const PAUSE_MS = 150; // between writes per worker, to stay well inside Salsify'
 export type PushProblem = { partNumber: string; reason: string };
 
 /** The newest finished Products run with quotes, and whether it can be pushed. */
+/**
+ * The Products run blended costs come from: the newest COMPLETED live run. Cancelled and failed runs only hold
+ * the products they got through, so they're never used; nor are simulated runs.
+ */
 async function sourceRun() {
-  return prisma.productRateRun.findFirst({ where: { status: { in: ["READY", "FAILED", "CANCELLED"] }, done: { gt: 0 } }, orderBy: { createdAt: "desc" }, select: { id: true, mode: true, createdAt: true } });
+  return prisma.productRateRun.findFirst({ where: { status: "READY", mode: "live" }, orderBy: { createdAt: "desc" }, select: { id: true, mode: true, createdAt: true } });
 }
+const runDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" });
 
 /** Why a push can't run now, or null if it can. */
 export async function pushBlocker(s: ShippingRatesSettings): Promise<string | null> {
   if (!s.salsifyPush.property) return "Set the Salsify property first (Settings → Push blended cost to Salsify).";
   if (s.mode !== "live") return "The tool is in simulated mode; simulated prices are never pushed to Salsify. Switch Rates source to Live (Settings) once UPS and Endicia test successfully.";
   const run = await sourceRun();
-  if (!run) return "There's no Products run to take blended costs from yet.";
-  if (run.mode !== "live") return "The newest Products run used simulated prices, so there's nothing to push. Run Products in live mode first (Products tab → Run now).";
+  if (!run) {
+    const any = await prisma.productRateRun.findFirst({ where: { status: "READY" }, select: { id: true } });
+    return any
+      ? "There's no completed Products run with live prices yet (simulated runs are never pushed). Run Products in live mode (Products tab → Run now) and let it finish."
+      : "There's no completed Products run yet (cancelled and failed runs aren't used). Run Products (Products tab → Run now) and let it finish.";
+  }
   if (!(await loadMix())) return "A processed cost report is needed for the zone mix (Cost reports tab).";
   return null;
 }
@@ -42,9 +51,9 @@ export async function pushBlocker(s: ShippingRatesSettings): Promise<string | nu
 /** One product's value from the newest Products run (for the Settings test), with why there isn't one. */
 export async function valueFor(s: ShippingRatesSettings, partNumber: string): Promise<{ value: PushValue | null; reason: string | null; runMode: string | null }> {
   const run = await sourceRun();
-  if (!run) return { value: null, reason: "There's no Products run yet.", runMode: null };
+  if (!run) return { value: null, reason: "There's no completed live Products run yet.", runMode: null };
   const item = await prisma.productRateItem.findFirst({ where: { runId: run.id, partNumber }, select: { id: true, status: true, error: true } });
-  if (!item) return { value: null, reason: `${partNumber} isn't in the newest Products run (is it on the Salsify list?).`, runMode: run.mode };
+  if (!item) return { value: null, reason: `${partNumber} isn't in the Products run of ${runDate(run.createdAt)}, the newest completed live run (cancelled and failed runs aren't used). Is it on the Salsify list?`, runMode: run.mode };
   if (item.status !== "OK") return { value: null, reason: `${partNumber} wasn't quoted: ${item.error ?? item.status}`, runMode: run.mode };
   const [rates, ctx] = await Promise.all([ratesForItems([item.id]), blendContext([partNumber])]);
   const blended = summaryOf(blendFor(ctx, partNumber, rates.get(item.id) ?? []));

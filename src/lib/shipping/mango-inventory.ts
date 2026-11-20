@@ -88,9 +88,14 @@ export async function loadInventory(parts: string[]): Promise<Map<string, ItemIn
   return new Map(rows.map((r) => [r.partNumber, toItem(r)]));
 }
 
-/** The items to read: the newest Products run's part numbers, else the Salsify list itself. */
+/**
+ * The items to read: the newest completed Products run's part numbers (a cancelled or failed run only holds the
+ * products it got through, so it's used only if no run ever completed), else the Salsify list itself.
+ */
 async function itemsToRead(s: ShippingRatesSettings, actor: Actor): Promise<string[]> {
-  const run = await prisma.productRateRun.findFirst({ where: { status: { in: ["READY", "FAILED", "CANCELLED"] }, done: { gt: 0 } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  const run =
+    (await prisma.productRateRun.findFirst({ where: { status: "READY" }, orderBy: { createdAt: "desc" }, select: { id: true } })) ??
+    (await prisma.productRateRun.findFirst({ where: { status: { in: ["FAILED", "CANCELLED"] }, done: { gt: 0 } }, orderBy: { createdAt: "desc" }, select: { id: true } }));
   if (run) {
     const items = await prisma.productRateItem.findMany({ where: { runId: run.id }, select: { partNumber: true }, orderBy: { position: "asc" } });
     return [...new Set(items.map((i) => i.partNumber))];
