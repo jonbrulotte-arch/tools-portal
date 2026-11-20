@@ -17,7 +17,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { MangoImportSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import type { MangoImportSettings, MangoInventorySettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES } from "@/lib/timezone";
 
@@ -39,6 +39,7 @@ type Initial = {
   salsify: { orgId: string; fields: SalsifyFieldMap };
   schedule: ShippingSchedule;
   mangoImport: MangoImportSettings;
+  mangoInventory: MangoInventorySettings;
   productRates: ProductRatesSettings;
 };
 
@@ -174,6 +175,8 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
   const [schedule, setSchedule] = useState(initial.schedule);
   const [mangoImport, setMangoImport] = useState(initial.mangoImport);
   const [productRates, setProductRates] = useState(initial.productRates);
+  const [mangoInventory, setMangoInventory] = useState(initial.mangoInventory);
+  const [invPart, setInvPart] = useState("");
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -202,6 +205,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           schedule,
           mangoImport,
           productRates,
+          mangoInventory,
         },
       });
       const kept = new Set(accounts.map((a) => a.account.trim().toUpperCase()).filter(Boolean));
@@ -248,6 +252,17 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
       setTest((t) => ({ ...t, MANGO: { ok: true, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, MANGO: { ok: false, text: (err as Error).message } }));
+    }
+  }
+
+  async function testInventory() {
+    if (!(await save())) return;
+    setTest((t) => ({ ...t, INVENTORY: "busy" }));
+    try {
+      const r = await apiFetch<{ message: string }>("/api/tools/shipping-rates/settings/inventory-test", { method: "POST", json: { partNumber: invPart } });
+      setTest((t) => ({ ...t, INVENTORY: { ok: true, text: r.message } }));
+    } catch (err) {
+      setTest((t) => ({ ...t, INVENTORY: { ok: false, text: (err as Error).message } }));
     }
   }
 
@@ -456,6 +471,112 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
             </Button>
           </div>
           <TestResult carrier="MANGO" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mango inventory</CardTitle>
+          <CardDescription>
+            Reads each product&apos;s stock per warehouse, and its last month of shipments, from Mango&apos;s inventory page. The blended shipping cost uses them to weight Las Vegas and Groveport. Covers the products on the Salsify list (Products tab). Product quote also reads its part live.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={mangoInventory.enabled} onCheckedChange={(v) => setMangoInventory({ ...mangoInventory, enabled: v })} />
+            Import automatically
+          </label>
+          <div>
+            <Label htmlFor="inv-url">Mango inventory page</Label>
+            <Input id="inv-url" value={mangoInventory.url} onChange={(e) => setMangoInventory({ ...mangoInventory, url: e.target.value })} className="font-mono text-xs" />
+            <p className="text-xs text-gray-500 mt-1">Without the ?it=… part; the portal adds each item number.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            {origins.map((o) => (
+              <div key={o.code}>
+                <Label htmlFor={`inv-site-${o.code}`}>Mango site for {o.name}</Label>
+                <Input
+                  id={`inv-site-${o.code}`}
+                  inputMode="numeric"
+                  value={mangoInventory.sites[o.code] ?? ""}
+                  onChange={(e) => setMangoInventory({ ...mangoInventory, sites: { ...mangoInventory.sites, [o.code]: e.target.value.replace(/\D/g, "").slice(0, 3) } })}
+                  placeholder="e.g. 0"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">The site number Mango shows (&quot;Site 0: Montessouri&quot;, &quot;Site 3: Ohio&quot;). Sites not listed here, like Buffalo, are ignored.</p>
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
+            <div>
+              <Label>Frequency</Label>
+              <Select value={mangoInventory.frequency} onValueChange={(v) => setMangoInventory({ ...mangoInventory, frequency: v as MangoInventorySettings["frequency"] })} disabled={!mangoInventory.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {mangoInventory.frequency === "weekly" && (
+              <div>
+                <Label>Day</Label>
+                <Select value={String(mangoInventory.weekday)} onValueChange={(v) => setMangoInventory({ ...mangoInventory, weekday: Number(v) })} disabled={!mangoInventory.enabled}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((d, i) => (
+                      <SelectItem key={d} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Start at</Label>
+              <Select value={String(mangoInventory.hour)} onValueChange={(v) => setMangoInventory({ ...mangoInventory, hour: Number(v) })} disabled={!mangoInventory.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {hourLabel(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Time zone</Label>
+              <Select value={mangoInventory.timezone} onValueChange={(v) => setMangoInventory({ ...mangoInventory, timezone: v })} disabled={!mangoInventory.enabled}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-40">
+              <Label htmlFor="inv-part">Item number to test</Label>
+              <Input id="inv-part" value={invPart} onChange={(e) => setInvPart(e.target.value.trim())} placeholder="e.g. 56831" />
+            </div>
+            <Button type="button" variant="outline" onClick={testInventory} disabled={busy || !invPart || test.INVENTORY === "busy"}>
+              <Plug className="h-4 w-4" /> {test.INVENTORY === "busy" ? "Testing…" : "Save & test"}
+            </Button>
+          </div>
+          <TestResult carrier="INVENTORY" />
         </CardContent>
       </Card>
 

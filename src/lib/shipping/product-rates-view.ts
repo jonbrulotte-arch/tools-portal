@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { zoneUsage } from "@/lib/shipping/analysis";
 import { getSetting } from "@/lib/settings";
 import type { ReportSummary } from "@/lib/shipping/report";
+import { blendContext, blendFor, rateOf, ratesForItems, summaryOf } from "@/lib/shipping/blended-view";
 
 // Reads for the Products tab: runs, a page of products with a per-warehouse summary at that
 // warehouse's most-used zone, and one product's full quote table.
@@ -57,6 +58,9 @@ export async function loadProductPage(runId: string, opts: { q?: string; filter?
     ? await prisma.productRateQuote.findMany({ where: { itemId: { in: items.map((i) => i.id) }, OR: pairs.map(([origin, zone]) => ({ origin, zone })) }, select: { itemId: true, origin: true, service: true, amount: true } })
     : [];
   const at = new Map(quotes.map((q) => [`${q.itemId}|${q.origin}|${q.service}`, num(q.amount)]));
+  // blended cost per unit (all zones, both warehouses) for the quoted products on this page
+  const quoted = items.filter((i) => i.status === "OK");
+  const [rates, ctx] = await Promise.all([ratesForItems(quoted.map((i) => i.id)), blendContext(quoted.map((i) => i.partNumber))]);
   return {
     total,
     page,
@@ -79,6 +83,7 @@ export async function loadProductPage(runId: string, opts: { q?: string; filter?
       busiest: Object.fromEntries(
         pairs.map(([origin]) => [origin, { usps: at.get(`${i.id}|${origin}|GROUND_ADVANTAGE`) ?? null, com: at.get(`${i.id}|${origin}|GROUND_COM`) ?? null, res: at.get(`${i.id}|${origin}|GROUND_RES`) ?? null }]),
       ) as Record<string, { usps: number | null; com: number | null; res: number | null }>,
+      blended: i.status === "OK" ? summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [])) : null,
     })),
   };
 }
@@ -92,6 +97,7 @@ export async function loadProductItem(id: string) {
     getSetting("shippingRates"),
   ]);
   if (!i) return null;
+  const ctx = await blendContext([i.partNumber]);
   // warehouses in the order set in Settings (Las Vegas, then Groveport)
   const order = (code: string) => {
     const n = s.origins.findIndex((o) => o.code === code);
@@ -112,5 +118,6 @@ export async function loadProductItem(id: string) {
     mode: i.run.mode,
     quotedAt: i.createdAt.toISOString(),
     rows: i.quotes.map((q) => ({ origin: q.origin, zone: q.zone, destZip: q.destZip, service: q.service, live: num(q.amount), chart: num(q.chart), diffPct: num(q.diffPct), error: q.error })),
+    blended: i.status === "OK" ? blendFor(ctx, i.partNumber, i.quotes.map((q) => rateOf({ origin: q.origin, zone: q.zone, service: q.service, live: num(q.amount), chart: num(q.chart) }))) : null,
   };
 }

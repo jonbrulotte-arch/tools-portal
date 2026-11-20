@@ -100,4 +100,4 @@ export async function quoteProduct(s: ShippingRatesSettings, input: ProductQuote
   };
 }
 
-export type ProductQuoteResult = Awaited<ReturnType<typeof quoteProduct>>;
+export type ProductQuoteResult = Awaited<ReturnType<typeof quoteProduct>> & { blended?: import("@/lib/shipping/blended-view").BlendDetail | null };

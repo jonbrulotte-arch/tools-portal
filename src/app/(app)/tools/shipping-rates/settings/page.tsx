@@ -41,6 +41,7 @@ export default async function ShippingSettingsPage() {
         schedule: s.schedule,
         mangoImport: s.mangoImport,
         productRates: s.productRates,
+        mangoInventory: s.mangoInventory,
       }}
     />
   );

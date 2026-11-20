@@ -149,6 +149,13 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 - **Fallback fields** (default *UPC Weight (Pounds)* and *UPC Length/Width/Height (Inches)*) are used when a part doesn't have all four shipping values. They're used as a set, so weight and size describe the same package; if the fallback set is incomplete too, only the gaps are filled. Product quote flags parts that used fallback values.
 - Each user adds their **own Salsify API key** in **My Profile → Salsify API key**. The key is encrypted per user (`UserCredential` table), never sent back to the browser, and used only for that user's lookups. Saving, testing, removing and every lookup are recorded in the Access Log.
 
+**Blended shipping cost** (Products tab, Product quote): one expected cost per unit across both warehouses, for ROIs. It's Σ warehouse share × that warehouse's zone mix (latest cost report) × the cheaper carrier per cell, weighted by residential share.
+- **Warehouse share**: the product's own UPS shipments last month (5 or more), else where it's stocked, else the company-wide split.
+- **Where stock and shipments come from**: Mango's inventory page, read nightly (Settings → Mango inventory; `src/lib/shipping/mango-inventory*.ts`). The page is parsed, and a layout change is recorded as an error, never as zero stock.
+- **Simple version**: single-warehouse products use that warehouse's usual zone mix and may be understated.
+- **Reality check**: a card on the Products tab compares the method with what was actually paid, by weight band.
+- **Blended costs CSV**: one row per product.
+
 **API Report** (managers): carrier API usage per account (each UPS account and the Endicia account):
 - what's counted: rate requests (every attempt, retries included), token requests, errors and throttling;
 - **average daily volume**, both over calendar days and per active day, plus the peak day;

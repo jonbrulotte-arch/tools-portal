@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/api";
 import { runScheduledQuotes } from "@/lib/shipping/schedule";
 import { runScheduledMangoImport } from "@/lib/shipping/mango-import";
 import { runScheduledProductRates } from "@/lib/shipping/product-rates";
+import { runScheduledInventoryImport } from "@/lib/shipping/mango-inventory";
 import { runScheduledAutoEmails } from "@/lib/auto-emails/runner";
 import { zonedParts } from "@/lib/timezone";
 
@@ -21,6 +22,7 @@ export function startScheduler() {
     void runScheduledQuotes().catch((err) => console.error("[scheduler] scheduled quotes:", errorMessage(err)));
     void runScheduledMangoImport().catch((err) => console.error("[scheduler] Mango import:", errorMessage(err)));
     void runScheduledProductRates().catch((err) => console.error("[scheduler] Products run:", errorMessage(err)));
+    void runScheduledInventoryImport().catch((err) => console.error("[scheduler] Mango inventory:", errorMessage(err)));
     try {
       const s = await getSetting("backup");
       const now = zonedParts(new Date(), s.timezone);

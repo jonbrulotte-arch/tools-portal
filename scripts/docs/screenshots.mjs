@@ -153,8 +153,21 @@ const shots = {
     await p.waitForSelector("text=/quotes vs rate chart/", { timeout: 60000 });
     await p.waitForTimeout(500);
     await save(d, "product-quote", p);
+    const blend = p.locator("div.rounded-lg.border").filter({ has: p.locator("h3", { hasText: /blended shipping cost per unit/ }) }).first();
+    if (await blend.count()) await save(d, "blended-quote", blend);
     await go(p, "/tools/shipping-rates/products", 1000);
     await save(d, "products", p);
+    // blended cost: the detail dialog, the reality check card
+    await p.locator("table").first().locator("tbody tr").first().click();
+    await p.waitForSelector("[role=dialog] >> text=Blended shipping cost per unit");
+    await p.waitForTimeout(500);
+    await save(d, "blended-detail", p.locator("[role=dialog] div.rounded-lg.border").first());
+    await p.keyboard.press("Escape");
+    const rc = p.locator("div.rounded-lg.border").filter({ has: p.locator("h3", { hasText: /^Reality check/ }) }).first();
+    if (await rc.count()) {
+      await rc.scrollIntoViewIfNeeded();
+      await save(d, "reality-check", rc);
+    }
     await go(p, "/tools/shipping-rates/reports");
     await save(d, "cost-reports", p);
     await go(p, "/tools/shipping-rates/quotes", 1000);
@@ -186,6 +199,14 @@ const shots = {
         await save(d, name, c);
       }
     }
+    // Mango inventory card, with a test result
+    const inv = card(p, "Mango inventory");
+    await inv.scrollIntoViewIfNeeded();
+    await p.fill("#inv-part", "00033-S");
+    await inv.getByRole("button", { name: /Save & test$/ }).click();
+    await p.waitForSelector("text=/Mango answered for item/", { timeout: 30000 }).catch(() => {});
+    await p.waitForTimeout(400);
+    await save(d, "mango-inventory", inv);
     // one account's API credentials dialog
     await card(p, "UPS accounts → warehouse").locator("tbody tr").first().getByRole("button", { name: /Change|Set credentials/ }).click();
     await p.waitForSelector("[role=dialog]");

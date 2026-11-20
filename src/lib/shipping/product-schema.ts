@@ -13,6 +13,8 @@ export const productQuoteSchema = z
     height: inches.nullable().optional(),
     origins: z.array(z.string().max(8)).min(1, "Pick at least one warehouse"),
     runId: z.string().max(40).nullable().optional(),
+    /** Read this part's stock and shipments from Mango for the blended cost (false for dimensions typed by hand). */
+    inventory: z.boolean().optional(),
   })
   .superRefine((b, ctx) => {
     const given = [b.length, b.width, b.height].filter((v) => v != null).length;

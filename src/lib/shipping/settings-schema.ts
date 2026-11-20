@@ -41,6 +41,20 @@ export const shippingSettingsSchema = z
       timezone: z.enum(TIMEZONE_IDS),
       keepReports: z.coerce.number().int().min(1, "Keep at least 1").max(90, "At most 90"),
     }),
+    mangoInventory: z.object({
+      enabled: z.boolean(),
+      url: z
+        .string()
+        .trim()
+        .url("Enter the full address of Mango's inventory page")
+        .refine((u) => /^https?:\/\//i.test(u), "Must be an http:// or https:// URL")
+        .refine((u) => !new URL(u).search, "Leave out the ?it=… part; the portal adds the item number"),
+      sites: z.record(z.string(), z.string().trim().regex(/^\d{0,3}$/, "Mango site numbers are digits (e.g. 0 or 3); leave blank for none")),
+      frequency: z.enum(["daily", "weekly"]),
+      weekday: z.coerce.number().int().min(0).max(6),
+      hour: z.coerce.number().int().min(0).max(23),
+      timezone: z.enum(TIMEZONE_IDS),
+    }),
     productRates: z.object({
       enabled: z.boolean(),
       listId: z

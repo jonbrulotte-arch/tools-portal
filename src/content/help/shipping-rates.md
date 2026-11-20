@@ -34,7 +34,42 @@ Quote one product from both warehouses to every zone.
 
 - Choose a **Run**. A new run starts on the schedule set in Settings, or with **Run now** (managers).
 - **Search** by part number or name; **Show** filters the list (for example products whose sizes came from UPC data).
-- **Export CSV** saves the whole run for Excel.
+- **Blended costs CSV** saves one row per product with its blended shipping cost; **All quotes CSV** saves every quote in the run.
+
+## Blended shipping cost (for ROIs)
+
+Many products ship from either Las Vegas or Groveport, and the cost depends on where the customer is. The **Blended cost** column on the Products tab gives one expected shipping cost per unit:
+
+- **Warehouse share**: how this product's orders split between the warehouses. It's read from Mango every night:
+  - **Own shipments**: if the product had at least 5 UPS shipments last month, its own split is used (the UPS tracking number shows which warehouse shipped it).
+  - **One warehouse**: if it's stocked in only one warehouse, 100% is from there.
+  - **Both stocked**: if it's stocked in both (with few shipments), or Mango has no data, the company-wide split from the cost report is used.
+- **Zone mix**: for each warehouse, its usual share of shipments per zone, from the latest cost report.
+- **Cell price**: for each warehouse and zone, the cheaper carrier for a home address and for a business address, weighted by how many of that warehouse's UPS shipments go to homes.
+
+The cell shows the warehouse split (for example *LV 21% · GV 79%*) and a badge for how it was decided. Hover for the **range**: the nearest zone (cheapest) to the furthest (dearest).
+
+Click a product to see the details: the cost, the range, how the split was decided, stock and shipments per warehouse, and the price and share of orders for each warehouse and zone.
+
+![Blended cost details for one product](images/blended-detail.jpg)
+
+**Blended costs CSV** (above the table) saves one row per product with its blended cost, range, warehouse split, basis, stock and shipments, ready for an ROI sheet. **All quotes CSV** is the full list of quotes as before.
+
+> Note: This is the simple version. A product stocked in only one warehouse ships every order from there, including customers the other warehouse normally serves, but its estimate uses that warehouse's usual zone mix. Its cost may be **low**, and it's marked *One warehouse* with a warning in the details.
+
+**Product quote** shows the same blended cost for any part you look up. While quoting, it reads that part's stock and shipments from Mango. Quote both warehouses for a complete blend. If you type the dimensions without a part number, the company-wide split is used.
+
+![Blended cost on Product quote](images/blended-quote.jpg)
+
+### Reality check
+
+At the bottom of the Products tab, the **Reality check** compares the blended method with what we actually paid. For each weight band, it takes the shipments in the latest cost report and compares:
+- the average actually paid per package, with
+- what the blended method gives from the latest quote run.
+
+**Within 10% on average** means the simple version is reliable enough for ROI decisions. If it's further off, the bands that are off show where to look: surcharges on heavy or large packages, or products that ship from one warehouse only.
+
+![Reality check](images/reality-check.jpg)
 
 ## Cost reports
 

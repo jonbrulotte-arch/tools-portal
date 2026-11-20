@@ -63,6 +63,21 @@ Set the **Frequency**, **Day**, **Start at** time and **Time zone** (for example
 
 Enter the **Mango export URL**, the **Date range** (days back from today, for example 90) and the schedule (for example weekly, **Monday at 12:00 AM**). **Keep this many automatic imports** removes older automatic reports; uploaded reports are kept.
 
+## Mango inventory
+
+The blended shipping cost needs to know where each product ships from. Mango has no API, so the tool reads each product's page on Mango's inventory lookup (*current_inventory?it=<item>*), the same page you see in the browser. From it, it takes:
+- **stock** per site;
+- **last month's orders with the item**. Each UPS tracking number contains the shipper account, so the account list above tells which warehouse shipped it.
+
+![Mango inventory settings](images/mango-inventory.jpg)
+
+- **Mango inventory page**: the page address without `?it=…`.
+- **Mango site for each warehouse**: the site number Mango shows. Las Vegas is *Site 0: Montessouri* and Groveport is *Site 3: Ohio*. Sites not listed (Buffalo) are ignored.
+- **Schedule**: daily at 2:00 AM by default. It reads every product on the Products list, 3 at a time. The Products tab shows the last read, with **Read inventory now**.
+- **Save & test**: reads one item and shows what was found (stock per warehouse, shipments by warehouse).
+
+If Mango's page layout changes, the item is recorded as **couldn't be read** (listed on the Products tab), not as zero stock. The item keeps its last good figures until a read works again. Cancelled orders and orders without a tracking number are skipped. FedEx, freight and USPS shipments can't be placed in a warehouse, so they're counted separately and not used for the split.
+
 ## Salsify (product lookup) and the Products list
 
 ![Salsify](images/salsify.jpg)

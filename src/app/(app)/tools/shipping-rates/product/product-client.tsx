@@ -19,6 +19,7 @@ import type { SalsifyProduct } from "@/lib/salsify";
 import type { ProductQuoteResult } from "@/lib/shipping/product-quote";
 import { ModeBadge } from "../quotes/quotes-client";
 import { ProductRatesTable } from "@/components/shipping/product-rates-table";
+import { BlendedPanel } from "@/components/shipping/blended-cost";
 
 type Origin = { code: string; name: string; zip: string };
 const SERVICES = [
@@ -72,10 +73,11 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
     setBusy("quote");
     setMsg(null);
     try {
-      const partNumber = product?.partNumber ?? (part.trim() || "Manual entry");
+      const known = product?.partNumber ?? part.trim();
+      const partNumber = known || "Manual entry";
       const r = await apiFetch<ProductQuoteResult>("/api/tools/shipping-rates/product/quote", {
         method: "POST",
-        json: { partNumber, weight, length: dims?.length ?? null, width: dims?.width ?? null, height: dims?.height ?? null, origins: selected, runId: runId || null },
+        json: { partNumber, weight, length: dims?.length ?? null, width: dims?.width ?? null, height: dims?.height ?? null, origins: selected, runId: runId || null, inventory: !!known },
       });
       setResult({ ...r, partNumber });
       const failed = r.rows.filter((x) => x.error);
@@ -256,6 +258,24 @@ export function ProductQuoteClient(props: { mode: string; origins: Origin[]; has
           {msg && <Alert variant={msg.type}>{msg.text}</Alert>}
         </CardContent>
       </Card>
+
+      {result?.blended && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              {result.partNumber}: blended shipping cost per unit <ModeBadge mode={result.mode} />
+            </CardTitle>
+            <CardDescription>
+              Expected cost per unit across both warehouses and every zone, for ROIs: each warehouse&apos;s share of this part&apos;s orders (from Mango) × that warehouse&apos;s usual zone mix × the cheaper carrier for home and business addresses, using the quotes below.
+              {selected.length < origins.length && " Quote every warehouse for a complete blend."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BlendedPanel b={result.blended} origins={origins} />
+          </CardContent>
+        </Card>
+      )}
+      {result && !result.blended && <Alert variant="info">A blended cost per unit needs a processed cost report (Cost reports tab) for each warehouse&apos;s zone mix.</Alert>}
 
       {result && (
         <Card>

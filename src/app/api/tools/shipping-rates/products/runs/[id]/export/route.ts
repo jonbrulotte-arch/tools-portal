@@ -6,18 +6,25 @@ import { logAudit } from "@/lib/audit";
 import { toCsv } from "@/lib/csv";
 import { getSetting } from "@/lib/settings";
 import { SHIPPING_TOOL } from "@/lib/shipping/access";
+import { blendedCsv } from "@/lib/shipping/blended-export";
 
 const SERVICE: Record<string, string> = { GROUND_COM: "UPS Ground (commercial)", GROUND_RES: "UPS Ground (residential)", GROUND_ADVANTAGE: "USPS Ground Advantage" };
 const n = (d: unknown) => (d == null ? "" : String(d));
 
 // One row per product × warehouse × zone × service (products without data get one row with the reason).
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = await guard({ tool: SHIPPING_TOOL });
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   const run = await prisma.productRateRun.findUnique({ where: { id } });
   if (!run) return jsonError("Products run not found", 404);
   const s = await getSetting("shippingRates");
+  // ?blended=1: one row per product with its blended shipping cost (for ROI sheets)
+  if (new URL(req.url).searchParams.get("blended") === "1") {
+    const { csv, products } = await blendedCsv(run.id, run.mode, s.origins);
+    await logAudit({ action: "shipping.blended_costs_exported", category: "TOOL", actorId: actor.id, actorEmail: actor.email, targetType: "ProductRateRun", targetId: id, metadata: { products } });
+    return new NextResponse(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="blended-shipping-costs-${run.createdAt.toISOString().slice(0, 10)}-${run.mode}.csv"` } });
+  }
   const originName = Object.fromEntries(s.origins.map((o) => [o.code, o.name]));
   const items = await prisma.productRateItem.findMany({ where: { runId: id }, orderBy: { position: "asc" }, include: { quotes: { orderBy: [{ origin: "asc" }, { zone: "asc" }, { service: "asc" }] } } });
   const rows: (string | number)[][] = [];

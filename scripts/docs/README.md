@@ -16,6 +16,7 @@ npx prisma migrate deploy
 mkdir -p /tmp/docs-demo && echo '{"columns":[],"rows":[]}' > /tmp/docs-demo/rows.json
 python3 scripts/docs/stand_in_graph.py /tmp/docs-demo &     # Microsoft Graph on 127.0.0.1:8097
 python3 scripts/docs/stand_in_salsify.py &                  # Salsify list on 127.0.0.1:8098
+python3 scripts/docs/stand_in_mango.py &                    # Mango inventory pages on 127.0.0.1:8096
 ```
 
 The same variables point the app and the seed at them:

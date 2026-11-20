@@ -18,11 +18,15 @@ import { apiFetch } from "@/lib/client-fetch";
 import { cn, formatDateTime } from "@/lib/utils";
 import { duration, elapsedMs, pace } from "@/lib/format-duration";
 import type { ProductPage } from "@/lib/shipping/product-rates-view";
+import type { BlendDetail } from "@/lib/shipping/blended-view";
+import type { InventoryStatus } from "@/lib/shipping/mango-inventory";
+import type { RealityCheckView } from "@/lib/shipping/blended-view";
+import { BlendedCell, BlendedPanel } from "@/components/shipping/blended-cost";
 import { ModeBadge } from "../quotes/quotes-client";
 
 type Run = { id: string; mode: string; status: "PENDING" | "RUNNING" | "READY" | "FAILED" | "CANCELLED"; listId: string; total: number; done: number; failed: number; error: string | null; startedBy: string | null; createdAt: string; startedAt: string; finishedAt: string | null };
 type Item = ProductPage["items"][number];
-type Detail = { partNumber: string; name: string | null; status: string; error: string | null; weight: number | null; dims: { length: number; width: number; height: number } | null; sizeSource: string | null; upsBillable: number | null; uspsBillable: number | null; mode: string; quotedAt: string; rows: RateRow[] };
+type Detail = { partNumber: string; name: string | null; status: string; error: string | null; weight: number | null; dims: { length: number; width: number; height: number } | null; sizeSource: string | null; upsBillable: number | null; uspsBillable: number | null; mode: string; quotedAt: string; rows: RateRow[]; blended: BlendDetail | null };
 
 const STATUS: Record<Run["status"], { label: string; variant: "secondary" | "warning" | "success" | "destructive" }> = {
   PENDING: { label: "Starting", variant: "secondary" },
@@ -58,6 +62,8 @@ export function ProductsClient(props: {
   selectedId: string | null;
   query: { q: string; filter: keyof typeof FILTER_LABELS };
   page: ProductPage | null;
+  inventory: InventoryStatus;
+  reality: RealityCheckView | null;
 }) {
   const { runs, page } = props;
   const router = useRouter();
@@ -66,16 +72,17 @@ export function ProductsClient(props: {
   const [q, setQ] = useState(props.query.q);
   const [detail, setDetail] = useState<{ item: Item; data: Detail | null; error?: string } | null>(null);
   const active = runs.find((r) => r.status === "RUNNING" || r.status === "PENDING");
+  const inventoryRunning = props.inventory.last?.status === "RUNNING" || props.inventory.last?.status === "PENDING";
   const selected = runs.find((r) => r.id === props.selectedId) ?? null;
   const originName = (code: string) => props.origins.find((o) => o.code === code)?.name ?? code;
   const busiest = props.origins.filter((o) => props.zones[o.code]);
 
   // live progress
   useEffect(() => {
-    if (!active) return;
+    if (!active && !inventoryRunning) return;
     const t = setInterval(() => router.refresh(), 3000);
     return () => clearInterval(t);
-  }, [active, router]);
+  }, [active, inventoryRunning, router]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
@@ -103,6 +110,16 @@ export function ProductsClient(props: {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runInventory() {
+    setError(null);
+    try {
+      await apiFetch("/api/tools/shipping-rates/inventory", { method: "POST" });
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -222,11 +239,18 @@ export function ProductsClient(props: {
                 <span className="tabular-nums">{duration(elapsedMs(selected, now))}</span>
                 {selected.startedBy && <span className="text-xs text-gray-500">by {selected.startedBy}</span>}
               </div>
-              <a href={`/api/tools/shipping-rates/products/runs/${selected.id}/export`} className="ml-auto">
-                <Button size="sm" variant="outline" type="button">
-                  <Download className="h-4 w-4" /> Export CSV
-                </Button>
-              </a>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <a href={`/api/tools/shipping-rates/products/runs/${selected.id}/export?blended=1`} title="One row per product with its blended shipping cost, warehouse split and stock">
+                  <Button size="sm" variant="outline" type="button">
+                    <Download className="h-4 w-4" /> Blended costs CSV
+                  </Button>
+                </a>
+                <a href={`/api/tools/shipping-rates/products/runs/${selected.id}/export`} title="Every quote: one row per product, warehouse, zone and service">
+                  <Button size="sm" variant="outline" type="button">
+                    <Download className="h-4 w-4" /> All quotes CSV
+                  </Button>
+                </a>
+              </div>
             </div>
             {selected.error && <Alert variant="error" className="mt-2">{selected.error}</Alert>}
           </CardHeader>
@@ -277,6 +301,10 @@ export function ProductsClient(props: {
                     Billable lb
                     <span className="block normal-case font-normal">UPS / USPS</span>
                   </Th>
+                  <Th rowSpan={2} className="border-l border-gray-200" title="Expected shipping cost per unit across both warehouses and every zone">
+                    Blended cost
+                    <span className="block normal-case font-normal">per unit</span>
+                  </Th>
                   {busiest.map((o) => (
                     <Th key={o.code} colSpan={2} className="text-center border-l border-gray-200">
                       {o.name} · zone {props.zones[o.code]}
@@ -291,7 +319,7 @@ export function ProductsClient(props: {
               </thead>
               <tbody>
                 {!page || page.items.length === 0 ? (
-                  <EmptyRow colSpan={4 + busiest.length * 2}>{active && selected.id === active.id ? "Products appear here as they're quoted." : "No products match."}</EmptyRow>
+                  <EmptyRow colSpan={5 + busiest.length * 2}>{active && selected.id === active.id ? "Products appear here as they're quoted." : "No products match."}</EmptyRow>
                 ) : (
                   page.items.map((i) => (
                     <Tr key={i.id} className="cursor-pointer hover:bg-gray-50" onClick={() => i.status === "OK" && open(i)}>
@@ -314,12 +342,17 @@ export function ProductsClient(props: {
                         )}
                       </Td>
                       <Td className="text-right tabular-nums whitespace-nowrap">{i.upsBillable != null ? `${i.upsBillable} / ${i.uspsBillable}` : "—"}</Td>
+                      {i.status === "OK" && (
+                        <Td className="border-l border-gray-100">
+                          <BlendedCell b={i.blended} origins={props.origins} />
+                        </Td>
+                      )}
                       {i.status === "OK" ? (
                         busiest.map((o) => (
                           <BusiestCells key={o.code} b={i.busiest[o.code]} />
                         ))
                       ) : (
-                        <Td colSpan={busiest.length * 2} className={cn("text-sm border-l border-gray-100", i.status === "FAILED" ? "text-red-700" : "text-amber-700")}>
+                        <Td colSpan={1 + busiest.length * 2} className={cn("text-sm border-l border-gray-100", i.status === "FAILED" ? "text-red-700" : "text-amber-700")}>
                           {i.error ?? (i.status === "NO_DATA" ? "Missing weight or size in Salsify" : "Couldn't be quoted")}
                         </Td>
                       )}
@@ -344,10 +377,16 @@ export function ProductsClient(props: {
                 </div>
               </div>
             )}
+            <p className="text-xs text-gray-500">
+              <strong>Blended cost</strong> is the expected shipping cost per unit: each warehouse&apos;s share of this product&apos;s orders (from its own recent shipments, else where it&apos;s stocked, from Mango) × that warehouse&apos;s usual zone mix × the cheaper carrier for home and business addresses. Hover for the range; click a product for the details.
+            </p>
             {busiest.length > 0 && <p className="text-xs text-gray-500">The summary columns show each warehouse&apos;s most-used zone (from the latest cost report): the cheapest price for a home address (USPS vs UPS residential) and for a business address (USPS vs UPS commercial).</p>}
           </CardContent>
         </Card>
       )}
+
+      <InventoryCard status={props.inventory} canRun={props.canManageSettings} onRun={runInventory} />
+      {props.reality && <RealityCheckCard r={props.reality} />}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
@@ -365,6 +404,11 @@ export function ProductsClient(props: {
           {detail?.error && <Alert variant="error">{detail.error}</Alert>}
           {detail?.data && (
             <div className="space-y-6">
+              {detail.data.blended && (
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <BlendedPanel b={detail.data.blended} origins={props.origins} />
+                </div>
+              )}
               <ProductRatesTable rows={detail.data.rows} originName={originName} />
             </div>
           )}
@@ -394,5 +438,107 @@ function BusiestCells({ b }: { b?: { usps: number | null; com: number | null; re
         <Cheapest usps={b?.usps ?? null} ups={b?.com ?? null} />
       </Td>
     </>
+  );
+}
+
+/** Mango inventory: when it was last read, progress, and items that couldn't be read. */
+function InventoryCard({ status, canRun, onRun }: { status: InventoryStatus; canRun: boolean; onRun: () => void }) {
+  const last = status.last;
+  const running = last?.status === "RUNNING" || last?.status === "PENDING";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Mango inventory</CardTitle>
+        <CardDescription>Stock per warehouse and last month&apos;s shipments for each product, read from Mango&apos;s inventory page. The blended cost uses them to split orders between Las Vegas and Groveport.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+          {last ? (
+            <>
+              <Badge variant={STATUS[last.status].variant}>{STATUS[last.status].label}</Badge>
+              <span>
+                {running ? `Reading ${last.done.toLocaleString()} of ${last.total.toLocaleString()} items…` : `Last read ${formatDateTime(last.finishedAt ?? last.createdAt)}: ${last.done.toLocaleString()} items`}
+                {last.failed > 0 && <span className="text-red-700"> · {last.failed.toLocaleString()} couldn&apos;t be read</span>}
+              </span>
+              {last.startedBy && <span className="text-xs text-gray-500">by {last.startedBy}</span>}
+            </>
+          ) : (
+            <span>Not read yet. Until it is, every product uses the company-wide warehouse split.</span>
+          )}
+          {canRun && (
+            <Button size="sm" variant="outline" className="ml-auto" onClick={onRun} disabled={running}>
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {running ? "Reading…" : "Read inventory now"}
+            </Button>
+          )}
+        </div>
+        {last?.error && <Alert variant="error">{last.error}</Alert>}
+        {status.errorSamples.length > 0 && (
+          <details className="text-sm text-gray-600">
+            <summary className="cursor-pointer">
+              {status.withErrors.toLocaleString()} item{status.withErrors === 1 ? "" : "s"} with a read problem (they keep their last good figures)
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {status.errorSamples.map((e) => (
+                <li key={e.partNumber}>
+                  <span className="font-mono">{e.partNumber}</span>: {e.error}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Checks the blended method against what we actually paid, by weight band. */
+function RealityCheckCard({ r }: { r: RealityCheckView }) {
+  const day = (iso: string | null) => (iso ? formatDateTime(iso).split(",")[0] : "?");
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center gap-2">
+          Reality check: blended method vs what we paid
+          {r.overallPct != null && <Badge variant={r.reliable ? "success" : "warning"}>{r.reliable ? `Within ${r.overallPct}% on average` : `Off by ${r.overallPct}% on average`}</Badge>}
+        </CardTitle>
+        <CardDescription>
+          For the shipments in the cost report ({day(r.reportFrom)} – {day(r.reportTo)}), the blended method&apos;s cost from the rate chart ({r.runMode === "live" ? "live" : "simulated"} quote run of {day(r.runAt)}) compared with the average we actually paid per package. This checks the method, not each product.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {r.runMode !== "live" && <Alert variant="warning">The newest quote run uses simulated prices, so this comparison is only a demonstration.</Alert>}
+        <TableWrap>
+          <thead>
+            <tr>
+              <Th>Billed weight</Th>
+              <Th className="text-right">Shipments</Th>
+              <Th className="text-right">Paid (avg)</Th>
+              <Th className="text-right">Blended method</Th>
+              <Th className="text-right">Difference</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.bands.map((b) => (
+              <Tr key={b.label}>
+                <Td>{b.label}</Td>
+                <Td className="text-right tabular-nums">{b.shipments.toLocaleString()}</Td>
+                <Td className="text-right tabular-nums">{money(b.actual)}</Td>
+                <Td className="text-right tabular-nums">{money(b.model)}</Td>
+                <Td className="text-right tabular-nums">
+                  {b.diffPct == null ? <span className="text-gray-400">{b.shipments ? "too few" : "—"}</span> : <span className={cn(Math.abs(b.diffPct) > 10 ? "text-amber-700 font-medium" : "text-gray-900")}>{b.diffPct > 0 ? "+" : ""}{b.diffPct}%</span>}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <p className="text-sm text-gray-700">
+          {r.overallPct == null
+            ? "Not enough shipments in the cost report to judge yet."
+            : r.reliable
+              ? "The simple version looks reliable: across weights, the method lands within 10% of what we paid on average."
+              : "The method is more than 10% off on average. Consider the re-zoned version for products stocked in one warehouse, and check surcharges on the bands that are off."}
+        </p>
+      </CardContent>
+    </Card>
   );
 }

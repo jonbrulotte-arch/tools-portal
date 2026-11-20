@@ -21,7 +21,7 @@ type Actor = { id: string | null; email: string };
 const dec = (n: number | null | undefined) => (n == null ? null : new Prisma.Decimal(n));
 
 /** The Salsify key a run uses: the person's own for "Run now", else the user chosen in Settings. */
-async function resolveKey(s: ShippingRatesSettings, actor: Actor) {
+export async function resolveKey(s: ShippingRatesSettings, actor: Actor) {
   if (actor.id) {
     const own = await getUserSecret(actor.id, "salsify");
     if (own) return { key: own, owner: actor.email };

@@ -481,3 +481,39 @@ model CarrierApiUsage {
   @@unique([day, carrier, account, source, kind, outcome])
   @@index([day])
 }
+
+// ─── Shipping Rates Generator: stock and recent shipments per item, from Mango's inventory page ───
+
+/// Latest read of Mango's inventory page for one item. A failed refresh keeps the last good figures and sets `error`.
+model ProductInventory {
+  partNumber     String    @id
+  description    String?
+  /// { [warehouse code]: { onHand, allocated } }
+  stock          Json      @default("{}")
+  /// UPS shipments in the last month per warehouse (from tracking numbers): { [warehouse code]: count }
+  shipments      Json      @default("{}")
+  /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, USPS)
+  otherShipments Int       @default(0)
+  unitsLastMonth Int?
+  /// Mango's own snapshot time, as shown on the page
+  snapshotAt     String?
+  fetchedAt      DateTime?
+  error          String?
+  errorAt        DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
+model InventoryImportRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  total       Int               @default(0)
+  done        Int               @default(0)
+  failed      Int               @default(0)
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}

@@ -21,6 +21,7 @@ import { setUserSecret } from "../../src/lib/user-credentials";
 import { processReport } from "../../src/lib/shipping/report";
 import { startQuoteRun } from "../../src/lib/shipping/runner";
 import { startProductRun } from "../../src/lib/shipping/product-rates";
+import { startInventoryImport } from "../../src/lib/shipping/mango-inventory";
 import { runAutoEmail } from "../../src/lib/auto-emails/runner";
 import { usageDay } from "../../src/lib/shipping/api-usage";
 
@@ -130,6 +131,12 @@ async function main() {
   }
   if (!(await prisma.shippingQuoteRun.count())) await (await startQuoteRun({ id: admin.id, email: admin.email })).finished;
   if (process.env.SALSIFY_API_BASE && !(await prisma.productRateRun.count())) await (await startProductRun({ id: admin.id, email: admin.email })).finished;
+  // Mango inventory from the stand-in page server (scripts/docs/stand_in_mango.py) for the blended cost
+  await setSetting("shippingRates", { mangoInventory: { ...(await getSetting("shippingRates")).mangoInventory, url: process.env.MANGO_INVENTORY_URL ?? "http://127.0.0.1:8096/orders/project-mango/current_inventory" } });
+  if (!(await prisma.productInventory.count()) && (await prisma.productRateRun.count())) {
+    await (await startInventoryImport({ id: admin.id, email: admin.email })).finished;
+    console.log("Mango inventory read");
+  }
 
   // ── Automated Emails (EDI): sample partner data via the SQL stub and the stand-in Graph ──
   await setSetting("autoEmails", {
