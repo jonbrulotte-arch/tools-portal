@@ -61,6 +61,10 @@ Click a product to see the details: the cost, the range, how the split was decid
 
 ![Blended cost on Product quote](images/blended-quote.jpg)
 
+### Blended cost in Salsify
+
+If your managers have set it up, each product's blended cost is also written to Salsify every week, so you can use it there. It's one property with three values: the **cost**, a **note** (`OK: …` or the issue with the price, the same as the badges here), and the **date** it was pushed. The **Salsify push** card on the Products tab shows when it last ran and what was written. Only managers can push.
+
 ### Reality check
 
 At the bottom of the Products tab, the **Reality check** compares the blended method with what we actually paid. For each weight band, it takes the shipments in the latest cost report and compares:

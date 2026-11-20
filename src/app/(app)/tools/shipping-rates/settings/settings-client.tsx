@@ -180,7 +180,8 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
   const [invPart, setInvPart] = useState("");
   const [salsifyPush, setSalsifyPush] = useState(initial.salsifyPush);
   const [pushPart, setPushPart] = useState("");
-  const [canWriteOne, setCanWriteOne] = useState(false);
+  /** After a test: why "Write this one product" would fail ("" = ready), or null before any test. */
+  const [writeBlocker, setWriteBlocker] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [test, setTest] = useState<Record<string, { ok: boolean; warn?: boolean; text: string } | "busy">>({});
   const [busy, setBusy] = useState(false);
@@ -276,12 +277,12 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
     if (!(await save())) return;
     setTest((t) => ({ ...t, PUSH: "busy" }));
     try {
-      const r = await apiFetch<{ ok: boolean; message: string; canWrite?: boolean }>("/api/tools/shipping-rates/settings/salsify-push-test", { method: "POST", json: { partNumber: pushPart, write } });
+      const r = await apiFetch<{ ok: boolean; message: string; writeBlocker?: string | null }>("/api/tools/shipping-rates/settings/salsify-push-test", { method: "POST", json: { partNumber: pushPart, write } });
       setTest((t) => ({ ...t, PUSH: { ok: true, warn: !r.ok, text: r.message } }));
-      if (!write) setCanWriteOne(!!r.canWrite);
+      if (!write) setWriteBlocker(r.writeBlocker ?? "");
     } catch (err) {
       setTest((t) => ({ ...t, PUSH: { ok: false, text: (err as Error).message } }));
-      setCanWriteOne(false);
+      if (!write) setWriteBlocker(null);
     }
   }
 
@@ -613,7 +614,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           </label>
           <div className="max-w-xl">
             <Label htmlFor="push-prop">Salsify property</Label>
-            <Input id="push-prop" value={salsifyPush.property} onChange={(e) => { setSalsifyPush({ ...salsifyPush, property: e.target.value }); setCanWriteOne(false); }} placeholder="e.g. Blended Shipping Cost" />
+            <Input id="push-prop" value={salsifyPush.property} onChange={(e) => { setSalsifyPush({ ...salsifyPush, property: e.target.value }); setWriteBlocker(null); }} placeholder="e.g. Blended Shipping Cost" />
             <p className="text-xs text-gray-500 mt-1">The property&apos;s ID exactly as Salsify shows it: a text property that allows multiple values.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-3 max-w-3xl">
@@ -681,15 +682,20 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-40">
               <Label htmlFor="push-part">Part number to test</Label>
-              <Input id="push-part" value={pushPart} onChange={(e) => { setPushPart(e.target.value.trim()); setCanWriteOne(false); }} placeholder="e.g. 56831" />
+              <Input id="push-part" value={pushPart} onChange={(e) => { setPushPart(e.target.value.trim()); setWriteBlocker(null); }} placeholder="e.g. 56831" />
             </div>
             <Button type="button" variant="outline" onClick={() => testPush(false)} disabled={busy || !pushPart || !salsifyPush.property || test.PUSH === "busy"}>
               <Plug className="h-4 w-4" /> {test.PUSH === "busy" ? "Working…" : "Save & test"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => testPush(true)} disabled={busy || !canWriteOne || test.PUSH === "busy"} title={canWriteOne ? "Write this product's value to Salsify now and read it back" : "Test first (needs live prices)"}>
+            <Button type="button" variant="outline" onClick={() => testPush(true)} disabled={busy || !pushPart || !salsifyPush.property || test.PUSH === "busy"} title="Write this product's value to Salsify now and read it back">
               Write this one product
             </Button>
           </div>
+          {writeBlocker !== null && (
+            <p className={cn("text-sm", writeBlocker ? "text-amber-700" : "text-green-700")}>
+              {writeBlocker ? `Can't write yet: ${writeBlocker}` : `Ready to write: "Write this one product" will write ${pushPart} to Salsify and read it back.`}
+            </p>
+          )}
           <TestResult carrier="PUSH" />
         </CardContent>
       </Card>

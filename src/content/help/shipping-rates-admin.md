@@ -80,37 +80,74 @@ If Mango's page layout changes, the item is recorded as **couldn't be read** (li
 
 ## Push blended cost to Salsify
 
-Once a week (Monday 6:00 AM by default), each product's **blended shipping cost** is written to a Salsify property, so it's on the product record for ROIs and channel pricing.
+Each product's **blended shipping cost** is written to a Salsify property on a schedule (weekly, Monday 6:00 AM Pacific by default), so it's on the product record for ROIs and channel pricing. **Push now** on the Products tab runs it on demand.
 
 ![Push blended cost to Salsify](images/salsify-push.png)
 
-**Set up the property in Salsify first.** It must be a **text** property that **allows multiple values**. Each product gets three values, always in this order:
+### What's written
+
+One Salsify property gets three values per product, always in this order:
 
 | # | Value | Example |
 | --- | --- | --- |
 | 1 | The blended cost, amount only | `17.12` |
-| 2 | A note: `OK: …` with how the warehouse split was decided, or the issue with the price | `OK: from 13 UPS shipments last month: all Groveport, OH` |
+| 2 | A note: `OK: …` with how the warehouse split was decided, or every issue with the price | `OK: from 13 UPS shipments last month: all Groveport, OH` |
 | 3 | The date it was pushed (Pacific) | `2026-11-23` |
 
-The note lists every issue, separated by "; ":
-- `Incomplete: only 62% of orders priced …`: some zones are over a carrier's weight limit or failed. **The cost is still pushed**, so check it.
-- `Stocked in Las Vegas, NV only; may understate`: the simple version, see the Shipping guide.
-- `No Mango data: company-wide split` or `Few shipments (2)`: the warehouse split is a fallback.
+The note is never empty, so the cost is always the 1st value and the date the 3rd. Possible issues, joined with "; ":
 
-**How it runs:**
-- **Only changed values are written.** A product is written when its cost (to the cent) or its note changed since the last push; otherwise it's left alone, date included.
-- **Which products:** the newest live Products run. **Simulated prices are never pushed.** The push refuses to run in simulated mode, or if the newest Products run was simulated.
-- Products that weren't quoted (missing weight or size) or had no price at all are **skipped**, and listed on the Products tab.
-- **Whose key:** it uses the Salsify key chosen under **Products → Scheduled runs use the Salsify key of**. That person needs **edit rights** in Salsify. If the key can't edit products, the push stops after a few tries and says so.
+| Note | Meaning |
+| --- | --- |
+| `Incomplete: only 62% of orders priced …` | Some zones are over a carrier's weight limit or failed to quote. The cost is still pushed, from the zones that were priced: check it. |
+| `Stocked in Las Vegas, NV only; may understate` | One warehouse stocks it, so it ships everywhere from there; the estimate uses that warehouse's usual zone mix (the simple version). |
+| `No Mango data: company-wide split` | Mango couldn't be read for this item; the company-wide Las Vegas/Groveport split is used. |
+| `No stock or shipments in Mango: company-wide split` | Mango shows no stock and no UPS shipments last month. |
+| `Few shipments (2)` | Fewer than 5 UPS shipments last month and no stock in Mango: the split comes from those few shipments. |
 
-**Before turning it on:**
-1. Enter the **Salsify property** (its ID exactly as Salsify shows it) and a **part number**, then click **Save & test**. The test checks the property exists, is text and allows multiple values, and shows the three values that part would get.
-2. Click **Write this one product** to write that part for real; it's read back from Salsify to confirm.
-3. Turn on **Push automatically**.
+### Set it up
 
-The Products tab shows the last push: written, unchanged, skipped and failed counts, with the reasons, and **Push now** for managers.
+1. **In Salsify**, create a **text** property that **allows multiple values**, for example *Blended Shipping Cost*.
+2. **Check whose key is used.** Writes use the Salsify key chosen under **Settings → Products (Salsify list) → Scheduled runs use the Salsify key of**. A manual push or test uses your own key if you have one. That person needs **edit rights** on products in Salsify.
+3. **In Settings → Push blended cost to Salsify**, enter the property's ID exactly as Salsify shows it, and a part number from the Products list. Then click **Save & test**. It checks:
+   - the property exists, is text and allows multiple values;
+   - the three values that part would get.
+
+   Under the buttons it then says **Ready to write**, or **Can't write yet:** with the reason.
+4. **Click Write this one product.** It writes that part for real, reads it back from Salsify and confirms the values match. Look at the product in Salsify to see them. You can click it without testing first; if something isn't right, it says exactly what.
+5. **Turn on Push automatically** and Save. The schedule fields set when it runs.
+
+### Each push
+
+- **Which products:** every product in the **newest live Products run**.
+- **Only changed values are written.** A product is written when its cost (to the cent) or its note changed since the last push; otherwise it's left alone, date included. To re-write one product anyway, use **Write this one product**.
+- **Never simulated prices.** It won't run while the tool is in simulated mode, or if the newest Products run used simulated prices.
+- **The Products tab shows the last push:**
+  - **written**: the value changed and was saved to Salsify;
+  - **unchanged**: same cost and note as last time, so nothing was sent;
+  - **skipped**: not quoted (missing weight or size in Salsify), or no zone could be priced;
+  - **failed**: Salsify refused it.
+
+  Open *products not written* for each reason.
 
 ![Salsify push on the Products tab](images/salsify-push-card.png)
+
+### Troubleshooting
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| Salsify has no property "…" | The ID doesn't match a Salsify property | Copy the property ID from Salsify exactly (it's case-sensitive). |
+| "…" is a number property … use a text property | The property is numeric, but the note and date are text | Use a text property that allows multiple values. |
+| Check it: it holds a single value … | The property only keeps one value | Allow multiple values on the property in Salsify. |
+| The tool is in simulated mode … | Rates source is Simulated | Switch to Live once UPS and Endicia test successfully. |
+| The newest Products run used simulated prices … | The last Products run ran in simulated mode | Run Products again in live mode (Products tab → Run now). |
+| … isn't in the newest Products run | The part isn't on the Salsify list, or the run is older than the list change | Check the part is on the list; run Products again. |
+| … wasn't quoted: … | Missing weight or size in Salsify | Fill in the weight and box size in Salsify; run Products again. |
+| No zone could be priced, so there's no cost | Every quote failed (e.g. over every carrier's limit) | Check the product's weight and size; see its quotes on the Products tab. |
+| The Salsify key can't edit product … | That user's key has read-only rights | Give the user edit rights in Salsify, or choose another user's key under Products. A push stops after a few of these. |
+| Product … isn't in Salsify | The part number doesn't match a Salsify product ID | Check the product ID in Salsify. |
+| Written, but Salsify now shows … | Salsify changed the values on save (e.g. a single-value or numeric property) | Fix the property as above. |
+
+Salsify throttling and temporary errors are retried automatically; a product that still fails is listed with the reason and tried again next push.
 
 ## Salsify (product lookup) and the Products list
 

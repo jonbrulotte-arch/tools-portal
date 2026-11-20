@@ -31,10 +31,10 @@ async function sourceRun() {
 /** Why a push can't run now, or null if it can. */
 export async function pushBlocker(s: ShippingRatesSettings): Promise<string | null> {
   if (!s.salsifyPush.property) return "Set the Salsify property first (Settings → Push blended cost to Salsify).";
-  if (s.mode !== "live") return "The tool is in simulated mode; simulated prices are never pushed to Salsify.";
+  if (s.mode !== "live") return "The tool is in simulated mode; simulated prices are never pushed to Salsify. Switch Rates source to Live (Settings) once UPS and Endicia test successfully.";
   const run = await sourceRun();
   if (!run) return "There's no Products run to take blended costs from yet.";
-  if (run.mode !== "live") return "The newest Products run used simulated prices, so there's nothing to push. Run Products in live mode first.";
+  if (run.mode !== "live") return "The newest Products run used simulated prices, so there's nothing to push. Run Products in live mode first (Products tab → Run now).";
   if (!(await loadMix())) return "A processed cost report is needed for the zone mix (Cost reports tab).";
   return null;
 }
@@ -52,13 +52,24 @@ export async function valueFor(s: ShippingRatesSettings, partNumber: string): Pr
   return { value, reason: value ? null : blended ? "No zone could be priced, so there's no cost." : "A processed cost report is needed for the zone mix.", runMode: run.mode };
 }
 
-/** Writes one product now (Settings "Write this one product") and reads it back. */
+/** The property's problems for this push: missing (error) or the wrong kind (error/warning). */
+async function checkProperty(s: ShippingRatesSettings, key: string) {
+  const prop = await getSalsifyProperty(key, s.salsify.orgId, s.salsifyPush.property);
+  if (!prop) return { prop: null, error: `Salsify has no property "${s.salsifyPush.property}". Use the property's ID exactly as Salsify shows it.`, warnings: [] as string[] };
+  const error = prop.dataType && !/string|text|rich/i.test(prop.dataType) ? `"${prop.id}" is a ${prop.dataType} property, but the note and date are text: use a text property that allows multiple values.` : null;
+  const warnings = prop.multiValued === false ? ["it holds a single value, but three are written (cost, note, date): allow multiple values on it"] : [];
+  return { prop, error, warnings };
+}
+
+/** Writes one product now (Settings "Write this one product") and reads it back. Every check explains itself. */
 export async function pushOne(s: ShippingRatesSettings, actor: Actor, partNumber: string) {
   const blocker = await pushBlocker(s);
   if (blocker) throw new Error(blocker);
+  const { key } = await resolveKey(s, actor);
+  const { error } = await checkProperty(s, key);
+  if (error) throw new Error(error);
   const { value, reason } = await valueFor(s, partNumber);
   if (!value) throw new Error(reason ?? "Nothing to push for this product.");
-  const { key } = await resolveKey(s, actor);
   const values = pushValues(value, usageDay());
   await updateSalsifyProduct(key, s.salsify.orgId, partNumber, s.salsifyPush.property, values);
   await prisma.salsifyPush.upsert({ where: { partNumber }, create: { partNumber, ...value, pushedAt: new Date() }, update: { ...value, pushedAt: new Date(), lastError: null, lastErrorAt: null } });
@@ -183,17 +194,16 @@ export type SalsifyPushStatus = Awaited<ReturnType<typeof salsifyPushStatus>>;
 export async function testSalsifyPush(s: ShippingRatesSettings, actor: Actor, partNumber: string) {
   if (!s.salsifyPush.property) throw new Error("Enter the Salsify property first.");
   const { key } = await resolveKey(s, actor);
-  const prop = await getSalsifyProperty(key, s.salsify.orgId, s.salsifyPush.property);
-  if (!prop) throw new Error(`Salsify has no property "${s.salsifyPush.property}". Use the property's ID exactly as Salsify shows it.`);
-  const warnings: string[] = [];
-  if (prop.dataType && !/string|text|rich/i.test(prop.dataType)) warnings.push(`it's a ${prop.dataType} property, but the note and date are text: use a text (string) property that holds multiple values`);
-  if (prop.multiValued === false) warnings.push("it holds a single value, but three are written (cost, note, date): allow multiple values on it");
+  const { prop, error, warnings } = await checkProperty(s, key);
+  if (!prop) throw new Error(error!);
   const { value, reason, runMode } = await valueFor(s, partNumber);
   const parts = [`Salsify property "${prop.id}"${prop.dataType ? ` (${prop.dataType}${prop.multiValued ? ", multiple values" : ""})` : ""} found.`];
-  if (warnings.length) parts.push(`Check it: ${warnings.join("; ")}.`);
+  if (error || warnings.length) parts.push(`Check it: ${[error, ...warnings].filter(Boolean).join("; ")}`);
   if (value) parts.push(`${partNumber} would get: ${pushValues(value, usageDay()).map((v) => `"${v}"`).join(", ")}${runMode !== "live" ? " (from simulated prices, which are never pushed)" : ""}.`);
   else parts.push(`${partNumber}: ${reason}`);
-  return { ok: warnings.length === 0, message: parts.join(" "), canWrite: !!value && runMode === "live" && s.mode === "live" };
+  // what would stop "Write this one product" (null = ready); the button still works and gives the same reason
+  const writeBlocker = (await pushBlocker(s)) ?? error ?? (value ? null : reason);
+  return { ok: !error && warnings.length === 0, message: parts.join(" "), writeBlocker };
 }
 
 /** Called every hour on the hour by the app scheduler. */

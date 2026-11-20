@@ -57,7 +57,10 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
       "fetch",
       vi.fn(async (url: string, init: RequestInit = {}) => {
         const path = new URL(url).pathname;
-        if (path.includes("/properties/")) return new Response(JSON.stringify({ "salsify:id": "Blended Shipping Cost", "salsify:data_type": "string", "salsify:is_multi_valued": true }));
+        if (path.includes("/properties/"))
+          return decodeURIComponent(path.split("/").pop()!) === "Blended Shipping Cost"
+            ? new Response(JSON.stringify({ "salsify:id": "Blended Shipping Cost", "salsify:data_type": "string", "salsify:is_multi_valued": true }))
+            : new Response("{}", { status: 404 });
         const part = decodeURIComponent(path.split("/").pop()!);
         if (part === "MISSING") return new Response("{}", { status: 404 });
         if (init.method === "PUT") {
@@ -103,10 +106,22 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
   it("tests the property, writes one product and reads it back", async () => {
     const { getSetting } = await import("@/lib/settings");
     const t = await testSalsifyPush(await getSetting("shippingRates"), user, "A1");
-    expect(t).toMatchObject({ ok: true, canWrite: true });
+    expect(t).toMatchObject({ ok: true, writeBlocker: null });
     expect(t.message).toMatch(/A1 would get: "16.00", "No Mango data: company-wide split", "\d{4}-\d{2}-\d{2}"/);
     const one = await pushOne(await getSetting("shippingRates"), user, "A1");
     expect(one.readBack).toEqual(one.values);
+  });
+
+  it("explains why one product can't be written instead of greying the button out", async () => {
+    const { getSetting } = await import("@/lib/settings");
+    const s = await getSetting("shippingRates");
+    await expect(pushOne(s, user, "NOT-ON-LIST")).rejects.toThrow("NOT-ON-LIST isn't in the newest Products run");
+    await expect(pushOne(s, user, "N1")).rejects.toThrow("N1 wasn't quoted: Salsify has no weight");
+    await expect(pushOne({ ...s, salsifyPush: { ...s.salsifyPush, property: "Nope" } }, user, "A1")).rejects.toThrow('Salsify has no property "Nope"');
+    await expect(pushOne({ ...s, mode: "simulated" }, user, "A1")).rejects.toThrow(/simulated mode/);
+    const t = await testSalsifyPush({ ...s, mode: "simulated" }, user, "A1");
+    expect(t.writeBlocker).toMatch(/simulated mode/);
+    expect((await testSalsifyPush(s, user, "N1")).writeBlocker).toMatch(/wasn't quoted/);
   });
 
   it("never pushes simulated prices", async () => {
