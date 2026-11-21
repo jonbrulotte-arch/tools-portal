@@ -41,9 +41,10 @@ Quote one product from both warehouses to every zone.
 Many products ship from either Las Vegas or Groveport, and the cost depends on where the customer is. The **Blended cost** column on the Products tab gives one expected shipping cost per unit:
 
 - **Warehouse share**: how this product's orders split between the warehouses. It's read from Mango every night:
-  - **Own shipments**: if the product had at least 5 UPS shipments last month, its own split is used (the UPS tracking number shows which warehouse shipped it).
+  - **Own shipments**: if the product had at least 5 shipments last month (UPS and USPS), its own split is used. Each tracking number is matched to the warehouse that shipped it.
   - **One warehouse**: if it's stocked in only one warehouse, 100% is from there.
-  - **Both stocked**: if it's stocked in both (with few shipments), or Mango has no data, the company-wide split from the cost report is used.
+  - **Most stock**: if it's stocked in both, 100% is from the warehouse holding most of the stock, which is the one that usually ships it.
+  - **Company split**: if Mango has no data, the company-wide split from the cost report is used.
 - **Zone mix**: for each warehouse, its usual share of shipments per zone, from the latest cost report.
 - **Cell price**: for each warehouse and zone, the cheaper carrier for a home address and for a business address, weighted by how many of that warehouse's UPS shipments go to homes.
 
@@ -55,7 +56,9 @@ Click a product to see the details: the cost, the range, how the split was decid
 
 **Blended costs CSV** (above the table) saves one row per product with its blended cost, range, warehouse split, basis, stock and shipments, ready for an ROI sheet. **All quotes CSV** is the full list of quotes as before.
 
-> Note: This is the simple version. A product stocked in only one warehouse ships every order from there, including customers the other warehouse normally serves, but its estimate uses that warehouse's usual zone mix. Its cost may be **low**, and it's marked *One warehouse* with a warning in the details.
+> Note: This is the simple version. A product that ships from one warehouse (*One warehouse* or *Most stock*) ships every order from there, including customers the other warehouse normally serves, but its estimate uses that warehouse's usual zone mix. Its cost may be **low**, and the details show a warning.
+
+The full formulas and a worked example are in *Shipping Rates Generator: methodology & calculations*.
 
 **Product quote** shows the same blended cost for any part you look up. While quoting, it reads that part's stock and shipments from Mango. Quote both warehouses for a complete blend. If you type the dimensions without a part number, the company-wide split is used.
 

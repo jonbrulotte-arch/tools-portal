@@ -13,7 +13,7 @@ const BASIS_BADGE: Record<string, { label: string; variant: "success" | "seconda
   shipments: { label: "Own shipments", variant: "success" },
   "few-shipments": { label: "Few shipments", variant: "warning" },
   "stock-one": { label: "One warehouse", variant: "warning" },
-  "stock-both": { label: "Both stocked", variant: "default" },
+  "stock-both": { label: "Most stock", variant: "warning" },
   company: { label: "Company split", variant: "secondary" },
 };
 
@@ -75,7 +75,7 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
       </p>
       {b.understates && (
         <Alert variant="warning">
-          Simple version: a product stocked in one warehouse ships to every customer from there, including ones the other warehouse usually serves. This estimate uses that warehouse&apos;s usual zone mix, so it may be low.
+          Simple version: this product is assumed to ship every order from one warehouse, including to customers the other warehouse usually serves. This estimate uses that warehouse&apos;s usual zone mix, so it may be low.
         </Alert>
       )}
       {b.incomplete && <Alert variant="warning">Only {pct(b.coverage)} of the weighting had a price (some zones are over a carrier&apos;s limit or failed), so treat this cost with care.</Alert>}
@@ -86,13 +86,13 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
             <p className="text-gray-600">
               Stock: {b.stock[o.code] ? `${b.stock[o.code].onHand.toLocaleString()} on hand${b.stock[o.code].allocated ? ` (${b.stock[o.code].allocated.toLocaleString()} allocated)` : ""}` : "—"}
             </p>
-            <p className="text-gray-600">UPS shipments last month: {(b.shipments[o.code] ?? 0).toLocaleString()}</p>
+            <p className="text-gray-600">Shipments last month (UPS and USPS): {(b.shipments[o.code] ?? 0).toLocaleString()}</p>
           </div>
         ))}
       </div>
       <p className="text-xs text-gray-500">
         {b.inventoryAsOf ? `Mango inventory read ${formatDateTime(b.inventoryAsOf)}` : "No Mango inventory read yet"}
-        {b.otherShipments ? `; ${b.otherShipments} other shipment${b.otherShipments === 1 ? "" : "s"} (FedEx, freight or USPS) not placed in a warehouse` : ""}
+        {b.otherShipments ? `; ${b.otherShipments} other shipment${b.otherShipments === 1 ? "" : "s"} not placed in a warehouse (FedEx, freight, or not in an imported cost report yet)` : ""}
         {b.inventoryError ? `. Last read failed: ${b.inventoryError}` : ""}. Zone mix and residential share from the cost report
         {b.mixFrom.dateFrom ? ` ${formatDateTime(b.mixFrom.dateFrom).split(",")[0]} – ${formatDateTime(b.mixFrom.dateTo ?? b.mixFrom.dateFrom).split(",")[0]}` : ""}.
       </p>

@@ -17,7 +17,7 @@ const REQUIRED = ["shipsource", "trackingnumber", "zone", "transactionamount", "
 const UPS_GROUND = /^Ground (Commercial|Residential)( Third Party| Collect)?$/i;
 
 type UpsPkg = { cost: number; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
-type UspsPkg = { cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
+type UspsPkg = { tracking: string; cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
 
 export type ReportSummary = {
   rows: number;
@@ -57,7 +57,7 @@ export async function processReport(reportId: string, file: Buffer) {
   const settings = await getSetting("shippingRates");
   await prisma.shippingReport.update({ where: { id: reportId }, data: { status: "RUNNING" } });
   try {
-    const { summary, aggregates, dateFrom, dateTo } = await parseReport(file, settings, async (rows) => {
+    const { summary, aggregates, dateFrom, dateTo, shipmentOrigins } = await parseReport(file, settings, async (rows) => {
       await prisma.shippingReport.update({ where: { id: reportId }, data: { progress: rows } });
     });
     await prisma.$transaction([
@@ -68,11 +68,20 @@ export async function processReport(reportId: string, file: Buffer) {
         data: { status: "READY", rowCount: summary.rows, progress: summary.rows, summary: summary as unknown as Prisma.InputJsonValue, dateFrom, dateTo, finishedAt: new Date() },
       }),
     ]);
+    await saveShipmentOrigins(shipmentOrigins).catch((err) => console.error("[shipping] couldn't save shipment origins", err));
     return summary;
   } catch (err) {
     await prisma.shippingReport.update({ where: { id: reportId }, data: { status: "FAILED", error: err instanceof Error ? err.message : String(err), finishedAt: new Date() } });
     throw err;
   }
+}
+
+const ORIGIN_RETENTION_DAYS = 120;
+
+/** Remembers which warehouse shipped each package (new tracking numbers only) and forgets old ones. */
+export async function saveShipmentOrigins(rows: { tracking: string; origin: string; carrier: string; shippedAt: Date | null }[]) {
+  for (let i = 0; i < rows.length; i += 5000) await prisma.shipmentOrigin.createMany({ data: rows.slice(i, i + 5000), skipDuplicates: true });
+  await prisma.shipmentOrigin.deleteMany({ where: { OR: [{ shippedAt: { lt: new Date(Date.now() - ORIGIN_RETENTION_DAYS * 86_400_000) } }, { shippedAt: null, createdAt: { lt: new Date(Date.now() - ORIGIN_RETENTION_DAYS * 86_400_000) } }] } });
 }
 
 export async function parseReport(file: Buffer, settings: ShippingRatesSettings, onProgress?: (rows: number) => Promise<void>) {
@@ -131,6 +140,7 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         }
       } else if (source === "USPS") {
         usps.push({
+          tracking,
           cost: num(get("transactionamount")),
           weight: num(get("weight")),
           originZip: text(get("originzip")).slice(0, 5),
@@ -289,5 +299,15 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     suggestedQuoteZips,
     zoneUsage: [...usage.values()].sort((a, b) => a.carrier.localeCompare(b.carrier) || a.origin.localeCompare(b.origin) || a.zone - b.zone),
   };
-  return { summary, aggregates, dateFrom, dateTo };
+  // which warehouse shipped each package (tracking number → warehouse), for placing a product's shipments
+  const shipmentOrigins: { tracking: string; origin: string; carrier: string; shippedAt: Date | null }[] = [];
+  for (const [tracking, p] of ups) {
+    const origin = settings.upsAccounts[p.account] ?? originByZip.get(p.originZip);
+    if (origin) shipmentOrigins.push({ tracking, origin, carrier: "UPS", shippedAt: p.date ?? null });
+  }
+  for (const p of usps) {
+    const origin = originByZip.get(p.originZip);
+    if (p.tracking && origin && p.cost > 0) shipmentOrigins.push({ tracking: p.tracking.replace(/\s/g, ""), origin, carrier: "USPS", shippedAt: p.date ?? null });
+  }
+  return { summary, aggregates, dateFrom, dateTo, shipmentOrigins };
 }

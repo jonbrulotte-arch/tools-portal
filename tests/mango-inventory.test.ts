@@ -26,7 +26,13 @@ describe("Mango inventory page", () => {
 
   it("maps sites and UPS accounts to warehouses (Buffalo ignored)", () => {
     const s = summarizeInventory(parseInventoryPage(page, "56831"), { "0": "LV", "3": "GV" }, UPS_ACCOUNTS);
-    expect(s).toEqual({ stock: { LV: { onHand: 0, allocated: 0 }, GV: { onHand: 1319, allocated: 16 } }, shipments: { GV: 2 }, otherShipments: 1 });
+    expect(s).toEqual({ stock: { LV: { onHand: 0, allocated: 0 }, GV: { onHand: 1319, allocated: 16 } }, shipments: { GV: 2 }, shipmentCarriers: { UPS: 2 }, otherShipments: 1 });
+  });
+
+  it("places other carriers' shipments by the cost reports' tracking-number record", () => {
+    const tracked = new Map([["0800000003", { origin: "LV", carrier: "USPS" }]]);
+    const s = summarizeInventory(parseInventoryPage(page, "56831"), { "0": "LV", "3": "GV" }, UPS_ACCOUNTS, tracked);
+    expect(s).toMatchObject({ shipments: { GV: 2, LV: 1 }, shipmentCarriers: { UPS: 2, USPS: 1 }, otherShipments: 0 });
   });
 
   it("refuses pages it doesn't recognise instead of reading zero stock", () => {

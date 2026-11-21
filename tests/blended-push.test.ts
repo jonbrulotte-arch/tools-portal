@@ -24,7 +24,8 @@ describe("Salsify push value", () => {
     expect(pushNote(blend({ incomplete: true, coverage: 0.5, basis: "stock-one", understates: true, shares: { GV: 1 } }), origins)).toBe(
       "Incomplete: only 50% of orders priced (some zones over a carrier limit or failed); Stocked in Groveport, OH only; may understate",
     );
-    expect(pushNote(blend({ basis: "stock-both", label: "Stocked in both: company-wide split" }), origins)).toBe("OK: stocked in both: company-wide split");
+    expect(pushNote(blend({ basis: "stock-both", label: "Stocked equally in both: company-wide split" }), origins)).toBe("OK: stocked equally in both: company-wide split");
+    expect(pushNote(blend({ basis: "stock-both", understates: true, shares: { GV: 1 } }), origins)).toBe("Stocked in both; ships from Groveport, OH (most stock); may understate");
   });
 
   it("has nothing to push without a cost", () => {

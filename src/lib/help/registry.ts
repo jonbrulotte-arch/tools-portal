@@ -27,6 +27,7 @@ export const HELP_DOCS: HelpDoc[] = [
   { slug: "shopify-discounts-admin", title: "Shopify Discount Code Generator: stores & form settings", summary: "Connect stores, and preset or lock the New discount form for everyone else.", section: "tools", toolSlug: "shopify-discounts", audience: { toolManager: "shopify-discounts" }, updated: "2026-11-19" },
 
   { slug: "shipping-rates", title: "Shipping Rates Generator: guide", summary: "Analysis, product quotes, the Products list, cost reports and quote runs.", section: "tools", toolSlug: "shipping-rates", audience: { tool: "shipping-rates" }, updated: "2026-11-19" },
+  { slug: "shipping-rates-methodology", title: "Shipping Rates Generator: methodology & calculations", summary: "How every number is worked out: billable weight, the rate chart, cutoffs, accuracy, the blended cost and warehouse split, the reality check, the API Report.", section: "tools", toolSlug: "shipping-rates", audience: { tool: "shipping-rates" }, updated: "2026-11-21" },
   { slug: "shipping-rates-admin", title: "Shipping Rates Generator: settings", summary: "Warehouses, UPS accounts, UPS/Endicia/Salsify/Mango connections and schedules.", section: "tools", toolSlug: "shipping-rates", audience: { toolManager: "shipping-rates" }, updated: "2026-11-19" },
 
   { slug: "auto-emails-log", title: "Automated Emails (EDI): reading the email log", summary: "See what was sent to partners, what failed and why.", section: "tools", toolSlug: "auto-emails", audience: { tool: "auto-emails" }, updated: "2026-11-19" },

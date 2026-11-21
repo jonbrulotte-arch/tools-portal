@@ -67,7 +67,7 @@ Enter the **Mango export URL**, the **Date range** (days back from today, for ex
 
 The blended shipping cost needs to know where each product ships from. Mango has no API, so the tool reads each product's page on Mango's inventory lookup (*current_inventory?it=<item>*), the same page you see in the browser. From it, it takes:
 - **stock** per site;
-- **last month's orders with the item**. Each UPS tracking number contains the shipper account, so the account list above tells which warehouse shipped it.
+- **last month's orders with the item**. Each tracking number is matched to the warehouse that shipped it: from the imported cost reports (which record every USPS and UPS package's warehouse), else, for UPS, from the shipper account in the number and the account list above. Labels shipped after the newest imported cost report aren't placed until the next import.
 
 ![Mango inventory settings](images/mango-inventory.jpg)
 
@@ -76,7 +76,7 @@ The blended shipping cost needs to know where each product ships from. Mango has
 - **Schedule**: daily at 2:00 AM by default. It reads every product on the Products list, 3 at a time. The Products tab shows the last read, with **Read inventory now**.
 - **Save & test**: reads one item and shows what was found (stock per warehouse, shipments by warehouse).
 
-If Mango's page layout changes, the item is recorded as **couldn't be read** (listed on the Products tab), not as zero stock. The item keeps its last good figures until a read works again. Cancelled orders and orders without a tracking number are skipped. FedEx, freight and USPS shipments can't be placed in a warehouse, so they're counted separately and not used for the split.
+If Mango's page layout changes, the item is recorded as **couldn't be read** (listed on the Products tab), not as zero stock. The item keeps its last good figures until a read works again. Cancelled orders and orders without a tracking number are skipped. FedEx and freight shipments can't be placed in a warehouse, so they're counted separately and not used for the split.
 
 ## Push blended cost to Salsify
 
@@ -100,9 +100,10 @@ The note is never empty, so the cost is always the 1st value and the date the 3r
 | --- | --- |
 | `Incomplete: only 62% of orders priced …` | Some zones are over a carrier's weight limit or failed to quote. The cost is still pushed, from the zones that were priced: check it. |
 | `Stocked in Las Vegas, NV only; may understate` | One warehouse stocks it, so it ships everywhere from there; the estimate uses that warehouse's usual zone mix (the simple version). |
+| `Stocked in both; ships from Groveport, OH (most stock); may understate` | Both warehouses stock it, and too few shipments to use its own split: the warehouse with most of the stock is assumed to ship it. |
 | `No Mango data: company-wide split` | Mango couldn't be read for this item; the company-wide Las Vegas/Groveport split is used. |
-| `No stock or shipments in Mango: company-wide split` | Mango shows no stock and no UPS shipments last month. |
-| `Few shipments (2)` | Fewer than 5 UPS shipments last month and no stock in Mango: the split comes from those few shipments. |
+| `No stock or shipments in Mango: company-wide split` | Mango shows no stock and no shipments last month. |
+| `Few shipments (2)` | Fewer than 5 shipments last month and no stock in Mango: the split comes from those few shipments. |
 
 ### Set it up
 

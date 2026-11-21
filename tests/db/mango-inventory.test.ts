@@ -27,6 +27,7 @@ describe.skipIf(!enabled)("Mango inventory import (database)", async () => {
     await setSetting("shippingRates", { ...SETTING_DEFAULTS.shippingRates, mangoInventory: { ...SETTING_DEFAULTS.shippingRates.mangoInventory, url } });
     await prisma.productInventory.deleteMany();
     await prisma.inventoryImportRun.deleteMany();
+    await prisma.shipmentOrigin.deleteMany();
     await prisma.productRateRun.deleteMany();
     await prisma.productRateRun.create({
       data: { mode: "live", status: "READY", listId: "s-x", done: 3, items: { create: ["56831", "CHANGED", "00000"].map((partNumber, position) => ({ partNumber, position, status: "OK" as const })) } },
@@ -47,6 +48,26 @@ describe.skipIf(!enabled)("Mango inventory import (database)", async () => {
     const st = await inventoryStatus();
     expect(st.last).toMatchObject({ status: "READY", total: 3, done: 3, failed: 2 });
     expect(st.withErrors).toBe(2);
+  });
+
+  it("places USPS shipments using the cost reports' tracking numbers", async () => {
+    const { parseReport, saveShipmentOrigins } = await import("@/lib/shipping/report");
+    const { costReportXlsx } = await import("../helpers/cost-report");
+    // a processed cost report remembers which warehouse shipped each package
+    const { shipmentOrigins } = await parseReport(await costReportXlsx(), await getSetting("shippingRates"));
+    expect(shipmentOrigins).toEqual(
+      expect.arrayContaining([
+        { tracking: "1Z7963050000000001", origin: "LV", carrier: "UPS", shippedAt: expect.any(Date) },
+        { tracking: "9400000000000001", origin: "LV", carrier: "USPS", shippedAt: expect.any(Date) },
+      ]),
+    );
+    await saveShipmentOrigins([...shipmentOrigins, { tracking: "0800000003", origin: "LV", carrier: "USPS", shippedAt: new Date() }]);
+    await saveShipmentOrigins(shipmentOrigins); // again: no duplicates
+    expect(await prisma.shipmentOrigin.count()).toBe(3);
+    // the fixture's third shipment (0800000003) is now placed in Las Vegas
+    const item = await refreshItemInventory(await getSetting("shippingRates"), "56831");
+    expect(item).toMatchObject({ shipments: { GV: 2, LV: 1 }, shipmentCarriers: { UPS: 2, USPS: 1 }, otherShipments: 0 });
+    await prisma.shipmentOrigin.deleteMany();
   });
 
   it("keeps the last good figures when a refresh fails", async () => {

@@ -16,8 +16,8 @@ export function pushNote(b: Pick<BlendSummary, "incomplete" | "coverage" | "basi
   const issues: string[] = [];
   if (b.incomplete) issues.push(`Incomplete: only ${pct(b.coverage)} of orders priced (some zones over a carrier limit or failed)`);
   if (b.understates) {
-    const only = Object.keys(b.shares).find((c) => b.shares[c] > 0);
-    issues.push(`Stocked in ${only ? name(only) : "one warehouse"} only; may understate`);
+    const from = Object.keys(b.shares).find((c) => b.shares[c] > 0);
+    issues.push(b.basis === "stock-both" ? `Stocked in both; ships from ${from ? name(from) : "the warehouse with most stock"} (most stock); may understate` : `Stocked in ${from ? name(from) : "one warehouse"} only; may understate`);
   }
   if (b.basis === "company" && /No Mango|No stock/.test(b.label)) issues.push(/No stock/.test(b.label) ? "No stock or shipments in Mango: company-wide split" : "No Mango data: company-wide split");
   if (b.basis === "few-shipments") issues.push(`Few shipments (${Object.values(b.shipments).reduce((a, n) => a + n, 0)})`);

@@ -34,6 +34,7 @@ export const TABLE_ORDER = [
   "InventoryImportRun",
   "SalsifyPush",
   "SalsifyPushRun",
+  "ShipmentOrigin",
   "AutoEmail",
   "AutoEmailSentKey",
   "AutoEmailLog",

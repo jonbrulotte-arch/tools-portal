@@ -49,7 +49,7 @@ export async function blendedCsv(runId: string, mode: string, origins: { code: s
       ...origins.map((o) => `${o.code}_share_pct`),
       "basis",
       "basis_detail",
-      ...origins.flatMap((o) => [`${o.code}_on_hand`, `${o.code}_ups_shipments_last_month`]),
+      ...origins.flatMap((o) => [`${o.code}_on_hand`, `${o.code}_shipments_last_month`]),
       "inventory_read_at",
     ],
     rows,

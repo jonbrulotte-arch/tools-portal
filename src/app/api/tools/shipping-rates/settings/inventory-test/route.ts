@@ -4,7 +4,7 @@ import { errorMessage, parseBody } from "@/lib/api";
 import { getSetting } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { inventoryTestSchema, describeInventoryTest } from "@/lib/shipping/mango-inventory-test";
-import { fetchInventoryPage } from "@/lib/shipping/mango-inventory";
+import { fetchInventoryPage, summarizePage } from "@/lib/shipping/mango-inventory";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 
 // Reads one item's Mango inventory page with the saved settings and says what was found, without saving it.
@@ -15,7 +15,8 @@ export async function POST(req: Request) {
   if (body instanceof NextResponse) return body;
   const s = await getSetting("shippingRates");
   try {
-    const message = describeInventoryTest(s, await fetchInventoryPage(s, body.partNumber));
+    const page = await fetchInventoryPage(s, body.partNumber);
+    const message = describeInventoryTest(s, page, await summarizePage(s, page));
     await logAudit({ action: "shipping.inventory_tested", category: "TOOL", actorId: actor.id, actorEmail: actor.email, metadata: { ok: true, partNumber: body.partNumber } });
     return NextResponse.json({ ok: true, message });
   } catch (err) {

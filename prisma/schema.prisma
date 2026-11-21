@@ -490,9 +490,11 @@ model ProductInventory {
   description    String?
   /// { [warehouse code]: { onHand, allocated } }
   stock          Json      @default("{}")
-  /// UPS shipments in the last month per warehouse (from tracking numbers): { [warehouse code]: count }
+  /// Shipments in the last month per warehouse (UPS and USPS, from tracking numbers): { [warehouse code]: count }
   shipments      Json      @default("{}")
-  /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, USPS)
+  /// Placed shipments per carrier last month: { UPS: n, USPS: n }
+  shipmentCarriers Json    @default("{}")
+  /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, or not in a cost report yet)
   otherShipments Int       @default(0)
   unitsLastMonth Int?
   /// Mango's own snapshot time, as shown on the page
@@ -551,4 +553,17 @@ model SalsifyPushRun {
   finishedAt   DateTime?
 
   @@index([createdAt])
+}
+
+/// Which warehouse shipped each package, from the cost reports (tracking number → warehouse). Lets the Mango
+/// inventory read place USPS shipments (whose tracking numbers don't say) and UPS from unlisted accounts.
+/// No names or addresses. Entries older than 120 days are pruned.
+model ShipmentOrigin {
+  tracking  String    @id
+  origin    String
+  carrier   String
+  shippedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([shippedAt])
 }

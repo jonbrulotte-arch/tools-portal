@@ -80,8 +80,11 @@ export type WarehouseShare = { shares: Record<string, number>; basis: ShareBasis
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 /**
- * How the product's orders split between warehouses: its own UPS shipments when there are enough,
- * otherwise where it's stocked, otherwise the company-wide split.
+ * How the product's orders split between warehouses:
+ *  1. its own shipments last month (UPS and USPS), when there are at least 5;
+ *  2. otherwise where it's stocked: one warehouse → 100% there; both → 100% from the one with the most stock
+ *     (that's the warehouse that usually ships it);
+ *  3. otherwise its few shipments, else the company-wide split.
  */
 export function warehouseShare(inv: ItemInventory | null | undefined, mix: Pick<MixData, "originSplit">, origins: { code: string; name: string }[]): WarehouseShare {
   const name = (c: string) => origins.find((o) => o.code === c)?.name ?? c;
@@ -98,7 +101,9 @@ export function warehouseShare(inv: ItemInventory | null | undefined, mix: Pick<
   const fromShipments = (basis: ShareBasis): WarehouseShare => {
     const shares = Object.fromEntries(shipped.map((c) => [c, inv.shipments[c] / nShip]));
     const top = shipped.sort((a, b) => shares[b] - shares[a])[0];
-    const label = `${basis === "few-shipments" ? "From only" : "From"} ${nShip} UPS shipment${nShip === 1 ? "" : "s"} last month: ${shipped.length === 1 ? `all ${name(top)}` : `${pct(shares[top])} ${name(top)}`}`;
+    const carriers = Object.entries(inv.shipmentCarriers ?? {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${n} ${c}`);
+    const how = carriers.length > 1 ? ` (${carriers.join(", ")})` : carriers.length === 1 ? ` ${carriers[0].split(" ")[1]}` : "";
+    const label = `${basis === "few-shipments" ? "From only" : "From"} ${nShip}${carriers.length === 1 ? how : ""} shipment${nShip === 1 ? "" : "s"} last month${carriers.length > 1 ? how : ""}: ${shipped.length === 1 ? `all ${name(top)}` : `${pct(shares[top])} ${name(top)}`}`;
     return { shares, basis, label, understates: false };
   };
   if (nShip >= MIN_OWN_SHIPMENTS) return fromShipments("shipments");
@@ -112,7 +117,19 @@ export function warehouseShare(inv: ItemInventory | null | undefined, mix: Pick<
       understates: true,
     };
   }
-  if (stocked.length > 1) return { ...company("Stocked in both: company-wide split"), basis: "stock-both" };
+  if (stocked.length > 1) {
+    // the warehouse holding most of the stock usually ships the order
+    const total = stocked.reduce((a, c) => a + inv.stock[c].onHand, 0);
+    const ranked = [...stocked].sort((a, b) => inv.stock[b].onHand - inv.stock[a].onHand);
+    if (inv.stock[ranked[0]].onHand === inv.stock[ranked[1]].onHand) return { ...company("Stocked equally in both: company-wide split"), basis: "stock-both" };
+    const top = ranked[0];
+    return {
+      shares: { [top]: 1 },
+      basis: "stock-both",
+      label: `Stocked in both; ships from ${name(top)}, which has most of the stock (${pct(inv.stock[top].onHand / total)}). Uses ${name(top)}'s usual zone mix, so it may understate the cost`,
+      understates: true,
+    };
+  }
   if (nShip > 0) return fromShipments("few-shipments");
   return company("No stock or shipment data in Mango: company-wide split");
 }

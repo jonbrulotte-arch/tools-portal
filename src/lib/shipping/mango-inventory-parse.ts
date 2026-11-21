@@ -109,16 +109,27 @@ export function parseInventoryPage(html: string, partNumber: string): MangoInven
   };
 }
 
-/** Stock and shipments per warehouse code, using the site → warehouse and UPS account → warehouse maps from Settings. */
-export function summarizeInventory(p: MangoInventoryPage, siteToOrigin: Record<string, string>, upsAccounts: Record<string, string>) {
+/** Tracking number → the warehouse that shipped it (from the cost reports), for shipments whose number doesn't say. */
+export type TrackingOrigins = Map<string, { origin: string; carrier: string }>;
+
+/**
+ * Stock and shipments per warehouse code. A shipment is placed by its tracking number: the cost reports' record
+ * of who shipped it (USPS and UPS), else, for UPS, the shipper account in the number and the account list.
+ */
+export function summarizeInventory(p: MangoInventoryPage, siteToOrigin: Record<string, string>, upsAccounts: Record<string, string>, tracked: TrackingOrigins = new Map()) {
   const stock: Record<string, SiteStock> = {};
   for (const [site, origin] of Object.entries(siteToOrigin)) if (p.sites[site]) stock[origin] = p.sites[site];
   const shipments: Record<string, number> = {};
+  const carriers: Record<string, number> = {};
   let other = 0;
   for (const s of p.shipments) {
-    const origin = s.upsAccount ? upsAccounts[s.upsAccount] : undefined;
-    if (origin) shipments[origin] = (shipments[origin] ?? 0) + 1;
-    else other++;
+    const known = tracked.get(s.tracking.toUpperCase());
+    const origin = known?.origin ?? (s.upsAccount ? upsAccounts[s.upsAccount] : undefined);
+    const carrier = known?.carrier ?? (s.upsAccount ? "UPS" : null);
+    if (origin && carrier) {
+      shipments[origin] = (shipments[origin] ?? 0) + 1;
+      carriers[carrier] = (carriers[carrier] ?? 0) + 1;
+    } else other++;
   }
-  return { stock, shipments, otherShipments: other };
+  return { stock, shipments, shipmentCarriers: carriers, otherShipments: other };
 }

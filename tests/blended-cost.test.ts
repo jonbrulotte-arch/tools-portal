@@ -15,7 +15,7 @@ const mix = mixFrom(
   ],
   { reportId: "r", dateFrom: null, dateTo: null },
 );
-const inv = (o: Partial<ItemInventory> = {}): ItemInventory => ({ partNumber: "P", description: null, stock: {}, shipments: {}, otherShipments: 0, unitsLastMonth: null, snapshotAt: null, fetchedAt: "2026-11-20T00:00:00Z", error: null, ...o });
+const inv = (o: Partial<ItemInventory> = {}): ItemInventory => ({ partNumber: "P", description: null, stock: {}, shipments: {}, shipmentCarriers: {}, otherShipments: 0, unitsLastMonth: null, snapshotAt: null, fetchedAt: "2026-11-20T00:00:00Z", error: null, ...o });
 
 describe("mixes from the cost report", () => {
   it("zone mix per warehouse, residential share, warehouse split", () => {
@@ -30,10 +30,12 @@ describe("mixes from the cost report", () => {
 
 describe("warehouse share", () => {
   it("uses the item's own shipments when there are enough", () => {
-    const s = warehouseShare(inv({ shipments: { GV: 11, LV: 3 }, stock: { LV: { onHand: 5, allocated: 0 } } }), mix, origins);
+    const s = warehouseShare(inv({ shipments: { GV: 11, LV: 3 }, shipmentCarriers: { UPS: 5, USPS: 9 }, stock: { LV: { onHand: 5, allocated: 0 } } }), mix, origins);
     expect(s).toMatchObject({ basis: "shipments", understates: false });
     expect(s.shares.GV).toBeCloseTo(11 / 14);
-    expect(s.label).toBe("From 14 UPS shipments last month: 79% Groveport, OH");
+    expect(s.label).toBe("From 14 shipments last month (9 USPS, 5 UPS): 79% Groveport, OH");
+    // USPS-only products now have their own split too
+    expect(warehouseShare(inv({ shipments: { LV: 6 }, shipmentCarriers: { USPS: 6 } }), mix, origins)).toMatchObject({ basis: "shipments", shares: { LV: 1 }, label: "From 6 USPS shipments last month: all Las Vegas, NV" });
   });
   it("one warehouse stocked: 100% there, flagged as possibly understated", () => {
     const s = warehouseShare(inv({ stock: { LV: { onHand: 0, allocated: 0 }, GV: { onHand: 1319, allocated: 16 } }, shipments: { GV: 2 } }), mix, origins);
@@ -41,8 +43,12 @@ describe("warehouse share", () => {
     expect(s.label).toMatch(/Stocked in Groveport, OH only .*may understate/);
   });
   it("both stocked, few shipments, no data, and no record fall back sensibly", () => {
-    expect(warehouseShare(inv({ stock: { LV: { onHand: 3, allocated: 0 }, GV: { onHand: 9, allocated: 0 } } }), mix, origins)).toMatchObject({ basis: "stock-both", shares: { LV: 0.4, GV: 0.6 } });
-    expect(warehouseShare(inv({ shipments: { LV: 2 } }), mix, origins)).toMatchObject({ basis: "few-shipments", shares: { LV: 1 }, label: "From only 2 UPS shipments last month: all Las Vegas, NV" });
+    // stocked in both: the warehouse with most of the stock ships it (13017: Groveport 1,283 of 1,763)
+    const both = warehouseShare(inv({ stock: { LV: { onHand: 480, allocated: 1 }, GV: { onHand: 1283, allocated: 1 } } }), mix, origins);
+    expect(both).toMatchObject({ basis: "stock-both", shares: { GV: 1 }, understates: true });
+    expect(both.label).toMatch(/^Stocked in both; ships from Groveport, OH, which has most of the stock \(73%\)/);
+    expect(warehouseShare(inv({ stock: { LV: { onHand: 9, allocated: 0 }, GV: { onHand: 9, allocated: 0 } } }), mix, origins)).toMatchObject({ basis: "stock-both", shares: { LV: 0.4, GV: 0.6 } });
+    expect(warehouseShare(inv({ shipments: { LV: 2 } }), mix, origins)).toMatchObject({ basis: "few-shipments", shares: { LV: 1 }, label: "From only 2 shipments last month: all Las Vegas, NV" });
     expect(warehouseShare(inv(), mix, origins)).toMatchObject({ basis: "company", label: "No stock or shipment data in Mango: company-wide split" });
     expect(warehouseShare(null, mix, origins)).toMatchObject({ basis: "company", label: "No Mango data yet: company-wide split" });
     expect(warehouseShare(inv({ fetchedAt: null, error: "Mango answered HTTP 500" }), mix, origins).label).toMatch(/No Mango data \(Mango answered HTTP 500\)/);

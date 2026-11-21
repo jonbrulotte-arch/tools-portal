@@ -5,7 +5,7 @@ import { errorMessage } from "@/lib/api";
 import { isDue } from "@/lib/timezone";
 import { iterateSalsifyList } from "@/lib/salsify";
 import { resolveKey } from "@/lib/shipping/product-rates";
-import { parseInventoryPage, summarizeInventory, type MangoInventoryPage, type SiteStock } from "@/lib/shipping/mango-inventory-parse";
+import { parseInventoryPage, summarizeInventory, type MangoInventoryPage, type SiteStock, type TrackingOrigins } from "@/lib/shipping/mango-inventory-parse";
 
 // Reads each product's stock (per warehouse) and last month's shipments from Mango's inventory page,
 // for the blended shipping cost. Mango has no API, so this loads the page per item: a few at a time,
@@ -21,6 +21,8 @@ export type ItemInventory = {
   description: string | null;
   stock: Record<string, SiteStock>;
   shipments: Record<string, number>;
+  /** Placed shipments per carrier: { UPS, USPS }. */
+  shipmentCarriers: Record<string, number>;
   otherShipments: number;
   unitsLastMonth: number | null;
   snapshotAt: string | null;
@@ -54,12 +56,25 @@ export async function fetchInventoryPage(s: Pick<ShippingRatesSettings, "mangoIn
 /** Warehouse code → Mango site number, as an index the other way (site → warehouse). */
 const siteIndex = (s: ShippingRatesSettings) => Object.fromEntries(Object.entries(s.mangoInventory.sites).filter(([, site]) => site !== "").map(([origin, site]) => [site, origin]));
 
+/** Which warehouse shipped each of these tracking numbers, per the imported cost reports. */
+export async function trackingOrigins(trackings: string[]): Promise<TrackingOrigins> {
+  const keys = [...new Set(trackings.map((t) => t.toUpperCase()).filter(Boolean))];
+  if (!keys.length) return new Map();
+  const rows = await prisma.shipmentOrigin.findMany({ where: { tracking: { in: keys } }, select: { tracking: true, origin: true, carrier: true } });
+  return new Map(rows.map((r) => [r.tracking.toUpperCase(), { origin: r.origin, carrier: r.carrier }]));
+}
+
+/** Stock and shipments per warehouse for one parsed page (USPS and UPS placed by tracking number). */
+export async function summarizePage(s: ShippingRatesSettings, page: MangoInventoryPage) {
+  return summarizeInventory(page, siteIndex(s), s.upsAccounts, await trackingOrigins(page.shipments.map((x) => x.tracking)));
+}
+
 /** Reads one item from Mango and saves it. On failure the last good figures are kept and the error recorded. */
 export async function refreshItemInventory(s: ShippingRatesSettings, part: string): Promise<ItemInventory> {
   try {
     const page = await fetchInventoryPage(s, part);
-    const sum = summarizeInventory(page, siteIndex(s), s.upsAccounts);
-    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
+    const sum = await summarizePage(s, page);
+    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, shipmentCarriers: sum.shipmentCarriers, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
     return toItem(await prisma.productInventory.upsert({ where: { partNumber: part }, create: { partNumber: part, ...data }, update: data }));
   } catch (err) {
     const error = errorMessage(err).slice(0, 500);
@@ -74,6 +89,7 @@ export function toItem(r: Row): ItemInventory {
     description: r.description,
     stock: (r.stock ?? {}) as Record<string, SiteStock>,
     shipments: (r.shipments ?? {}) as Record<string, number>,
+    shipmentCarriers: (r.shipmentCarriers ?? {}) as Record<string, number>,
     otherShipments: r.otherShipments,
     unitsLastMonth: r.unitsLastMonth,
     snapshotAt: r.snapshotAt,
