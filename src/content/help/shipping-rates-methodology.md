@@ -4,10 +4,10 @@ This page explains how the Shipping Rates Generator arrives at every number it s
 
 | Source | What it provides | When it's refreshed |
 | --- | --- | --- |
-| **Cost reports**: Mango's Ship Cost History (UPS invoice lines and USPS labels) | What we actually paid per package; which warehouse shipped it; destination city and state; zone; billed weight | Weekly import from Mango (90 days), or uploaded by hand |
-| **Quote runs**: UPS Rating API and Endicia (USPS) | Current prices for every warehouse × zone × weight × service (the "rate chart") | Weekly (Monday 1:00 AM by default) |
-| **Products runs**: Salsify list, then live quotes | Each product's shipping weight and box size, quoted from each warehouse to each zone | Weekly (Sunday by default) |
-| **Mango inventory page** | Each product's stock per warehouse, and its orders last month with tracking numbers | Nightly (2:00 AM by default) |
+| **Cost reports**: Mango's Ship Cost History (UPS invoice lines and USPS labels) | What we actually paid per package; which warehouse shipped it; destination city and state; zone; billed weight | Weekly from Mango, the last 90 days (Settings → Mango cost import), or uploaded by hand |
+| **Quote runs**: UPS Rating API and Endicia (USPS) | Current prices for every warehouse × zone × weight × service (the "rate chart") | Weekly (Settings → Scheduled quote run) |
+| **Products runs**: Salsify list, then live quotes | Each product's shipping weight and box size, quoted from each warehouse to each zone | Weekly (Settings → Products (Salsify list)) |
+| **Mango inventory page** | Each product's stock per warehouse, and its orders last month with tracking numbers | Daily (Settings → Mango inventory) |
 | **Settings** | Warehouses and their ZIPs, the UPS account → warehouse list, destination ZIPs per zone | When changed |
 
 Simulated mode replaces carrier prices with placeholder formulas. Every number based on them is labelled **Simulated** and is never pushed to Salsify.

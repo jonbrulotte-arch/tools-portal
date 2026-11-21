@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
 import type { MangoImportSettings, MangoInventorySettings, SalsifyPushSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
-import { hourLabel, TIMEZONES } from "@/lib/timezone";
+import { hourLabel, TIMEZONES, timezoneLabel } from "@/lib/timezone";
+import { buildTimeline, JOB_NAMES, type JobKey } from "@/lib/shipping/schedule-timeline";
+import { duration } from "@/lib/format-duration";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -151,7 +153,7 @@ function Choice({ checked, onClick, label, hint }: { checked: boolean; onClick: 
   );
 }
 
-export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initial: Initial; autoZips: Record<string, Record<number, string>>; keyUsers: { id: string; name: string; email: string }[] }) {
+export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations }: { initial: Initial; autoZips: Record<string, Record<number, string>>; keyUsers: { id: string; name: string; email: string }[]; durations: Record<JobKey, number | null> }) {
   const router = useRouter();
   const [origins, setOrigins] = useState(initial.origins);
   const [accounts, setAccounts] = useState(Object.entries(initial.upsAccounts).map(([account, origin]) => ({ account, origin })));
@@ -318,8 +320,60 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
     return <Alert variant={!r.ok ? "error" : r.warn ? "warning" : "success"}>{r.text}</Alert>;
   };
 
+  const timeline = buildTimeline(
+    [
+      { key: "products", name: JOB_NAMES.products, recurrence: productRates, lastDurationMs: durations.products },
+      { key: "costImport", name: JOB_NAMES.costImport, recurrence: mangoImport, lastDurationMs: durations.costImport },
+      { key: "quoteRun", name: JOB_NAMES.quoteRun, recurrence: schedule, lastDurationMs: durations.quoteRun },
+      { key: "inventory", name: JOB_NAMES.inventory, recurrence: mangoInventory, lastDurationMs: durations.inventory },
+      { key: "push", name: JOB_NAMES.push, recurrence: salsifyPush, lastDurationMs: durations.push },
+    ],
+    new Date(),
+  );
+  const when = (d: Date, tz: string) => d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz });
+  const tzOf: Record<JobKey, string> = { products: productRates.timezone, costImport: mangoImport.timezone, quoteRun: schedule.timezone, inventory: mangoInventory.timezone, push: salsifyPush.timezone };
+
   return (
     <form onSubmit={save} className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Weekly schedule</CardTitle>
+          <CardDescription>The five scheduled jobs in the order they next run, as set in their cards below (it updates as you edit them; Save to apply). The Salsify push uses the newest completed Products run, the newest cost report and the latest Mango inventory read.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <TableWrap>
+            <thead>
+              <tr>
+                <Th>Next start</Th>
+                <Th>Job (Settings card)</Th>
+                <Th>Repeats</Th>
+                <Th className="text-right">Took last time</Th>
+                <Th>Expected to finish</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {timeline.items.map((i) => {
+                const rec = { products: productRates, costImport: mangoImport, quoteRun: schedule, inventory: mangoInventory, push: salsifyPush }[i.key];
+                return (
+                  <Tr key={i.key} className={cn(!i.enabled && "text-gray-400")}>
+                    <Td className="whitespace-nowrap">{i.next ? when(i.next, tzOf[i.key]) : "Off"}</Td>
+                    <Td className="font-medium">{i.name}</Td>
+                    <Td className="whitespace-nowrap">{rec.frequency === "daily" ? `Daily ${hourLabel(rec.hour)}` : `${WEEKDAYS[rec.weekday]}s ${hourLabel(rec.hour)}`} <span className="text-xs text-gray-500">{timezoneLabel(rec.timezone)}</span></Td>
+                    <Td className="text-right tabular-nums">{i.lastDurationMs != null ? duration(i.lastDurationMs) : <span className="text-gray-400">not run yet</span>}</Td>
+                    <Td className="whitespace-nowrap">{i.expectedEnd ? when(i.expectedEnd, tzOf[i.key]) : <span className="text-gray-400">—</span>}</Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </TableWrap>
+          {timeline.warnings.map((w) => (
+            <Alert key={w} variant="warning">
+              {w}
+            </Alert>
+          ))}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Rates source</CardTitle>
@@ -337,7 +391,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
         <CardHeader>
           <CardTitle>Scheduled quote run</CardTitle>
           <CardDescription>
-            Runs the full quote grid automatically so the rate chart stays current. Weekly on Monday morning is usually enough: UPS fuel surcharges change each Monday, and base rates only a few times a year. Only runs in live mode, and is skipped if another run is in progress. Failed quotes are re-quoted once at the end. Older scheduled runs are deleted automatically; runs started by hand are kept.
+            Runs the full quote grid automatically so the rate chart stays current. Weekly is usually enough: UPS fuel surcharges change each Monday, and base rates only a few times a year. Don&apos;t let it overlap the Products (Salsify list) run (see Weekly schedule above). Only runs in live mode, and is skipped if another run is in progress. Failed quotes are re-quoted once at the end. Older scheduled runs are deleted automatically; runs started by hand are kept.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -418,7 +472,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
         <CardHeader>
           <CardTitle>Mango cost import</CardTitle>
           <CardDescription>
-            Pulls the Ship Cost History report straight from Mango&apos;s Export (no download or upload needed) and processes it like an uploaded file. Weekly at 12:00 AM Monday, an hour before the scheduled quote run, keeps each week&apos;s analysis current. Older automatic imports are deleted; reports uploaded or imported by hand are kept.
+            Pulls the Ship Cost History report straight from Mango&apos;s Export (no download or upload needed) and processes it like an uploaded file. Run it before the Scheduled quote run, so the chart&apos;s destination ZIPs use fresh history. Older automatic imports are deleted; reports uploaded or imported by hand are kept.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -697,7 +751,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
               </Select>
             </div>
           </div>
-          <p className="text-xs text-gray-500">Monday 6:00 AM runs after the Sunday Products run, the Monday Mango import and quote run, and the nightly inventory read.</p>
+          <p className="text-xs text-gray-500">Uses the newest completed Products (Salsify list) run, the newest cost report and the latest Mango inventory read, so schedule it after those finish (see Weekly schedule above).</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-40">
               <Label htmlFor="push-part">Part number to test</Label>
@@ -999,7 +1053,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
         <CardHeader>
           <CardTitle>Products (Salsify list)</CardTitle>
           <CardDescription>
-            The Products tab quotes every product on a Salsify list (42 quotes each) and keeps the results to browse. Paste the list&apos;s Salsify address or just its ID (…/product_lists/<span className="font-mono">s-…</span>). A list of thousands of products takes most of a day, so schedule it well away from Monday&apos;s Mango import and quote run (for example Saturday morning). Each kept run adds about 42 rows per product to the database and backups; 2–4 runs is plenty.
+            The Products tab quotes every product on a Salsify list (42 quotes each) and keeps the results to browse. Paste the list&apos;s Salsify address or just its ID (…/product_lists/<span className="font-mono">s-…</span>). A list of thousands of products takes 1–2 days (about 42 quotes per product), so don&apos;t let it overlap the Scheduled quote run; the Weekly schedule card above shows when it&apos;s expected to finish. Each kept run adds about 42 rows per product to the database and backups; 2–4 runs is plenty.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

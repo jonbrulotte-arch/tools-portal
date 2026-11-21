@@ -1,5 +1,31 @@
 For managers of the Shipping Rates Generator: people with its **Manage tool settings** permission, and Super Admins. Everything here is on the **Settings** tab. API keys and passwords are encrypted when saved and never shown again; leave a secret box blank to keep the saved value.
 
+## Weekly schedule
+
+Five jobs keep the numbers current. Each has its own card in Settings, with its own day, time and time zone. The **Weekly schedule** card at the top of Settings lists them in the order they next run. It shows how long each took last time and when it's expected to finish, and it updates as you edit the cards (Save to apply).
+
+| Settings card | What it does | Typical length |
+| --- | --- | --- |
+| **Products (Salsify list)** | Live quotes for every product on the list (42 each) | 1–2 days for thousands of products |
+| **Mango cost import** | Imports the last 90 days of what we paid | Minutes |
+| **Scheduled quote run** | Refreshes the rate chart | About an hour |
+| **Mango inventory** | Reads each product's stock and recent shipments from Mango | Under an hour |
+| **Push blended cost to Salsify** | Writes the blended cost to Salsify | Minutes |
+
+The rules that matter:
+- **Don't let the Products run overlap the Scheduled quote run.** Both call UPS and would slow each other down.
+- **Run the push after the Products run finishes.** The push uses the newest **completed** Products run, the newest cost report and the latest Mango inventory read. If the Products run is still going, the push uses the previous week's run.
+- **Run Mango inventory overnight if you can.** It reads every product's page from Mango.
+
+The card shows an amber warning when any of these is broken, or when a job is turned off.
+
+*Example, for a Wednesday 1:30 PM review:*
+- Products (Salsify list): Friday 5:00 PM (finishes around Sunday);
+- Mango cost import: Saturday 8:00 PM;
+- Scheduled quote run: Sunday 6:00 PM;
+- Mango inventory: daily, overnight;
+- Push blended cost to Salsify: Wednesday 6:00 AM.
+
 ## Rates source
 
 Choose **Simulated** (placeholder prices, for trying the tool) or **Live** (real UPS and Endicia rates). Every run and quote made in simulated mode is labelled *Simulated rates* everywhere.

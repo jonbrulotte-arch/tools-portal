@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { automaticZips, latestZipSuggestions } from "@/lib/shipping/runner";
 import { ShippingSettingsClient } from "./settings-client";
+import { MANGO_ACTOR } from "@/lib/shipping/mango-import";
 
 export const metadata: Metadata = { title: "Shipping rates settings" };
 
@@ -18,6 +19,17 @@ export default async function ShippingSettingsPage() {
     redirect("/tools/shipping-rates");
   }
   const s = await getSetting("shippingRates");
+  // how long each scheduled job took last time it completed (for the Weekly schedule card)
+  const ms = (r: { createdAt: Date; finishedAt: Date | null; startedAt?: Date | null } | null) => (r?.finishedAt ? r.finishedAt.getTime() - (r.startedAt ?? r.createdAt).getTime() : null);
+  const ready = { where: { status: "READY" as const }, orderBy: { createdAt: "desc" as const } };
+  const [lastProducts, lastQuote, lastImport, lastInventory, lastPush] = await Promise.all([
+    prisma.productRateRun.findFirst(ready),
+    prisma.shippingQuoteRun.findFirst({ where: { status: "READY", startDone: 0 }, orderBy: { createdAt: "desc" } }),
+    prisma.shippingReport.findFirst({ where: { status: "READY", uploadedBy: MANGO_ACTOR.email }, orderBy: { createdAt: "desc" } }),
+    prisma.inventoryImportRun.findFirst(ready),
+    prisma.salsifyPushRun.findFirst(ready),
+  ]);
+  const durations = { products: ms(lastProducts), quoteRun: ms(lastQuote), costImport: ms(lastImport), inventory: ms(lastInventory), push: ms(lastPush) };
   const autoZips = automaticZips(s, await latestZipSuggestions());
   // users with a saved Salsify key (candidates for whose key scheduled Products runs use)
   const keyUsers = (await prisma.userCredential.findMany({ where: { provider: "salsify", user: { status: "ACTIVE" } }, select: { user: { select: { id: true, name: true, email: true } } } })).map((c) => c.user);
@@ -25,6 +37,7 @@ export default async function ShippingSettingsPage() {
     <ShippingSettingsClient
       autoZips={autoZips}
       keyUsers={keyUsers}
+      durations={durations}
       initial={{
         origins: s.origins,
         upsAccounts: s.upsAccounts,
