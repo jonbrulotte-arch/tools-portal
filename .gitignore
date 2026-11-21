@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.*
+!.env.example
+backups/
+test-results/
+playwright-report/
+.deploy/
