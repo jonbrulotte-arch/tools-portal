@@ -73,7 +73,8 @@ The blended shipping cost needs to know where each product ships from. Mango has
 
 - **Mango inventory page**: the page address without `?it=…`.
 - **Mango site for each warehouse**: the site number Mango shows. Las Vegas is *Site 0: Montessouri* and Groveport is *Site 3: Ohio*. Sites not listed (Buffalo) are ignored.
-- **Schedule**: daily at 2:00 AM by default. It reads every product on the Products list, 3 at a time. The Products tab shows the last read, with **Read inventory now**.
+- **Schedule**: daily at 2:00 AM by default. It reads every product on the Products list, 3 at a time.
+- **Read all inventory now** (in this card) or **Read inventory now** (Products tab) starts a full read straight away, without waiting for the schedule. It runs in the background; the Products tab shows its progress and any items that couldn't be read.
 - **Save & test**: reads one item and shows what was found (stock per warehouse, shipments by warehouse).
 
 If Mango's page layout changes, the item is recorded as **couldn't be read** (listed on the Products tab), not as zero stock. The item keeps its last good figures until a read works again. Cancelled orders and orders without a tracking number are skipped. FedEx and freight shipments can't be placed in a warehouse, so they're counted separately and not used for the split.
@@ -116,6 +117,8 @@ The note is never empty, so the cost is always the 1st value and the date the 3r
    Under the buttons it then says **Ready to write**, or **Can't write yet:** with the reason.
 4. **Click Write this one product.** It writes that part for real, reads it back from Salsify and confirms the values match. Look at the product in Salsify to see them. You can click it without testing first; if something isn't right, it says exactly what.
 5. **Turn on Push automatically** and Save. The schedule fields set when it runs.
+
+**Push all to Salsify now** (in the Settings card) or **Push now** (Products tab) runs a full push straight away, without waiting for the schedule. Only changed values are written. It runs in the background; the Products tab shows its progress and results.
 
 ### Each push
 

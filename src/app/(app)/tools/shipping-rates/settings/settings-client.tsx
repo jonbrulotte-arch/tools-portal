@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Plug, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Play, Plug, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -258,6 +258,21 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
       setTest((t) => ({ ...t, MANGO: { ok: true, text: r.message } }));
     } catch (err) {
       setTest((t) => ({ ...t, MANGO: { ok: false, text: (err as Error).message } }));
+    }
+  }
+
+  /** Starts a full Mango inventory read or a full Salsify push now (progress shows on the Products tab). */
+  async function runNow(kind: "INVENTORY_RUN" | "PUSH_RUN") {
+    const what = kind === "INVENTORY_RUN" ? "Read the Mango inventory for every product on the Products list now?" : `Push blended costs to the Salsify property "${salsifyPush.property}" now? Only products whose cost or note changed are written.`;
+    if (!confirm(what)) return;
+    if (!(await save())) return;
+    setTest((t) => ({ ...t, [kind]: "busy" }));
+    try {
+      await apiFetch(kind === "INVENTORY_RUN" ? "/api/tools/shipping-rates/inventory" : "/api/tools/shipping-rates/salsify-push", { method: "POST" });
+      const text = kind === "INVENTORY_RUN" ? "Started reading every product from Mango. It runs in the background; follow it on the Products tab (Mango inventory)." : "Started pushing to Salsify. It runs in the background; follow it on the Products tab (Salsify push).";
+      setTest((t) => ({ ...t, [kind]: { ok: true, text } }));
+    } catch (err) {
+      setTest((t) => ({ ...t, [kind]: { ok: false, text: (err as Error).message } }));
     }
   }
 
@@ -595,8 +610,12 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
             <Button type="button" variant="outline" onClick={testInventory} disabled={busy || !invPart || test.INVENTORY === "busy"}>
               <Plug className="h-4 w-4" /> {test.INVENTORY === "busy" ? "Testing…" : "Save & test"}
             </Button>
+            <Button type="button" onClick={() => runNow("INVENTORY_RUN")} disabled={busy || test.INVENTORY_RUN === "busy"} className="ml-auto" title="Read every product on the Products list from Mango now, without waiting for the schedule">
+              <Play className="h-4 w-4" /> {test.INVENTORY_RUN === "busy" ? "Starting…" : "Read all inventory now"}
+            </Button>
           </div>
           <TestResult carrier="INVENTORY" />
+          <TestResult carrier="INVENTORY_RUN" />
         </CardContent>
       </Card>
 
@@ -691,12 +710,18 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers }: { initia
               Write this one product
             </Button>
           </div>
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => runNow("PUSH_RUN")} disabled={busy || !salsifyPush.property || test.PUSH_RUN === "busy"} title="Push every product's blended cost now (only changed values are written), without waiting for the schedule">
+              <Play className="h-4 w-4" /> {test.PUSH_RUN === "busy" ? "Starting…" : "Push all to Salsify now"}
+            </Button>
+          </div>
           {writeBlocker !== null && (
             <p className={cn("text-sm", writeBlocker ? "text-amber-700" : "text-green-700")}>
               {writeBlocker ? `Can't write yet: ${writeBlocker}` : `Ready to write: "Write this one product" will write ${pushPart} to Salsify and read it back.`}
             </p>
           )}
           <TestResult carrier="PUSH" />
+          <TestResult carrier="PUSH_RUN" />
         </CardContent>
       </Card>
 
