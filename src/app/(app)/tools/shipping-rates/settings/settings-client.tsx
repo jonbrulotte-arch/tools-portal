@@ -701,7 +701,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations 
             Add UPS surcharges to UPS quotes
           </label>
           <p className="-mt-2 max-w-3xl text-xs text-gray-500">
-            Each warehouse&apos;s surcharges in the cost report that quotes leave out (size-based handling, delivery area, address corrections and so on), as a share of what the quotes cover, are added to its UPS prices, per weight band. Residential, and handling for weight over 50 lb, are already in the quotes.
+            Each warehouse&apos;s surcharges in the cost report that quotes leave out (size-based handling, delivery area, address corrections and so on), as a share of what the quotes cover, are added to its UPS prices, per weight band. Residential, and additional handling on packages over 50 lb, are already in the quotes.
           </p>
           <label className="flex items-center gap-3 text-sm text-gray-700">
             <Checkbox checked={blend.upsQuotesIncludeFuel} onCheckedChange={(v) => setBlend({ ...blend, upsQuotesIncludeFuel: v === true })} disabled={!blend.upsSurcharges} />

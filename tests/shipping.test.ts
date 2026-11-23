@@ -145,12 +145,19 @@ describe("cost report processing", () => {
       { shipsource: "UPS", trackingnumber: "1Z7963050000000002", billedweight: "3", zone: "007", transactionamount: 0, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial Third Party", destinationcity: "DALLAS", destinationstate: "TX" },
       // Groveport account package, zone 4
       { shipsource: "UPS", transactiondate: "2026-09-01", trackingnumber: "1Z9X0F560000000003", billedweight: "10", zone: "004", transactionamount: 12.5, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial", destinationcity: "ATLANTA", destinationstate: "GA" },
+      { shipsource: "UPS", trackingnumber: "1Z9X0F560000000003", zone: "004", transactionamount: 20, ups_chargeclasscode: "ACC", ups_chargedescription: "Additional Handling - Length+Girth" },
+      // Groveport 60 lb package: size handling and its demand surcharge are in a 60 lb quote; large package isn't
+      { shipsource: "UPS", transactiondate: "2026-09-02", trackingnumber: "1Z9X0F560000000004", billedweight: "60", zone: "005", transactionamount: 40, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial", destinationcity: "ATLANTA", destinationstate: "GA" },
+      { shipsource: "UPS", trackingnumber: "1Z9X0F560000000004", zone: "005", transactionamount: 30, ups_chargeclasscode: "ACC", ups_chargedescription: "Additional Handling - Length+Girth" },
+      { shipsource: "UPS", trackingnumber: "1Z9X0F560000000004", zone: "005", transactionamount: 10, ups_chargeclasscode: "ACC", ups_chargedescription: "Demand Surcharge Addl Handling" },
+      { shipsource: "UPS", trackingnumber: "1Z9X0F560000000004", zone: "005", transactionamount: 5, ups_chargeclasscode: "ACC", ups_chargedescription: "Shipping Charge Correction Additional Handling" },
+      { shipsource: "UPS", trackingnumber: "1Z9X0F560000000004", zone: "005", transactionamount: 100, ups_chargeclasscode: "ACC", ups_chargedescription: "Large Package Surcharge - Length + Girth" },
       // USPS to Charlotte (zone learned from the UPS package), and to a city UPS never shipped to (distance)
       { shipsource: "USPS", transactiondate: "2026-08-02", trackingnumber: "9400000000000001", weight: "0.4", transactionamount: 6.1, originzip: "89113", destinationcity: "CHARLOTTE", destinationstate: "NC" },
       { shipsource: "USPS", transactiondate: "2026-08-03", trackingnumber: "9400000000000002", weight: "1.5", transactionamount: 8.2, originzip: "89113", destinationcity: "PHOENIX", destinationstate: "AZ" },
     ]);
     const { summary, aggregates } = await parseReport(file, SETTING_DEFAULTS.shippingRates);
-    expect(summary.ups).toMatchObject({ packages: 3, used: 2 });
+    expect(summary.ups).toMatchObject({ packages: 4, used: 3 });
     expect(summary.skipped["UPS package billed to a third party or the receiver (not our prepaid shipping)"]).toBe(1);
     const lv = aggregates.find((a) => a.carrier === "UPS" && a.origin === "LV")!;
     expect(lv).toMatchObject({ service: "GROUND_RES", zone: 8, count: 1 });
@@ -158,12 +165,15 @@ describe("cost report processing", () => {
     // each warehouse's UPS charges, split the way quotes are compared with them (address-correction fuel is "other"),
     // overall and per weight band (LV's 2 lb package is in 1–5 lb, GV's 10 lb in 5–10 lb)
     const lvCharges = { packages: 1, freight: 9.35, fuel: 2.25, residential: 2.92, weightHandling: 3, other: 6 };
-    const gvCharges = { packages: 1, freight: 12.5, fuel: 0, residential: 0, weightHandling: 0, other: 0 };
+    // 10 lb: size handling is a surcharge; 60 lb: every handling line is in the quote, large package isn't
+    const gv10 = { packages: 1, freight: 12.5, fuel: 0, residential: 0, weightHandling: 0, other: 20 };
+    const gv60 = { packages: 1, freight: 40, fuel: 0, residential: 0, weightHandling: 45, other: 100 };
     expect(summary.upsCharges?.LV).toMatchObject(lvCharges);
     expect(summary.upsCharges?.LV.bands?.[1]).toEqual(lvCharges);
     expect(summary.upsCharges?.LV.bands?.[0].packages).toBe(0);
-    expect(summary.upsCharges?.GV).toMatchObject(gvCharges);
-    expect(summary.upsCharges?.GV.bands?.[2]).toEqual(gvCharges);
+    expect(summary.upsCharges?.GV).toMatchObject({ packages: 2, freight: 52.5, weightHandling: 45, other: 120 });
+    expect(summary.upsCharges?.GV.bands?.[2]).toEqual(gv10);
+    expect(summary.upsCharges?.GV.bands?.[5]).toEqual(gv60);
     expect(aggregates.find((a) => a.carrier === "UPS" && a.origin === "GV")).toMatchObject({ zone: 4, service: "GROUND_COM" });
     const charlotte = aggregates.find((a) => a.carrier === "USPS" && Number(a.weight) === 0.5)!;
     expect(charlotte).toMatchObject({ zone: 8, zoneSource: "ups-city" });

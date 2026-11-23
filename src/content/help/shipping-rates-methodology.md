@@ -55,8 +55,8 @@ Each warehouse's **UPS charges** on those packages are also kept, overall and pe
 - **Freight:** the UPS Ground freight line.
 - **Fuel:** fuel surcharge lines (but not the fuel charged on an address correction).
 - **Residential:** the residential surcharge.
-- **Handling by weight:** additional handling charged for weight alone (over 50 lb).
-- **Other:** everything else: additional handling for size, large package, demand surcharges, delivery area (extended, remote), address corrections and their fuel, shipping charge corrections, and so on.
+- **Handling by weight:** additional handling charged for weight alone. On packages billed **over 50 lb**, every additional-handling line counts here too (by size, its demand surcharge, and corrections to it): UPS charges one additional handling per package, and a quote at that weight already includes it.
+- **Other:** everything else: additional handling on packages up to 50 lb, large package, other demand surcharges, delivery area (extended, remote), address corrections and their fuel, shipping charge corrections, and so on.
 
 Reports processed before this was added don't have the buckets; the next import or upload does. Names and street addresses are read only to place each package and are never stored. Each package's tracking number and warehouse are kept for 120 days, so a product's USPS shipments can be traced back to the warehouse that sent them.
 
@@ -103,7 +103,7 @@ UPS price = UPS quote × (1 + surcharge ratio)
 surcharge ratio = other ÷ (freight + residential + handling by weight + fuel)
 
 - It's worked out **per warehouse and weight band** (the reality check's bands), because the charges differ: delivery-area charges weigh most on light packages, size-based handling on big boxes. A band with fewer than 20 UPS packages uses the warehouse's overall ratio, and so does a product with no weight.
-- Residential isn't added: the residential quotes already include it. Nor is handling by weight: a quote over 50 lb already includes it.
+- Residential isn't added: the residential quotes already include it. Nor is additional handling on packages over 50 lb: a quote at that weight already includes it. Large package (by size) is still added.
 - **UPS quotes already include the fuel surcharge** (on by default). UPS's rating API returns totals with fuel, and the 50–150 lb band, which is nearly all UPS, matching what we paid confirms it. If it's turned off, fuel moves to the top line: ratio = (other + fuel) ÷ (freight + residential).
 - The ratio is capped at 60%, so a report with odd adjustments can't run away with the cost.
 

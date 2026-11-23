@@ -23,18 +23,40 @@ export type UpsChargeTotals = { packages: number; freight: number; fuel: number;
 export type UpsCharges = UpsChargeTotals & { bands?: UpsChargeTotals[] };
 type ChargeKind = "freight" | "fuel" | "residential" | "weightHandling" | "other";
 const CHARGE_KINDS: ChargeKind[] = ["freight", "fuel", "residential", "weightHandling", "other"];
+/** "handling": any other additional-handling line (size, its demand surcharge, corrections), placed per package. */
+type LineKind = ChargeKind | "handling";
+
+/** Over this billed weight a UPS quote already includes additional handling (UPS charges one per package). */
+export const QUOTED_HANDLING_OVER_LB = 50;
 
 /** Which bucket a UPS invoice line goes in. The Ground freight line itself is "freight". */
-export function upsChargeKind(cls: string, desc: string): ChargeKind {
+export function upsChargeKind(cls: string, desc: string): LineKind {
   if (cls.toUpperCase() === "FRT" && UPS_GROUND.test(desc)) return "freight";
   if (/fuel/i.test(desc) && !/address/i.test(desc)) return "fuel";
   if (/^residential/i.test(desc)) return "residential";
   // over 50 lb UPS adds handling by weight alone, so a quote at that weight already includes it
   if (/handling/i.test(desc) && /weight/i.test(desc) && !/correction|demand/i.test(desc)) return "weightHandling";
+  if (/handling/i.test(desc)) return "handling";
   return "other";
 }
 
-type UpsPkg = { cost: number; charges: Record<ChargeKind, number>; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
+/**
+ * A package's charges in the buckets that are kept. Over 50 lb billed, every additional-handling line (by size,
+ * its demand surcharge, corrections) counts as handling by weight: UPS charges one additional handling per
+ * package, and the quote at that weight already has it. Lighter packages' handling is a surcharge ("other").
+ */
+export function packageCharges(lines: Record<LineKind, number>, billedLb: number): Record<ChargeKind, number> {
+  const heavy = billedLb > QUOTED_HANDLING_OVER_LB;
+  return {
+    freight: lines.freight,
+    fuel: lines.fuel,
+    residential: lines.residential,
+    weightHandling: lines.weightHandling + (heavy ? lines.handling : 0),
+    other: lines.other + (heavy ? 0 : lines.handling),
+  };
+}
+
+type UpsPkg = { cost: number; charges: Record<LineKind, number>; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
 type UspsPkg = { tracking: string; cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
 
 export type ReportSummary = {
@@ -145,7 +167,7 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         }
         let p = ups.get(tracking);
         if (!p) {
-          p = { cost: 0, charges: { freight: 0, fuel: 0, residential: 0, weightHandling: 0, other: 0 }, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
+          p = { cost: 0, charges: { freight: 0, fuel: 0, residential: 0, weightHandling: 0, handling: 0, other: 0 }, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
           ups.set(tracking, p);
         }
         const amount = num(get("transactionamount"));
@@ -243,9 +265,10 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     upsUsed++;
     const c = (upsCharges[origin] ??= { ...noCharges(), bands: WEIGHT_BANDS.map(noCharges) });
     const band = c.bands![bandIndex(upsTier(p.weight))];
+    const charges = packageCharges(p.charges, p.weight);
     for (const t of [c, band]) {
       t.packages++;
-      for (const k of CHARGE_KINDS) t[k] += p.charges[k];
+      for (const k of CHARGE_KINDS) t[k] += charges[k];
     }
     if (p.city && p.state) {
       const k = `${origin}|${p.zone}|${p.city.trim().toUpperCase()}|${p.state}`;
