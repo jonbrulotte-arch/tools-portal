@@ -138,6 +138,9 @@ describe("cost report processing", () => {
       { shipsource: "UPS", transactiondate: "2026-08-01", trackingnumber: "1Z7963050000000001", billedweight: "2", zone: "008", transactionamount: 9.35, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Residential", destinationname: "A Person", destinationcity: "CHARLOTTE", destinationstate: "NC" },
       { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 2.92, ups_chargeclasscode: "ACC", ups_chargedescription: "Residential Surcharge" },
       { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 2.25, ups_chargeclasscode: "FSC", ups_chargedescription: "Fuel Surcharge" },
+      { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 4.5, ups_chargeclasscode: "ACC", ups_chargedescription: "Delivery Area Surcharge - Extended" },
+      { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 1.5, ups_chargeclasscode: "ACC", ups_chargedescription: "Address Correction Fuel Surcharge" },
+      { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 3, ups_chargeclasscode: "ACC", ups_chargedescription: "Addl. Handling weight" },
       // Third-party package (billed to someone else): excluded
       { shipsource: "UPS", trackingnumber: "1Z7963050000000002", billedweight: "3", zone: "007", transactionamount: 0, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial Third Party", destinationcity: "DALLAS", destinationstate: "TX" },
       // Groveport account package, zone 4
@@ -151,7 +154,16 @@ describe("cost report processing", () => {
     expect(summary.skipped["UPS package billed to a third party or the receiver (not our prepaid shipping)"]).toBe(1);
     const lv = aggregates.find((a) => a.carrier === "UPS" && a.origin === "LV")!;
     expect(lv).toMatchObject({ service: "GROUND_RES", zone: 8, count: 1 });
-    expect(Number(lv.total)).toBeCloseTo(14.52);
+    expect(Number(lv.total)).toBeCloseTo(23.52);
+    // each warehouse's UPS charges, split the way quotes are compared with them (address-correction fuel is "other"),
+    // overall and per weight band (LV's 2 lb package is in 1–5 lb, GV's 10 lb in 5–10 lb)
+    const lvCharges = { packages: 1, freight: 9.35, fuel: 2.25, residential: 2.92, weightHandling: 3, other: 6 };
+    const gvCharges = { packages: 1, freight: 12.5, fuel: 0, residential: 0, weightHandling: 0, other: 0 };
+    expect(summary.upsCharges?.LV).toMatchObject(lvCharges);
+    expect(summary.upsCharges?.LV.bands?.[1]).toEqual(lvCharges);
+    expect(summary.upsCharges?.LV.bands?.[0].packages).toBe(0);
+    expect(summary.upsCharges?.GV).toMatchObject(gvCharges);
+    expect(summary.upsCharges?.GV.bands?.[2]).toEqual(gvCharges);
     expect(aggregates.find((a) => a.carrier === "UPS" && a.origin === "GV")).toMatchObject({ zone: 4, service: "GROUND_COM" });
     const charlotte = aggregates.find((a) => a.carrier === "USPS" && Number(a.weight) === 0.5)!;
     expect(charlotte).toMatchObject({ zone: 8, zoneSource: "ups-city" });

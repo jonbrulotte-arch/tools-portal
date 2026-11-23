@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/settings";
 import { loadQuotes, loadHistory } from "@/lib/shipping/analysis";
 import { loadInventory, type ItemInventory } from "@/lib/shipping/mango-inventory";
-import { blendedCost, loadMix, realityCheck, warehouseShare, type BlendCell, type MixData, type ProductRate } from "@/lib/shipping/blended-cost";
+import { blendedCost, loadMix, realityCheck, warehouseShare, type BlendCell, type BlendedCost, type MixData, type ProductRate } from "@/lib/shipping/blended-cost";
 
 // Server-side reads that put the blended cost on screen: the per-product summary (Products table,
 // detail dialog, CSV, Product quote) and the reality check card.
@@ -17,6 +17,8 @@ export type BlendSummary = {
   label: string;
   understates: boolean;
   shares: Record<string, number>;
+  /** Carrier method used and each warehouse's USPS share / UPS surcharge ratio. */
+  carrier: BlendedCost["carrier"];
   stock: Record<string, { onHand: number; allocated: number }>;
   shipments: Record<string, number>;
   otherShipments: number;
@@ -35,11 +37,12 @@ export async function blendContext(parts: string[]): Promise<BlendContext> {
 /** A product's rate per warehouse/zone/service: the live quote, else the rate chart's price. */
 export const rateOf = (q: { origin: string; zone: number; service: string; live: number | null; chart: number | null }): ProductRate => ({ origin: q.origin, zone: q.zone, service: q.service, amount: q.live ?? q.chart });
 
-export function blendFor(ctx: BlendContext, partNumber: string | null, rates: ProductRate[], inv?: ItemInventory | null): BlendDetail | null {
+/** `billedLb`: the product's UPS billable weight, which picks the weight band for the actual carrier mix. */
+export function blendFor(ctx: BlendContext, partNumber: string | null, rates: ProductRate[], billedLb: number | null, inv?: ItemInventory | null): BlendDetail | null {
   if (!ctx.mix) return null;
   const item = inv !== undefined ? inv : partNumber ? (ctx.inventory.get(partNumber) ?? null) : null;
   const share = warehouseShare(item, ctx.mix, ctx.origins);
-  const b = blendedCost(rates, ctx.mix, share);
+  const b = blendedCost(rates, ctx.mix, share, billedLb);
   return {
     cost: b.cost,
     best: b.best,
@@ -50,6 +53,7 @@ export function blendFor(ctx: BlendContext, partNumber: string | null, rates: Pr
     label: share.label,
     understates: share.understates,
     shares: share.shares,
+    carrier: b.carrier,
     stock: item?.stock ?? {},
     shipments: item?.shipments ?? {},
     otherShipments: item?.otherShipments ?? 0,
@@ -83,10 +87,11 @@ export async function ratesForItems(itemIds: string[]): Promise<Map<string, Prod
 
 /** The reality check card: newest cost report vs the newest finished quote run (live preferred). */
 export async function loadRealityCheck() {
-  const [mix, report, run] = await Promise.all([
+  const [mix, report, run, s] = await Promise.all([
     loadMix(),
     prisma.shippingReport.findFirst({ where: { status: "READY" }, orderBy: { createdAt: "desc" }, select: { id: true, dateFrom: true, dateTo: true } }),
     prisma.shippingQuoteRun.findFirst({ where: { status: "READY" }, orderBy: [{ mode: "asc" }, { createdAt: "desc" }], select: { id: true, mode: true, createdAt: true } }), // "live" sorts before "simulated"
+    getSetting("shippingRates"),
   ]);
   if (!mix || !report || !run) return null;
   const [history, quotes] = await Promise.all([loadHistory(report.id), loadQuotes(run.id)]);
@@ -95,6 +100,6 @@ export async function loadRealityCheck() {
     quotes.map((q) => ({ service: q.service, origin: q.origin, zone: q.zone, weight: q.weight, amount: q.amount })),
     mix,
   );
-  return { ...check, reportFrom: report.dateFrom?.toISOString() ?? null, reportTo: report.dateTo?.toISOString() ?? null, runAt: run.createdAt.toISOString(), runMode: run.mode };
+  return { ...check, reportFrom: report.dateFrom?.toISOString() ?? null, reportTo: report.dateTo?.toISOString() ?? null, runAt: run.createdAt.toISOString(), runMode: run.mode, origins: s.origins.map((o) => ({ code: o.code, name: o.name })) };
 }
 export type RealityCheckView = NonNullable<Awaited<ReturnType<typeof loadRealityCheck>>>;

@@ -17,7 +17,7 @@ import { TableWrap, Th, Td, Tr, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 import { ZONES } from "@/lib/shipping/weights";
-import type { MangoImportSettings, MangoInventorySettings, SalsifyPushSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
+import type { BlendSettings, MangoImportSettings, MangoInventorySettings, SalsifyPushSettings, ProductRatesSettings, SalsifyFieldMap, SalsifySizeFields, ShippingSchedule } from "@/lib/settings";
 import { Switch } from "@/components/ui/switch";
 import { hourLabel, TIMEZONES, timezoneLabel } from "@/lib/timezone";
 import { buildTimeline, JOB_NAMES, type JobKey } from "@/lib/shipping/schedule-timeline";
@@ -44,6 +44,7 @@ type Initial = {
   mangoInventory: MangoInventorySettings;
   salsifyPush: SalsifyPushSettings;
   productRates: ProductRatesSettings;
+  blend: BlendSettings;
 };
 
 type CredentialHint = { clientId: SavedHint; hasSecret: boolean };
@@ -181,6 +182,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations 
   const [mangoInventory, setMangoInventory] = useState(initial.mangoInventory);
   const [invPart, setInvPart] = useState("");
   const [salsifyPush, setSalsifyPush] = useState(initial.salsifyPush);
+  const [blend, setBlend] = useState(initial.blend);
   const [pushPart, setPushPart] = useState("");
   /** After a test: why "Write this one product" would fail ("" = ready), or null before any test. */
   const [writeBlocker, setWriteBlocker] = useState<string | null>(null);
@@ -214,6 +216,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations 
           productRates,
           mangoInventory,
           salsifyPush,
+          blend,
         },
       });
       const kept = new Set(accounts.map((a) => a.account.trim().toUpperCase()).filter(Boolean));
@@ -670,6 +673,43 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations 
           </div>
           <TestResult carrier="INVENTORY" />
           <TestResult carrier="INVENTORY_RUN" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Blended cost method</CardTitle>
+          <CardDescription>
+            How the blended cost, the Salsify push and the reality check pick a carrier and price UPS. Both use the newest processed cost report. The reality check shows both carrier choices either way; this picks the one the cost and the Salsify push use.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Carrier choice</Label>
+            <div className="mt-1 flex max-w-2xl gap-2">
+              <Choice
+                checked={blend.carrierMethod === "actual-mix"}
+                onClick={() => setBlend({ ...blend, carrierMethod: "actual-mix" })}
+                label="Our actual carrier mix"
+                hint="Each warehouse's UPS/USPS split at that weight, from the cost report"
+              />
+              <Choice checked={blend.carrierMethod === "cheapest"} onClick={() => setBlend({ ...blend, carrierMethod: "cheapest" })} label="Cheapest carrier" hint="Every package on the cheaper of UPS and USPS" />
+            </div>
+          </div>
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={blend.upsSurcharges} onCheckedChange={(v) => setBlend({ ...blend, upsSurcharges: v })} />
+            Add UPS surcharges to UPS quotes
+          </label>
+          <p className="-mt-2 max-w-3xl text-xs text-gray-500">
+            Each warehouse&apos;s surcharges in the cost report that quotes leave out (size-based handling, delivery area, address corrections and so on), as a share of what the quotes cover, are added to its UPS prices, per weight band. Residential, and handling for weight over 50 lb, are already in the quotes.
+          </p>
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Checkbox checked={blend.upsQuotesIncludeFuel} onCheckedChange={(v) => setBlend({ ...blend, upsQuotesIncludeFuel: v === true })} disabled={!blend.upsSurcharges} />
+            UPS quotes already include the fuel surcharge
+          </label>
+          <p className="-mt-2 max-w-3xl text-xs text-gray-500">
+            Leave this on: UPS&apos;s rating API returns totals with fuel, and the heaviest band (almost all UPS) matching what we paid confirms it. Turn it off only if a live quote comes back without fuel; fuel is then added from the cost report too.
+          </p>
         </CardContent>
       </Card>
 

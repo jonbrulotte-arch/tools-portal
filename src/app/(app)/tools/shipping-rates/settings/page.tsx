@@ -56,6 +56,7 @@ export default async function ShippingSettingsPage() {
         productRates: s.productRates,
         mangoInventory: s.mangoInventory,
         salsifyPush: s.salsifyPush,
+        blend: s.blend,
       }}
     />
   );

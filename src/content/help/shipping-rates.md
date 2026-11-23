@@ -46,11 +46,15 @@ Many products ship from either Las Vegas or Groveport, and the cost depends on w
   - **Most stock**: if it's stocked in both, 100% is from the warehouse holding most of the stock, which is the one that usually ships it.
   - **Company split**: if Mango has no data, the company-wide split from the cost report is used.
 - **Zone mix**: for each warehouse, its usual share of shipments per zone, from the latest cost report.
-- **Cell price**: for each warehouse and zone, the cheaper carrier for a home address and for a business address, weighted by how many of that warehouse's UPS shipments go to homes.
+- **Cell price**: for each warehouse and zone, the product's UPS and USPS prices combined the way your managers chose in Settings:
+  - **Our actual carrier mix** (the default): the share of that warehouse's packages at this weight that really went USPS, and the rest UPS, from the cost report.
+  - **Cheapest carrier**: the cheaper carrier for a home address and for a business address.
+
+  Either way, UPS home and business prices are weighted by how many of that warehouse's UPS shipments go to homes. UPS prices also include the warehouse's usual surcharges (additional handling, delivery area and so on) when that's turned on.
 
 The cell shows the warehouse split (for example *LV 21% · GV 79%*) and a badge for how it was decided. Hover for the **range**: the nearest zone (cheapest) to the furthest (dearest).
 
-Click a product to see the details: the cost, the range, how the split was decided, stock and shipments per warehouse, and the price and share of orders for each warehouse and zone.
+Click a product to see the details: the cost, the range, how the split was decided, which carrier mix and UPS surcharges were used, stock and shipments per warehouse, and the price and share of orders for each warehouse and zone.
 
 ![Blended cost details for one product](images/blended-detail.jpg)
 
@@ -70,11 +74,15 @@ If your managers have set it up, each product's blended cost is also written to 
 
 ### Reality check
 
-At the bottom of the Products tab, the **Reality check** compares the blended method with what we actually paid. For each weight band, it takes the shipments in the latest cost report and compares:
-- the average actually paid per package, with
-- what the blended method gives from the latest quote run.
+At the bottom of the Products tab, the **Reality check** compares the blended method with what we actually paid. For each weight band, it takes the shipments in the latest cost report and compares the average actually paid per package with what the blended method gives from the latest quote run, two ways:
+- **At our carrier mix:** with each warehouse's real UPS/USPS split at that weight.
+- **If cheapest carrier:** with every package on the cheaper carrier.
 
-**Within 10% on average** means the simple version is reliable enough for ROI decisions. If it's further off, the bands that are off show where to look: surcharges on heavy or large packages, or products that ship from one warehouse only.
+The column marked **used** is the one the blended costs and the Salsify push use (managers choose it in Settings). **Carrier choice cost** is the difference between the two, in dollars: roughly what shipping the way we do cost over always taking the cheaper carrier. The card also gives it per month.
+
+**Within 10% on average** means the method is reliable enough for ROI decisions. If it's further off, the bands that are off show where to look: surcharges on heavy or large packages, or products that ship from one warehouse only.
+
+To refresh it, the newest cost report and the newest **finished** live quote run must both be current. A quote run that's still going isn't used until it finishes.
 
 ![Reality check](images/reality-check.jpg)
 

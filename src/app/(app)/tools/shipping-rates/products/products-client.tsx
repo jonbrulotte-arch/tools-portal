@@ -505,9 +505,16 @@ function InventoryCard({ status, canRun, onRun }: { status: InventoryStatus; can
   );
 }
 
-/** Checks the blended method against what we actually paid, by weight band. */
+/** Checks the blended method against what we actually paid, by weight band, at both carrier choices. */
 function RealityCheckCard({ r }: { r: RealityCheckView }) {
   const day = (iso: string | null) => (iso ? formatDateTime(iso).split(",")[0] : "?");
+  const pct = (p: number | null, shipments: number) =>
+    p == null ? <span className="text-gray-400">{shipments ? "too few" : "—"}</span> : <span className={cn(Math.abs(p) > 10 ? "font-medium text-amber-700" : "text-gray-500")}>{p > 0 ? "+" : ""}{p}%</span>;
+  const used = (m: RealityCheckView["method"]) => (r.method === m ? <Badge className="ml-1">used</Badge> : null);
+  const days = r.reportFrom && r.reportTo ? Math.max(1, Math.round((Date.parse(r.reportTo) - Date.parse(r.reportFrom)) / 86_400_000) + 1) : null;
+  const perMonth = days ? Math.round((r.carrierChoice / days) * 30) : null;
+  const name = (code: string) => r.origins.find((o) => o.code === code)?.name ?? code;
+  const uplift = Object.entries(r.upsUplift).filter(([, v]) => v > 0);
   return (
     <Card>
       <CardHeader>
@@ -516,19 +523,25 @@ function RealityCheckCard({ r }: { r: RealityCheckView }) {
           {r.overallPct != null && <Badge variant={r.reliable ? "success" : "warning"}>{r.reliable ? `Within ${r.overallPct}% on average` : `Off by ${r.overallPct}% on average`}</Badge>}
         </CardTitle>
         <CardDescription>
-          For the shipments in the cost report ({day(r.reportFrom)} – {day(r.reportTo)}), the blended method&apos;s cost from the rate chart ({r.runMode === "live" ? "live" : "simulated"} quote run of {day(r.runAt)}) compared with the average we actually paid per package. This checks the method, not each product.
+          For the shipments in the cost report ({day(r.reportFrom)} – {day(r.reportTo)}), the blended method&apos;s cost from the rate chart ({r.runMode === "live" ? "live" : "simulated"} quote run of {day(r.runAt)}) compared with the average we actually paid per package, at our actual carrier mix and if everything went on the cheapest carrier. This checks the method, not each product. The badge, the blended costs and the Salsify push use the column marked &quot;used&quot; (Settings → Blended cost method).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {r.runMode !== "live" && <Alert variant="warning">The newest quote run uses simulated prices, so this comparison is only a demonstration.</Alert>}
+        {r.surcharge === "no-data" && (
+          <Alert variant="warning">UPS surcharges are turned on, but the newest cost report was processed before the portal kept its surcharge breakdown, so none are added yet. The next Mango cost import (or a fresh upload on the Cost reports tab) adds them.</Alert>
+        )}
         <TableWrap>
           <thead>
             <tr>
               <Th>Billed weight</Th>
               <Th className="text-right">Shipments</Th>
               <Th className="text-right">Paid (avg)</Th>
-              <Th className="text-right">Blended method</Th>
-              <Th className="text-right">Difference</Th>
+              <Th className="text-right">At our carrier mix{used("actual-mix")}</Th>
+              <Th className="text-right">If cheapest carrier{used("cheapest")}</Th>
+              <Th className="text-right" title="What our actual carrier mix cost over the cheapest carrier, for these shipments">
+                Carrier choice cost
+              </Th>
             </tr>
           </thead>
           <tbody>
@@ -537,20 +550,47 @@ function RealityCheckCard({ r }: { r: RealityCheckView }) {
                 <Td>{b.label}</Td>
                 <Td className="text-right tabular-nums">{b.shipments.toLocaleString()}</Td>
                 <Td className="text-right tabular-nums">{money(b.actual)}</Td>
-                <Td className="text-right tabular-nums">{money(b.model)}</Td>
                 <Td className="text-right tabular-nums">
-                  {b.diffPct == null ? <span className="text-gray-400">{b.shipments ? "too few" : "—"}</span> : <span className={cn(Math.abs(b.diffPct) > 10 ? "text-amber-700 font-medium" : "text-gray-900")}>{b.diffPct > 0 ? "+" : ""}{b.diffPct}%</span>}
+                  {money(b.actualMix)} <span className="ml-1 text-xs">{pct(b.actualMixPct, b.shipments)}</span>
                 </Td>
+                <Td className="text-right tabular-nums">
+                  {money(b.cheapest)} <span className="ml-1 text-xs">{pct(b.cheapestPct, b.shipments)}</span>
+                </Td>
+                <Td className="text-right tabular-nums">{b.carrierChoice ? `$${b.carrierChoice.toLocaleString()}` : <span className="text-gray-400">—</span>}</Td>
               </Tr>
             ))}
+            <Tr className="bg-gray-50 font-medium">
+              <Td colSpan={3}>Average difference from what we paid</Td>
+              <Td className="text-right tabular-nums">{r.actualMixPct == null ? "—" : `${r.actualMixPct}%`}</Td>
+              <Td className="text-right tabular-nums">{r.cheapestPct == null ? "—" : `${r.cheapestPct}%`}</Td>
+              <Td className="text-right tabular-nums">${r.carrierChoice.toLocaleString()}</Td>
+            </Tr>
           </tbody>
         </TableWrap>
         <p className="text-sm text-gray-700">
           {r.overallPct == null
             ? "Not enough shipments in the cost report to judge yet."
             : r.reliable
-              ? "The simple version looks reliable: across weights, the method lands within 10% of what we paid on average."
-              : "The method is more than 10% off on average. Consider the re-zoned version for products stocked in one warehouse, and check surcharges on the bands that are off."}
+              ? "The method looks reliable: across weights, it lands within 10% of what we paid on average."
+              : r.method === "cheapest"
+                ? "The cheapest-carrier method is more than 10% off on average. Our actual carrier mix is usually closer to what we paid (Settings → Blended cost method)."
+                : "The method is more than 10% off on average. Check the UPS surcharges below and the bands that are off."}
+        </p>
+        <p className="text-sm text-gray-700">
+          <span className="font-medium">Carrier choice:</span> shipping at our actual mix rather than always on the cheapest carrier cost about ${r.carrierChoice.toLocaleString()} over these {days ?? "?"} days
+          {perMonth != null && <> (about ${perMonth.toLocaleString()} a month)</>}, at quoted prices. Some of it can&apos;t be avoided: retailer routing guides that require UPS, and packages too large for USPS.
+        </p>
+        <p className="text-xs text-gray-500">
+          UPS surcharges:{" "}
+          {r.surcharge === "off"
+            ? "off (UPS is priced at the quote)."
+            : r.surcharge === "no-data"
+              ? "on, waiting for a newer cost report."
+              : uplift.length
+                ? `on, added to UPS quotes from the cost report: ${uplift
+                    .map(([o, v]) => `${name(o)} +${Math.round(v * 1000) / 10}% overall (${(r.upsUpliftByBand[o] ?? []).map((x, i) => `${r.bands[i]?.label ?? ""} +${Math.round(x * 100)}%`).join(", ")})`)
+                    .join("; ")}.`
+                : "on, but the cost report shows none beyond what the quotes include."}
         </p>
       </CardContent>
     </Card>

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSetting, type ShippingRatesSettings } from "@/lib/settings";
 import { cityPoint, distanceMiles, estimateZone, fitZoneBands, nearestZip, NON_CONTIGUOUS, zipPoint, type ZoneBands } from "@/lib/shipping/geo";
 import { upsTier, uspsTier } from "@/lib/shipping/weights";
+import { bandIndex, WEIGHT_BANDS } from "@/lib/shipping/blended-cost";
 
 // Turns the "Ship Cost History" export (UPS invoice lines + USPS labels) into per-package
 // costs, then into totals by carrier / service / origin / zone / weight tier.
@@ -16,7 +17,24 @@ const REQUIRED = ["shipsource", "trackingnumber", "zone", "transactionamount", "
  *  but still teach us each destination city's real zone, used to place USPS labels. */
 const UPS_GROUND = /^Ground (Commercial|Residential)( Third Party| Collect)?$/i;
 
-type UpsPkg = { cost: number; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
+/** UPS charges on our prepaid Ground packages, split the way quotes are compared with them. */
+export type UpsChargeTotals = { packages: number; freight: number; fuel: number; residential: number; weightHandling: number; other: number };
+/** A warehouse's UPS charges, overall and per reality-check weight band (index into WEIGHT_BANDS). */
+export type UpsCharges = UpsChargeTotals & { bands?: UpsChargeTotals[] };
+type ChargeKind = "freight" | "fuel" | "residential" | "weightHandling" | "other";
+const CHARGE_KINDS: ChargeKind[] = ["freight", "fuel", "residential", "weightHandling", "other"];
+
+/** Which bucket a UPS invoice line goes in. The Ground freight line itself is "freight". */
+export function upsChargeKind(cls: string, desc: string): ChargeKind {
+  if (cls.toUpperCase() === "FRT" && UPS_GROUND.test(desc)) return "freight";
+  if (/fuel/i.test(desc) && !/address/i.test(desc)) return "fuel";
+  if (/^residential/i.test(desc)) return "residential";
+  // over 50 lb UPS adds handling by weight alone, so a quote at that weight already includes it
+  if (/handling/i.test(desc) && /weight/i.test(desc) && !/correction|demand/i.test(desc)) return "weightHandling";
+  return "other";
+}
+
+type UpsPkg = { cost: number; charges: Record<ChargeKind, number>; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
 type UspsPkg = { tracking: string; cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
 
 export type ReportSummary = {
@@ -29,6 +47,8 @@ export type ReportSummary = {
   zoneUsage: { carrier: string; origin: string; zone: number; count: number; cost: number }[];
   /** Each origin's zone boundaries learned from its UPS invoices (null = not enough data, textbook bands used). */
   zoneBands: Record<string, ZoneBands | null>;
+  /** Each warehouse's UPS charges on the packages used (prepaid Ground, zones 2–8); missing on older reports. */
+  upsCharges?: Record<string, UpsCharges>;
   /** Per origin and zone, a ZIP in the city we ship to most in that zone (prepaid UPS) — used as the quote destination. */
   suggestedQuoteZips: Record<string, Record<number, string>>;
 };
@@ -47,6 +67,9 @@ const num = (v: ExcelJS.CellValue) => {
   const n = Number(text(v));
   return Number.isFinite(n) ? n : 0;
 };
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const noCharges = (): UpsChargeTotals => ({ packages: 0, freight: 0, fuel: 0, residential: 0, weightHandling: 0, other: 0 });
+const roundCharges = (c: UpsChargeTotals): UpsChargeTotals => ({ packages: c.packages, freight: round2(c.freight), fuel: round2(c.fuel), residential: round2(c.residential), weightHandling: round2(c.weightHandling), other: round2(c.other) });
 const date = (v: ExcelJS.CellValue) => {
   if (v instanceof Date) return v;
   const d = new Date(text(v));
@@ -122,13 +145,15 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         }
         let p = ups.get(tracking);
         if (!p) {
-          p = { cost: 0, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
+          p = { cost: 0, charges: { freight: 0, fuel: 0, residential: 0, weightHandling: 0, other: 0 }, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
           ups.set(tracking, p);
         }
-        p.cost += num(get("transactionamount"));
+        const amount = num(get("transactionamount"));
+        p.cost += amount;
         if (!p.originZip) p.originZip = text(get("originzip")).slice(0, 5);
         const cls = text(get("ups_chargeclasscode")).toUpperCase();
         const desc = text(get("ups_chargedescription"));
+        p.charges[upsChargeKind(cls, desc)] += amount;
         if (cls === "FRT" && UPS_GROUND.test(desc) && p.weight === undefined) {
           p.weight = num(get("billedweight"));
           p.zone = parseInt(text(get("zone")), 10);
@@ -181,6 +206,7 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
   const topCities = new Map<string, number>(); // "origin|zone|CITY|ST" -> prepaid UPS packages
   const cityKey = (origin: string, city: string, state: string) => `${origin}|${city.trim().toUpperCase()}|${state.trim().toUpperCase()}`;
   let upsUsed = 0, upsCost = 0, uspsUsed = 0, uspsCost = 0;
+  const upsCharges: Record<string, UpsCharges> = {};
   for (const p of ups.values()) {
     upsCost += p.cost;
     if (!p.service || p.weight === undefined) {
@@ -215,6 +241,12 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     }
     add("UPS", p.service, origin, p.zone, "actual", upsTier(p.weight), p.cost, p.date);
     upsUsed++;
+    const c = (upsCharges[origin] ??= { ...noCharges(), bands: WEIGHT_BANDS.map(noCharges) });
+    const band = c.bands![bandIndex(upsTier(p.weight))];
+    for (const t of [c, band]) {
+      t.packages++;
+      for (const k of CHARGE_KINDS) t[k] += p.charges[k];
+    }
     if (p.city && p.state) {
       const k = `${origin}|${p.zone}|${p.city.trim().toUpperCase()}|${p.state}`;
       topCities.set(k, (topCities.get(k) ?? 0) + 1);
@@ -297,6 +329,7 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     zoneSources,
     zoneBands,
     suggestedQuoteZips,
+    upsCharges: Object.fromEntries(Object.entries(upsCharges).map(([o, c]) => [o, { ...roundCharges(c), bands: c.bands!.map(roundCharges) }])),
     zoneUsage: [...usage.values()].sort((a, b) => a.carrier.localeCompare(b.carrier) || a.origin.localeCompare(b.origin) || a.zone - b.zone),
   };
   // which warehouse shipped each package (tracking number → warehouse), for placing a product's shipments

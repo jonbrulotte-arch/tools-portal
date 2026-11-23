@@ -49,7 +49,16 @@ Each cost report is turned into one cost per package:
   - voided labels;
   - packages from unknown accounts or ZIPs.
 
-The packages are then totalled by carrier × service × warehouse × zone × weight tier. These totals feed the **zone mix**, the **residential share**, the **company-wide warehouse split**, the **historical cutoff** and the **reality check**. Names and street addresses are read only to place each package and are never stored. Each package's tracking number and warehouse are kept for 120 days, so a product's USPS shipments can be traced back to the warehouse that sent them.
+The packages are then totalled by carrier × service × warehouse × zone × weight tier. These totals feed the **zone mix**, the **residential share**, the **company-wide warehouse split**, the **carrier mix**, the **historical cutoff** and the **reality check**.
+
+Each warehouse's **UPS charges** on those packages are also kept, overall and per weight band, in five buckets, for the UPS surcharge ratio (section 7):
+- **Freight:** the UPS Ground freight line.
+- **Fuel:** fuel surcharge lines (but not the fuel charged on an address correction).
+- **Residential:** the residential surcharge.
+- **Handling by weight:** additional handling charged for weight alone (over 50 lb).
+- **Other:** everything else: additional handling for size, large package, demand surcharges, delivery area (extended, remote), address corrections and their fuel, shipping charge corrections, and so on.
+
+Reports processed before this was added don't have the buckets; the next import or upload does. Names and street addresses are read only to place each package and are never stored. Each package's tracking number and warehouse are kept for 120 days, so a product's USPS shipments can be traced back to the warehouse that sent them.
 
 ## 4. Quote runs (the rate chart)
 
@@ -85,12 +94,37 @@ One expected shipping cost per unit across both warehouses and every zone, for R
 
 **Zone share (zone mix):** each warehouse's share of its prepaid shipments per zone, from the latest cost report. For example, Groveport: zone 4 36%, zone 5 16%, …
 
-**Cell price:** for each warehouse and zone, using the product's quotes (the chart price if a quote is missing):
+**Cell price:** for each warehouse and zone, using the product's quotes (the chart price if a quote is missing). Two settings (Settings → **Blended cost method**) decide how:
 
-cell = residential share × min(USPS, UPS residential) + (1 − residential share) × min(USPS, UPS commercial)
+**1. UPS surcharges (on by default).** Quotes are priced by weight to a typical ZIP, so they don't include surcharges that depend on the box size or the exact address, such as size-based additional handling or delivery area. So each UPS quote is raised by the warehouse's **UPS surcharge ratio** for the product's weight band, from the cost report:
 
+UPS price = UPS quote × (1 + surcharge ratio)
+
+surcharge ratio = other ÷ (freight + residential + handling by weight + fuel)
+
+- It's worked out **per warehouse and weight band** (the reality check's bands), because the charges differ: delivery-area charges weigh most on light packages, size-based handling on big boxes. A band with fewer than 20 UPS packages uses the warehouse's overall ratio, and so does a product with no weight.
+- Residential isn't added: the residential quotes already include it. Nor is handling by weight: a quote over 50 lb already includes it.
+- **UPS quotes already include the fuel surcharge** (on by default). UPS's rating API returns totals with fuel, and the 50–150 lb band, which is nearly all UPS, matching what we paid confirms it. If it's turned off, fuel moves to the top line: ratio = (other + fuel) ÷ (freight + residential).
+- The ratio is capped at 60%, so a report with odd adjustments can't run away with the cost.
+
+**2. Carrier choice.**
+
+- **Our actual carrier mix** (the default):
+
+  UPS = residential share × UPS residential + (1 − residential share) × UPS commercial
+
+  cell = USPS share × USPS + (1 − USPS share) × UPS
+
+  The **USPS share** is how many of that warehouse's packages in the product's **weight band** went USPS in the cost report. The bands are the reality check's: under 1 lb, 1–5, 5–10, 10–20, 20–50 and 50–150 lb, by UPS billable weight. A warehouse needs **20 shipments** in the band for its own split; otherwise the company's split for the band is used. With no shipments in the band at all, the cheaper carrier is used.
+- **Cheapest carrier:**
+
+  cell = residential share × min(USPS, UPS residential) + (1 − residential share) × min(USPS, UPS commercial)
+
+  Every package goes on the cheaper carrier for that kind of address. This is what shipping *could* cost; the actual mix is what it *does* cost.
+
+The other inputs:
 - **Residential share:** the share of that warehouse's UPS shipments that went to homes, from the cost report. With fewer than 50 UPS shipments it uses the company-wide share.
-- **min(…):** the cheaper carrier for that kind of address, because that's what we'd choose.
+- **A carrier without a price** (over its weight limit, or a failed quote): the other carrier takes all of the cell.
 - **Missing prices:** if a cell has no price (over a carrier's limit, or a failed quote), it's left out and the remaining weights are scaled back up to 100%. If less than **80%** of the weighting had a price, the cost is flagged **Incomplete**.
 
 **Range:** the cheapest and most expensive cell among the warehouses used (*nearest zone – furthest zone*).
@@ -121,24 +155,37 @@ Cancelled orders and orders without tracking are skipped. Mango's page covers ab
 A product stocked in both warehouses (Groveport 1,283, Las Vegas 480) with no shipments last month:
 1. **Warehouse share:** Groveport has 73% of the stock, so **Groveport 100%**.
 2. **Zone mix:** Groveport's own, for example zone 2 8%, zone 3 12%, zone 4 36%, zone 5 16%, zone 6 8%, zone 7 8%, zone 8 12%.
-3. **Cell prices** (cheaper carrier, home/business weighted): $7.85, $8.23, $8.39, $9.04, $9.04, $10.08, $10.08.
+3. **Cell prices** (here with the cheapest-carrier method and no surcharges, home/business weighted): $7.85, $8.23, $8.39, $9.04, $9.04, $10.08, $10.08.
 4. **Blended cost:** 0.08×7.85 + 0.12×8.23 + 0.36×8.39 + 0.16×9.04 + 0.08×9.04 + 0.08×10.08 + 0.12×10.08 = **$8.82**.
 5. **Range:** $7.85 – $10.08.
+
+**With the actual carrier mix and surcharges**, one cell, Groveport zone 4, for a 3 lb product:
+- Quotes: USPS $8.39, UPS commercial $9.10, UPS residential $12.40. Groveport's residential share 25%, its 1–5 lb surcharge ratio 8%, and 60% of its 1–5 lb packages went USPS.
+- UPS = 0.25 × 12.40 × 1.08 + 0.75 × 9.10 × 1.08 = 3.35 + 7.37 = $10.72.
+- Cell = 0.60 × 8.39 + 0.40 × 10.72 = 5.03 + 4.29 = **$9.32** (cheapest carrier would say $8.39).
 
 ### Known limits
 
 - **Products that ship from one warehouse** (rules 2 and 3) ship every order from there, including customers the other warehouse would normally serve. The estimate uses that warehouse's usual zone mix, which leans toward its nearby zones, so the cost **may be low**. These are flagged *may understate*.
 - **A month of orders** is thin for slow movers; they fall back to stock.
-- **Surcharges** that depend on box size (UPS additional handling or large package, USPS non-standard length) are only included if the live quote includes them. The chart doesn't.
+- **UPS surcharges** are added as one ratio per warehouse and weight band. Within a band, a big box pays more handling than a small one, and an address in a delivery area pays more than one in a city. USPS surcharges (non-standard length) are only included if the live quote includes them.
+- **The carrier mix** is a warehouse's habit at a weight, not this product's. A product sold mostly through a retailer that requires UPS will cost more than shown.
 - **USPS cubic pricing** for small, dense parcels isn't modelled.
 
 ## 8. Reality check
 
-This checks the **method**, not each product. For each billed-weight band (under 1 lb, 1–5, 5–10, 10–20, 20–50, 50–150 lb) it compares two figures for the cost report's own shipments:
+This checks the **method**, not each product. It uses the newest processed cost report and the newest finished quote run (live preferred; a run still going, cancelled or failed is skipped). For each billed-weight band (under 1 lb, 1–5, 5–10, 10–20, 20–50, 50–150 lb) it compares, for the cost report's own shipments:
 - **Paid:** the average actually paid per package.
-- **Blended method:** for each shipment's billed weight, the chart from the latest quote run (live preferred), blended with the company-wide warehouse split, each warehouse's zone mix and residential share. Then averaged over the band's shipments.
+- **At our carrier mix:** for each shipment's billed weight, the chart price blended with the company-wide warehouse split, each warehouse's zone mix, residential share and **carrier mix** at that weight, plus UPS surcharges when they're on. Then averaged over the band's shipments.
+- **If cheapest carrier:** the same, but every package on the cheaper carrier.
+- **Carrier choice cost:** (at our carrier mix − if cheapest carrier) × the band's shipments: what shipping the way we did cost over always taking the cheaper carrier, at quoted prices. The card adds the bands up and scales it to a month (× 30 ÷ the report's days). Some of it can't be avoided: retailer routing guides that require UPS, and packages too large for USPS.
 
-**Difference %** = (method − paid) ÷ paid. The overall figure is the shipment-weighted average of the absolute differences. **Within 10%** means the simple version is reliable enough for ROI decisions. Bands with fewer than 20 shipments aren't judged.
+**Difference %** = (method − paid) ÷ paid. The overall figure, shown in the badge, is the shipment-weighted average of the absolute differences **for the method chosen in Settings** (marked *used*). The footer row gives it for both methods. **Within 10%** means the method is reliable enough for ROI decisions. Bands with fewer than 20 shipments aren't judged.
+
+**Reading it:**
+- Both columns low: the quotes miss charges. Check that UPS surcharges are on and the note under the table shows each warehouse's ratios.
+- *At our carrier mix* close to *Paid* but *If cheapest carrier* well below: the prices are right, and the gap is carrier choice.
+- One band off: look at what's special about it, for example additional handling on 50 lb+ boxes or retailer drop-ships under 3 lb.
 
 ## 9. API Report
 

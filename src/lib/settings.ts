@@ -72,7 +72,16 @@ export type ShippingRatesSettings = {
   salsifyPush: SalsifyPushSettings;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };
+  /** How the blended cost (and the reality check) picks carriers and prices UPS. */
+  blend: BlendSettings;
 };
+/**
+ * Blended cost method. `carrierMethod`: "actual-mix" splits each warehouse's packages between UPS and USPS the way
+ * the cost report shows it really shipped them at that weight; "cheapest" assumes every package takes the cheaper
+ * carrier. `upsSurcharges` adds each warehouse's UPS surcharge ratio from the cost report to UPS quotes;
+ * `upsQuotesIncludeFuel` says the quotes already carry the fuel surcharge (so fuel isn't added twice).
+ */
+export type BlendSettings = { carrierMethod: "actual-mix" | "cheapest"; upsSurcharges: boolean; upsQuotesIncludeFuel: boolean };
 export type UpsCredentials = { encClientId: string | null; encClientSecret: string | null };
 /** Automatic Ship Cost History import from Mango's export (rolling date range, on a schedule). */
 /** Mango inventory page import: URL, which Mango site number is which warehouse, and a daily/weekly schedule. */
@@ -170,6 +179,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
     // Monday 6 AM: after the Sunday Products run, the Monday Mango import and quote run, and the nightly inventory read
     salsifyPush: { enabled: false, property: "", frequency: "weekly", weekday: 1, hour: 6, timezone: "America/Los_Angeles" },
     mangoInventory: { enabled: true, url: "http://mango.jsproducts.com/orders/project-mango/current_inventory", sites: { LV: "0", GV: "3" }, frequency: "daily", weekday: 0, hour: 2, timezone: "America/Los_Angeles" },
+    blend: { carrierMethod: "actual-mix", upsSurcharges: true, upsQuotesIncludeFuel: true },
     quoteZips: {},
     uspsMaxLb: 20,
     upsMaxLb: 150,
@@ -266,6 +276,7 @@ function withShippingDefaults(s: ShippingRatesSettings): ShippingRatesSettings {
     productRates: { ...SETTING_DEFAULTS.shippingRates.productRates, ...s.productRates },
     mangoInventory: { ...SETTING_DEFAULTS.shippingRates.mangoInventory, ...s.mangoInventory },
     salsifyPush: { ...SETTING_DEFAULTS.shippingRates.salsifyPush, ...s.salsifyPush },
+    blend: { ...SETTING_DEFAULTS.shippingRates.blend, ...s.blend },
     salsify: { ...d, ...s.salsify, fields: { ...fields, fallback: { ...d.fields.fallback, ...s.salsify?.fields?.fallback } } },
   };
 }

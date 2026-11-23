@@ -73,6 +73,22 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
         <Info className="inline h-4 w-4 mr-1 text-blue-600 -mt-0.5" />
         {b.label}.
       </p>
+      <p className="text-sm text-gray-700">
+        Carrier:{" "}
+        {Object.entries(b.carrier.uspsShare)
+          .map(([o, s]) =>
+            b.carrier.method === "cheapest" || s == null
+              ? `${name(o)} on the cheaper of UPS and USPS${b.carrier.method === "actual-mix" ? " (no shipments at this weight to go by)" : ""}`
+              : `${name(o)} ${pct(s)} USPS, ${pct(1 - s)} UPS (what it shipped at this weight)`,
+          )
+          .join(" · ")}
+        {Object.values(b.carrier.upsUplift).some((v) => v > 0) &&
+          `. UPS includes surcharges: ${Object.entries(b.carrier.upsUplift)
+            .filter(([, v]) => v > 0)
+            .map(([o, v]) => `+${Math.round(v * 1000) / 10}% ${name(o)}`)
+            .join(", ")}`}
+        .
+      </p>
       {b.understates && (
         <Alert variant="warning">
           Simple version: this product is assumed to ship every order from one warehouse, including to customers the other warehouse usually serves. This estimate uses that warehouse&apos;s usual zone mix, so it may be low.

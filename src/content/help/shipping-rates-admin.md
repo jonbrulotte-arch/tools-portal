@@ -105,6 +105,21 @@ The blended shipping cost needs to know where each product ships from. Mango has
 
 If Mango's page layout changes, the item is recorded as **couldn't be read** (listed on the Products tab), not as zero stock. The item keeps its last good figures until a read works again. Cancelled orders and orders without a tracking number are skipped. FedEx and freight shipments can't be placed in a warehouse, so they're counted separately and not used for the split.
 
+## Blended cost method
+
+How the blended cost, the Salsify push and the reality check pick a carrier and price UPS. Both settings use the newest processed cost report.
+
+| Setting | What it does | Default |
+| --- | --- | --- |
+| **Carrier choice: Our actual carrier mix** | Each warehouse's packages at a weight band split between UPS and USPS the way the cost report shows it really shipped them. Matches what we pay. | On |
+| **Carrier choice: Cheapest carrier** | Every package on the cheaper of UPS and USPS. What shipping could cost if carrier choice were perfect; usually below what we pay. | |
+| **Add UPS surcharges to UPS quotes** | Raises each warehouse's UPS quotes by its surcharge ratio for the product's weight band, from the cost report: size-based handling, delivery area, address corrections and so on, as a share of what quotes cover. | On |
+| **UPS quotes already include the fuel surcharge** | Leave on. Turn off only if a live UPS quote comes back without fuel; fuel is then added from the cost report too. | On |
+
+The reality check on the Products tab shows both carrier choices either way, marks the one in use, and shows each warehouse's surcharge ratios (overall and per weight band) under the table.
+
+Changing these changes every product's blended cost, so the next Salsify push rewrites most products. Reports processed before the surcharge breakdown was added have no ratio: the reality check says so, and the next Mango import (or a fresh upload) fixes it.
+
 ## Push blended cost to Salsify
 
 Each product's **blended shipping cost** is written to a Salsify property on a schedule (weekly, Monday 6:00 AM Pacific by default), so it's on the product record for ROIs and channel pricing. **Push now** on the Products tab runs it on demand.

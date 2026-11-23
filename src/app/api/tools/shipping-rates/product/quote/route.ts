@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       body.inventory ? refreshItemInventory(s, body.partNumber) : Promise.resolve(null),
       loadMix(),
     ]);
-    const blended = blendFor({ mix, origins: s.origins, inventory: new Map() }, body.partNumber, result.rows.map(rateOf), inventory);
+    const blended = blendFor({ mix, origins: s.origins, inventory: new Map() }, body.partNumber, result.rows.map(rateOf), result.billable.ups, inventory);
     const failed = result.rows.filter((r) => r.error).length;
     await logAudit({
       action: "shipping.product_quoted",

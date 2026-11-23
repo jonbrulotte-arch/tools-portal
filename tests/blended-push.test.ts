@@ -5,7 +5,7 @@ import type { BlendSummary } from "@/lib/shipping/blended-view";
 const origins = [{ code: "LV", name: "Las Vegas, NV" }, { code: "GV", name: "Groveport, OH" }];
 const blend = (o: Partial<BlendSummary> = {}): BlendSummary => ({
   cost: 17.123, best: 10, worst: 25, coverage: 1, incomplete: false, basis: "shipments", label: "From 13 UPS shipments last month: all Groveport, OH", understates: false,
-  shares: { GV: 1 }, stock: {}, shipments: { GV: 13 }, otherShipments: 0, inventoryAsOf: null, inventoryError: null, ...o,
+  shares: { GV: 1 }, carrier: { method: "actual-mix", uspsShare: { GV: 0.4 }, upsUplift: { GV: 0.1 } }, stock: {}, shipments: { GV: 13 }, otherShipments: 0, inventoryAsOf: null, inventoryError: null, ...o,
 });
 
 describe("Salsify push value", () => {

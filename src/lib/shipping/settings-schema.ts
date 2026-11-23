@@ -77,6 +77,11 @@ export const shippingSettingsSchema = z
       timezone: z.enum(TIMEZONE_IDS),
       keepRuns: z.coerce.number().int().min(1, "Keep at least 1").max(26, "At most 26"),
     }),
+    blend: z.object({
+      carrierMethod: z.enum(["actual-mix", "cheapest"]),
+      upsSurcharges: z.boolean(),
+      upsQuotesIncludeFuel: z.boolean(),
+    }),
     quoteZips: z.record(z.string(), z.record(z.string(), z.union([zip, z.literal("")]))),
     uspsMaxLb: z.coerce.number().int().min(1).max(70),
     upsMaxLb: z.coerce.number().int().min(1).max(150),
