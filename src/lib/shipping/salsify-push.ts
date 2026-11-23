@@ -48,15 +48,19 @@ export async function pushBlocker(s: ShippingRatesSettings): Promise<string | nu
   return null;
 }
 
+const lb = (v: { toString(): string } | null) => (v == null ? null : Number(v));
+/** A Products run item's billable weight per carrier. */
+const billedWeights = (i: { upsBillable: { toString(): string } | null; uspsBillable: { toString(): string } | null }) => ({ ups: lb(i.upsBillable), usps: lb(i.uspsBillable) });
+
 /** One product's value from the newest Products run (for the Settings test), with why there isn't one. */
 export async function valueFor(s: ShippingRatesSettings, partNumber: string): Promise<{ value: PushValue | null; reason: string | null; runMode: string | null }> {
   const run = await sourceRun();
   if (!run) return { value: null, reason: "There's no completed live Products run yet.", runMode: null };
-  const item = await prisma.productRateItem.findFirst({ where: { runId: run.id, partNumber }, select: { id: true, status: true, error: true, upsBillable: true } });
+  const item = await prisma.productRateItem.findFirst({ where: { runId: run.id, partNumber }, select: { id: true, status: true, error: true, upsBillable: true, uspsBillable: true } });
   if (!item) return { value: null, reason: `${partNumber} isn't in the Products run of ${runDate(run.createdAt)}, the newest completed live run (cancelled and failed runs aren't used). Is it on the Salsify list?`, runMode: run.mode };
   if (item.status !== "OK") return { value: null, reason: `${partNumber} wasn't quoted: ${item.error ?? item.status}`, runMode: run.mode };
   const [rates, ctx] = await Promise.all([ratesForItems([item.id]), blendContext([partNumber])]);
-  const blended = summaryOf(blendFor(ctx, partNumber, rates.get(item.id) ?? [], item.upsBillable == null ? null : Number(item.upsBillable)));
+  const blended = summaryOf(blendFor(ctx, partNumber, rates.get(item.id) ?? [], billedWeights(item)));
   const value = pushValue(blended, s.origins);
   return { value, reason: value ? null : blended ? "No zone could be priced, so there's no cost." : "A processed cost report is needed for the zone mix.", runMode: run.mode };
 }
@@ -114,7 +118,7 @@ async function executePush(runId: string, s: ShippingRatesSettings, key: string,
   let authFailures = 0;
   let stopped = false;
   try {
-    const items = await prisma.productRateItem.findMany({ where: { runId: productRunId }, orderBy: { position: "asc" }, select: { id: true, partNumber: true, status: true, error: true, upsBillable: true } });
+    const items = await prisma.productRateItem.findMany({ where: { runId: productRunId }, orderBy: { position: "asc" }, select: { id: true, partNumber: true, status: true, error: true, upsBillable: true, uspsBillable: true } });
     await prisma.salsifyPushRun.update({ where: { id: runId }, data: { status: "RUNNING", products: items.length } });
     const ctx = await blendContext(items.map((i) => i.partNumber));
     for (let start = 0; start < items.length; start += BATCH) {
@@ -126,7 +130,7 @@ async function executePush(runId: string, s: ShippingRatesSettings, key: string,
       const last = new Map(prev.map((p) => [p.partNumber, p.cost != null && p.note != null && p.pushedAt ? { cost: p.cost, note: p.note } : null]));
       const toWrite: { partNumber: string; value: PushValue }[] = [];
       for (const i of batch) {
-        const value = i.status === "OK" ? pushValue(summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], i.upsBillable == null ? null : Number(i.upsBillable))), s.origins) : null;
+        const value = i.status === "OK" ? pushValue(summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], billedWeights(i))), s.origins) : null;
         if (!value) {
           counts.skipped++;
           counts.done++;

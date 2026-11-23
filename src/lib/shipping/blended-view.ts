@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/settings";
 import { loadQuotes, loadHistory } from "@/lib/shipping/analysis";
 import { loadInventory, type ItemInventory } from "@/lib/shipping/mango-inventory";
-import { blendedCost, loadMix, realityCheck, warehouseShare, type BlendCell, type BlendedCost, type MixData, type ProductRate } from "@/lib/shipping/blended-cost";
+import { blendedCost, loadMix, realityCheck, warehouseShare, type BilledWeights, type BlendCell, type BlendedCost, type MixData, type ProductRate } from "@/lib/shipping/blended-cost";
 
 // Server-side reads that put the blended cost on screen: the per-product summary (Products table,
 // detail dialog, CSV, Product quote) and the reality check card.
@@ -37,12 +37,12 @@ export async function blendContext(parts: string[]): Promise<BlendContext> {
 /** A product's rate per warehouse/zone/service: the live quote, else the rate chart's price. */
 export const rateOf = (q: { origin: string; zone: number; service: string; live: number | null; chart: number | null }): ProductRate => ({ origin: q.origin, zone: q.zone, service: q.service, amount: q.live ?? q.chart });
 
-/** `billedLb`: the product's UPS billable weight, which picks the weight band for the actual carrier mix. */
-export function blendFor(ctx: BlendContext, partNumber: string | null, rates: ProductRate[], billedLb: number | null, inv?: ItemInventory | null): BlendDetail | null {
+/** `weights`: the product's billable weight per carrier, which pick the weight bands for the carrier mix and UPS surcharges. */
+export function blendFor(ctx: BlendContext, partNumber: string | null, rates: ProductRate[], weights: BilledWeights | null, inv?: ItemInventory | null): BlendDetail | null {
   if (!ctx.mix) return null;
   const item = inv !== undefined ? inv : partNumber ? (ctx.inventory.get(partNumber) ?? null) : null;
   const share = warehouseShare(item, ctx.mix, ctx.origins);
-  const b = blendedCost(rates, ctx.mix, share, billedLb);
+  const b = blendedCost(rates, ctx.mix, share, weights);
   return {
     cost: b.cost,
     best: b.best,

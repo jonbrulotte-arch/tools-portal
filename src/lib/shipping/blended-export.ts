@@ -14,7 +14,7 @@ export async function blendedCsv(runId: string, mode: string, origins: { code: s
     const batch = items.slice(start, start + BATCH);
     const rates = await ratesForItems(batch.filter((i) => i.status === "OK").map((i) => i.id));
     for (const i of batch) {
-      const b = i.status === "OK" ? blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], i.upsBillable == null ? null : Number(i.upsBillable)) : null;
+      const b = i.status === "OK" ? blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], { ups: i.upsBillable == null ? null : Number(i.upsBillable), usps: i.uspsBillable == null ? null : Number(i.uspsBillable) }) : null;
       rows.push([
         mode,
         i.partNumber,

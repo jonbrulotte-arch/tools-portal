@@ -164,7 +164,7 @@ describe("carrier mix and UPS surcharges", () => {
       { origin: "LV", zone: 8, service: "GROUND_RES", amount: 12 },
     ];
     const share = { shares: { LV: 1 }, basis: "stock-one" as const, label: "", understates: true };
-    const b = blendedCost(rates, m, share, 2);
+    const b = blendedCost(rates, m, share, { ups: 2, usps: 2 });
     const res = m.resShare.LV;
     // 2 lb: LV's own 1–5 lb surcharge ratio, 30%
     expect(b.cost).toBeCloseTo(0.75 * 10 + 0.25 * (res * 12 * 1.3 + (1 - res) * 8 * 1.3), 2);
@@ -172,6 +172,10 @@ describe("carrier mix and UPS surcharges", () => {
     expect(b.carrier.uspsShare).toEqual({ LV: 0.75 });
     expect(b.carrier.upsUplift.LV).toBeCloseTo(0.3);
     // no weight: cheapest carrier and the warehouse's overall ratio
+    // a light part UPS bills at 2 lb (box rounded up) but USPS at 0.3 lb: carrier split from the under-1 lb band
+    // (no shipments there in this mix: cheapest carrier), surcharge from UPS's 1–5 lb band
+    expect(blendedCost(rates, m, share, { ups: 2, usps: 0.3 }).carrier).toEqual({ method: "actual-mix", uspsShare: { LV: null }, upsUplift: { LV: expect.closeTo(0.3) } });
+    expect(blendedCost(rates, m, share, { ups: 3, usps: 3 }).carrier.uspsShare).toEqual({ LV: 0.75 });
     expect(blendedCost(rates, m, share, null).carrier).toEqual({ method: "actual-mix", uspsShare: { LV: null }, upsUplift: { LV: 0.1 } });
   });
 

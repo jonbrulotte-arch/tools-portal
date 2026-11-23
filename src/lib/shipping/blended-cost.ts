@@ -266,13 +266,27 @@ export function cellCost(
   return mixOf(resShare, minOf(prices.usps, res), minOf(prices.usps, com));
 }
 
-/** How each warehouse's cells are priced for a product of this billed weight (null weight: cheapest carrier). */
-function cellOpts(mix: MixData, origin: string, billedLb: number | null | undefined, method: CarrierMethod) {
-  const upsUplift = billedLb == null ? (mix.upsUplift[origin] ?? 0) : (mix.upsUpliftByBand[origin]?.[bandIndex(billedLb)] ?? mix.upsUplift[origin] ?? 0);
-  return { upsUplift, uspsShare: method === "actual-mix" && billedLb != null ? uspsShareFor(mix, origin, billedLb) : null };
+/**
+ * A product's billable weight on each carrier. UPS rounds each side up to a whole inch and bills whole pounds, so a
+ * 0.3 lb part in a 9.5 × 6.5 × 1.6 in. box bills 2 lb at UPS but 0.3 lb at USPS.
+ */
+export type BilledWeights = { ups: number | null; usps: number | null };
+
+/**
+ * How each warehouse's cells are priced for a product (no weights: cheapest carrier, overall surcharge ratio).
+ *  - The carrier split comes from the band of the USPS billable weight (else UPS's): it's the package's real
+ *    weight class, the one the warehouse picks a carrier by. Banding by UPS's rounded-up weight put light
+ *    parts with the 1–5 lb packages, which go UPS far more often.
+ *  - The UPS surcharge ratio comes from the band of the UPS billable weight, the weight UPS charges at.
+ */
+function cellOpts(mix: MixData, origin: string, w: Partial<BilledWeights> | null | undefined, method: CarrierMethod) {
+  const upsLb = w?.ups ?? w?.usps ?? null;
+  const carrierLb = w?.usps ?? w?.ups ?? null;
+  const upsUplift = upsLb == null ? (mix.upsUplift[origin] ?? 0) : (mix.upsUpliftByBand[origin]?.[bandIndex(upsLb)] ?? mix.upsUplift[origin] ?? 0);
+  return { upsUplift, uspsShare: method === "actual-mix" && carrierLb != null ? uspsShareFor(mix, origin, carrierLb) : null };
 }
 
-export function blendedCost(rates: ProductRate[], mix: MixData, share: WarehouseShare, billedLb?: number | null): BlendedCost {
+export function blendedCost(rates: ProductRate[], mix: MixData, share: WarehouseShare, weights?: BilledWeights | null): BlendedCost {
   const price = new Map(rates.map((r) => [`${r.origin}|${r.zone}|${r.service}`, r.amount]));
   const cells: BlendCell[] = [];
   let weighted = 0, covered = 0, totalWeight = 0;
@@ -280,7 +294,7 @@ export function blendedCost(rates: ProductRate[], mix: MixData, share: Warehouse
   const carrier: BlendedCost["carrier"] = { method: mix.blend.carrierMethod, uspsShare: {}, upsUplift: {} };
   for (const [origin, s] of Object.entries(share.shares)) {
     if (s <= 0) continue;
-    const opts = cellOpts(mix, origin, billedLb, mix.blend.carrierMethod);
+    const opts = cellOpts(mix, origin, weights, mix.blend.carrierMethod);
     carrier.uspsShare[origin] = opts.uspsShare;
     carrier.upsUplift[origin] = opts.upsUplift;
     for (const zone of ZONES) {
@@ -338,7 +352,7 @@ export function realityCheck(history: HistRow[], chart: ChartCell[], mix: MixDat
   const modelAt = (lb: number, method: CarrierMethod) => {
     let sum = 0, w = 0;
     for (const [origin, s] of Object.entries(mix.originSplit)) {
-      const opts = cellOpts(mix, origin, lb, method);
+      const opts = cellOpts(mix, origin, { ups: lb, usps: lb }, method);
       for (const zone of ZONES) {
         const weight = s * (mix.zoneMix[origin]?.[zone] ?? 0);
         if (weight <= 0) continue;

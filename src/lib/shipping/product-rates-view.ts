@@ -83,7 +83,7 @@ export async function loadProductPage(runId: string, opts: { q?: string; filter?
       busiest: Object.fromEntries(
         pairs.map(([origin]) => [origin, { usps: at.get(`${i.id}|${origin}|GROUND_ADVANTAGE`) ?? null, com: at.get(`${i.id}|${origin}|GROUND_COM`) ?? null, res: at.get(`${i.id}|${origin}|GROUND_RES`) ?? null }]),
       ) as Record<string, { usps: number | null; com: number | null; res: number | null }>,
-      blended: i.status === "OK" ? summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], num(i.upsBillable))) : null,
+      blended: i.status === "OK" ? summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], { ups: num(i.upsBillable), usps: num(i.uspsBillable) })) : null,
     })),
   };
 }
@@ -118,6 +118,6 @@ export async function loadProductItem(id: string) {
     mode: i.run.mode,
     quotedAt: i.createdAt.toISOString(),
     rows: i.quotes.map((q) => ({ origin: q.origin, zone: q.zone, destZip: q.destZip, service: q.service, live: num(q.amount), chart: num(q.chart), diffPct: num(q.diffPct), error: q.error })),
-    blended: i.status === "OK" ? blendFor(ctx, i.partNumber, i.quotes.map((q) => rateOf({ origin: q.origin, zone: q.zone, service: q.service, live: num(q.amount), chart: num(q.chart) })), num(i.upsBillable)) : null,
+    blended: i.status === "OK" ? blendFor(ctx, i.partNumber, i.quotes.map((q) => rateOf({ origin: q.origin, zone: q.zone, service: q.service, live: num(q.amount), chart: num(q.chart) })), { ups: num(i.upsBillable), usps: num(i.uspsBillable) }) : null,
   };
 }

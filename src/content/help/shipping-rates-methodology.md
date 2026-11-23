@@ -116,7 +116,7 @@ surcharge ratio = other ÷ (freight + residential + handling by weight + fuel)
 
   cell = USPS share × USPS + (1 − USPS share) × UPS
 
-  The **USPS share** is how many of that warehouse's packages in the product's **weight band** went USPS in the cost report. The bands are the reality check's: under 1 lb, 1–5, 5–10, 10–20, 20–50 and 50–150 lb, by UPS billable weight. A warehouse needs **20 shipments** in the band for its own split; otherwise the company's split for the band is used. With no shipments in the band at all, the cheaper carrier is used.
+  The **USPS share** is how many of that warehouse's packages in the product's **weight band** went USPS in the cost report. The bands are the reality check's: under 1 lb, 1–5, 5–10, 10–20, 20–50 and 50–150 lb, by the product's **USPS billable weight** (its UPS billable weight if it has no USPS one). That's the package's real weight class, which is what the warehouse picks a carrier by. UPS rounds each side of the box up to a whole inch and bills whole pounds, so a 0.28 lb part in a 9.5 × 6.5 × 1.6 in. box bills 2 lb at UPS; banding by that would put it with the 1–5 lb packages, which go UPS far more often than parts under a pound. The UPS surcharge ratio, though, uses the band of the **UPS** billable weight, the weight UPS charges at. A warehouse needs **20 shipments** in the band for its own split; otherwise the company's split for the band is used. With no shipments in the band at all, the cheaper carrier is used.
 - **Cheapest carrier:**
 
   cell = residential share × min(USPS, UPS residential) + (1 − residential share) × min(USPS, UPS commercial)
@@ -210,6 +210,7 @@ This checks the **method**, not each product. It uses the newest processed cost 
 | Nov 23, 2026 | Carrier choice can be **our actual carrier mix** (now the default) or the cheapest carrier. The reality check shows both, and the carrier choice cost. | Cheapest carrier was 15–26% under what we paid for packages under 10 lb: many light packages go UPS (retailer orders, among others). The actual mix landed within 4%. |
 | Nov 23, 2026 | UPS quotes raised by each warehouse's **surcharge ratio** per weight band, from the cost report. | About a third of UPS spend is charges other than freight; quotes priced by weight to a typical ZIP leave out size- and address-based ones. |
 | Nov 23, 2026 | On packages over 50 lb, all additional handling counts as already quoted. | UPS charges one additional handling per package, and the quote over 50 lb has it. |
+| Nov 23, 2026 | The carrier split's weight band comes from the USPS billable weight, not UPS's. | A 0.28 lb part that UPS bills at 2 lb was being treated as a 1–5 lb package (Las Vegas: 43% USPS) instead of an under-1 lb one (88% USPS). |
 | Nov 23, 2026 | No surcharge on the 50–150 lb band. | The band matched what we paid without surcharges (+2.6%) and overshot with them (+16.5% to +29.5%). |
 
 ## 9. API Report
