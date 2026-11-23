@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import sql from "mssql";
 import { decrypt } from "@/lib/crypto";
 import type { AutoEmailSettings } from "@/lib/settings";
-import { connectionHint, splitServer } from "@/lib/auto-emails/sql-hints";
+import { describeSqlError, isPoolTimeout, splitServer, type SqlErrorContext } from "@/lib/auto-emails/sql-hints";
 
 // SQL Server access for Automated Emails. Queries must be a single read-only SELECT (checked here,
 // on top of a read-only SQL login), run inside a transaction that is always rolled back, with a time
@@ -15,6 +15,11 @@ export type SqlResult = { columns: SqlColumn[]; rows: Record<string, SqlValue>[]
 
 const CONNECT_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 60_000;
+/** How long a run waits for a free pooled connection before giving up. */
+const ACQUIRE_TIMEOUT_MS = 30_000;
+/** Extra wait after the request timeout before assuming the driver will never report the end. */
+const GUARD_EXTRA_MS = 15_000;
+const POOL_MAX = 3;
 
 const FORBIDDEN = [
   "INSERT", "UPDATE", "DELETE", "MERGE", "EXEC", "EXECUTE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "DENY",
@@ -94,12 +99,22 @@ export function poolConfig(s: AutoEmailSettings["sql"]): sql.config {
     password: decrypt(s.encPassword),
     connectionTimeout: CONNECT_TIMEOUT_MS,
     requestTimeout: REQUEST_TIMEOUT_MS,
-    pool: { max: 3, min: 0, idleTimeoutMillis: 60_000 },
+    pool: { max: POOL_MAX, min: 0, idleTimeoutMillis: 60_000, acquireTimeoutMillis: ACQUIRE_TIMEOUT_MS },
     options: { encrypt: s.encrypt, trustServerCertificate: s.trustServerCertificate, appName: "tools-portal auto-emails", ...(instance ? { instanceName: instance } : {}) },
   };
 }
 
 const g = globalThis as unknown as { __autoEmailPool?: { key: string; pool: Promise<sql.ConnectionPool> } };
+
+const errorContext = (s: AutoEmailSettings["sql"], stage: "connect" | "query", pool?: sql.ConnectionPool | null): SqlErrorContext => ({
+  server: s.server,
+  port: s.port,
+  windowsDomain: s.authType === "windows" ? s.domain : null,
+  stage,
+  pool: pool ? { inUse: pool.borrowed, free: pool.available, waiting: pool.pending, max: POOL_MAX } : null,
+  requestTimeoutS: REQUEST_TIMEOUT_MS / 1000,
+  acquireTimeoutS: ACQUIRE_TIMEOUT_MS / 1000,
+});
 
 async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool> {
   const key = JSON.stringify([s.server, s.port, s.database, s.authType, s.domain, s.encUser, s.encPassword, s.encrypt, s.trustServerCertificate]);
@@ -114,10 +129,14 @@ async function getPool(s: AutoEmailSettings["sql"]): Promise<sql.ConnectionPool>
   try {
     return await g.__autoEmailPool.pool;
   } catch (err) {
-    const message = (err as Error).message;
-    const hint = connectionHint(message, s.server, s.port, s.authType === "windows" ? s.domain : null);
-    throw new Error(`Couldn't connect to SQL Server ${s.server}: ${message}${hint ? ` ${hint}` : ""}`);
+    throw new Error(describeSqlError(err, errorContext(s, "connect")));
   }
+}
+
+/** Throws the pool away (closing its connections) so the next run starts fresh. */
+async function discardPool(reason: string) {
+  console.warn(`[auto-emails] resetting the SQL Server connections: ${reason}`);
+  await resetSqlPool();
 }
 
 function fromStub(path: string, maxRows: number): SqlResult {
@@ -126,60 +145,97 @@ function fromStub(path: string, maxRows: number): SqlResult {
   return { columns: data.columns, rows: data.rows.slice(0, maxRows), truncated: data.rows.length > maxRows, ms: 1 };
 }
 
-/** Runs a read-only query and returns at most `maxRows` rows (and whether more were available). */
+/**
+ * Runs a read-only query and returns at most `maxRows` rows (and whether more were available).
+ *
+ * The request is only settled when the driver says it's finished ("done"). SQL Server error messages arrive
+ * as "error" events while the request is still running; rolling back then fails ("request in progress"),
+ * and the transaction would keep its pooled connection forever. That leak used to exhaust the pool.
+ */
 export async function runQuery(s: AutoEmailSettings["sql"], query: string, maxRows: number): Promise<SqlResult> {
   assertReadOnly(query);
   const started = Date.now();
   if (process.env.AUTO_EMAILS_SQL_STUB) return fromStub(process.env.AUTO_EMAILS_SQL_STUB, maxRows);
   const pool = await getPool(s);
   const tx = new sql.Transaction(pool);
-  await tx.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+  try {
+    await tx.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+  } catch (err) {
+    const message = describeSqlError(err, errorContext(s, "connect", pool));
+    if (isPoolTimeout(err)) await discardPool("no free connection within the acquire timeout");
+    throw new Error(message);
+  }
+  let finished = false;
   try {
     return await new Promise<SqlResult>((resolve, reject) => {
       const req = new sql.Request(tx);
       req.stream = true;
       const columns: SqlColumn[] = [];
       const rows: Record<string, SqlValue>[] = [];
-      let truncated = false, settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        resolve({ columns, rows, truncated, ms: Date.now() - started });
-      };
+      let truncated = false;
+      let firstError: (Error & { code?: string }) | null = null;
+      // a safety net in case the driver never reports the end (e.g. a dead connection)
+      const guard = setTimeout(() => {
+        if (finished) return;
+        finished = true;
+        reject(new Error(`SQL Server didn't finish the query within ${(REQUEST_TIMEOUT_MS + GUARD_EXTRA_MS) / 1000} s. The connections have been reset.`));
+      }, REQUEST_TIMEOUT_MS + GUARD_EXTRA_MS);
       req.on("recordset", (cols: Record<string, { name: string; index: number; type?: { declaration?: string } }>) => {
         if (columns.length) return; // only the first result set
         for (const c of Object.values(cols).sort((a, b) => a.index - b.index)) columns.push({ name: c.name, type: c.type?.declaration ?? "" });
       });
       req.on("row", (row: Record<string, unknown>) => {
         if (rows.length >= maxRows) {
+          if (!truncated) req.cancel();
           truncated = true;
-          req.cancel();
           return;
         }
         rows.push(Object.fromEntries(columns.map((c) => [c.name, normalize(row[c.name])])));
       });
       req.on("error", (err: Error & { code?: string }) => {
-        if (truncated && err.code === "ECANCEL") return finish();
-        if (!settled) {
-          settled = true;
-          reject(new Error(`SQL Server: ${err.message}`));
-        }
+        // remember it; settle only when the request has finished
+        if (!(truncated && err.code === "ECANCEL") && !firstError) firstError = err;
       });
-      req.on("done", finish);
+      req.on("done", () => {
+        clearTimeout(guard);
+        if (finished) return;
+        finished = true;
+        if (firstError) reject(new Error(describeSqlError(firstError, errorContext(s, "query"))));
+        else resolve({ columns, rows, truncated, ms: Date.now() - started });
+      });
       req.query(query);
     });
   } finally {
-    await tx.rollback().catch(() => {});
+    try {
+      await tx.rollback();
+    } catch (err) {
+      // the transaction couldn't hand its connection back: drop the pool rather than leak it
+      const code = (err as { code?: string }).code;
+      if (code !== "EABORT" && code !== "ENOTBEGUN") await discardPool(`rollback failed (${(err as Error).message})`);
+    }
   }
 }
 
-/** Checks the connection: server version and current database. */
+/**
+ * Checks the connection on a fresh, separate connection (not the shared pool), so it shows the server's
+ * real state even if the pool is stuck. A successful test also resets the shared pool.
+ */
 export async function testConnection(s: AutoEmailSettings["sql"]): Promise<{ version: string; database: string }> {
   if (process.env.AUTO_EMAILS_SQL_STUB) return { version: "SQL stub (AUTO_EMAILS_SQL_STUB)", database: s.database || "stub" };
-  const pool = await getPool(s);
-  const r = await pool.request().query<{ v: string; db: string }>("SELECT @@VERSION AS v, DB_NAME() AS db");
-  const row = r.recordset[0];
-  return { version: String(row?.v ?? "").split("\n")[0].trim(), database: String(row?.db ?? "") };
+  const probe = new sql.ConnectionPool({ ...poolConfig(s), pool: { max: 1, min: 0, idleTimeoutMillis: 1_000, acquireTimeoutMillis: CONNECT_TIMEOUT_MS + 5_000 } });
+  try {
+    try {
+      await probe.connect();
+    } catch (err) {
+      throw new Error(describeSqlError(err, errorContext(s, "connect")));
+    }
+    const r = await probe.request().query<{ v: string; db: string }>("SELECT @@VERSION AS v, DB_NAME() AS db");
+    const row = r.recordset[0];
+    await resetSqlPool();
+    return { version: String(row?.v ?? "").split("\n")[0].trim(), database: String(row?.db ?? "") };
+  } finally {
+    await probe.close().catch(() => {});
+  }
 }
 
 /** Closes the pool (e.g. after the credentials change). */

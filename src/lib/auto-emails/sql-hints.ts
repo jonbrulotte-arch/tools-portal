@@ -42,3 +42,36 @@ export function connectionHint(message: string, server: string, port: number, wi
   if (m.includes("certificate") || m.includes("self signed") || m.includes("ssl") || m.includes("tls")) return 'The server\'s certificate wasn\'t trusted. If it uses a self-signed certificate, turn on "Trust the server\'s certificate".';
   return "";
 }
+
+export type PoolStats = { inUse: number; free: number; waiting: number; max: number };
+export type SqlErrorContext = { server: string; port: number; windowsDomain: string | null; stage: "connect" | "query"; pool?: PoolStats | null; requestTimeoutS: number; acquireTimeoutS: number };
+
+/** The connection pool gave up waiting for a free connection (tarn's TimeoutError while acquiring). */
+export function isPoolTimeout(err: unknown) {
+  const e = err as { name?: string; constructor?: { name?: string }; message?: string };
+  return e?.constructor?.name === "TimeoutError" || /operation timed out for an unknown reason|resourcerequest timed out/i.test(e?.message ?? "");
+}
+
+/**
+ * A readable explanation of a SQL Server failure: what happened, what to do, and the driver's code.
+ * Replaces messages like the pool's "operation timed out for an unknown reason".
+ */
+export function describeSqlError(err: unknown, ctx: SqlErrorContext): string {
+  const e = err as { message?: string; code?: string; originalError?: { code?: string; message?: string } };
+  const code = e?.code ?? e?.originalError?.code;
+  const tag = code ? ` [${code}]` : "";
+  const message = (e?.message ?? String(err)).trim();
+  if (isPoolTimeout(err)) {
+    const p = ctx.pool;
+    const stats = p ? ` (in use ${p.inUse} of ${p.max}, free ${p.free}, waiting ${p.waiting})` : "";
+    return `Couldn't get a SQL Server connection within ${ctx.acquireTimeoutS} s: all connections were busy or stuck${stats}. The connections have been reset, so the next check starts fresh. If this keeps happening, a query may be running longer than ${ctx.requestTimeoutS} s, or SQL Server isn't answering (use Save & test connection in Settings).`;
+  }
+  if (ctx.stage === "query" && code === "ETIMEOUT") {
+    return `The query ran longer than ${ctx.requestTimeoutS} s and was stopped. Narrow its date range or filters, or ask the DBA for an index on the columns it filters by.${tag}`;
+  }
+  if (ctx.stage === "connect") {
+    const hint = connectionHint(message, ctx.server, ctx.port, ctx.windowsDomain);
+    return `Couldn't connect to SQL Server ${ctx.server}: ${message}${hint ? ` ${hint}` : ""}${tag}`;
+  }
+  return `SQL Server: ${message}${tag}`;
+}

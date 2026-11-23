@@ -30,7 +30,7 @@ type RunResult = { status: "sent" | "nothing-new" | "failed"; rowCount: number; 
 
 const recipients = (e: Email) => [...e.to, ...e.cc.map((c) => `cc ${c}`)];
 
-export function EmailsClient({ emails, canManage, schedule }: { emails: Email[]; canManage: boolean; schedule: { enabled: boolean; intervalMinutes: number; graphReady: boolean; sqlReady: boolean } }) {
+export function EmailsClient({ emails, canManage, schedule, outage }: { emails: Email[]; canManage: boolean; schedule: { enabled: boolean; intervalMinutes: number; graphReady: boolean; sqlReady: boolean }; outage: { error: string; since: string | null; lastSuccess: string | null; emails: number } | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
@@ -82,6 +82,26 @@ export function EmailsClient({ emails, canManage, schedule }: { emails: Email[];
 
   return (
     <div className="space-y-4">
+      {outage && (
+        <Alert variant="error">
+          <p className="font-medium">
+            {outage.emails === 1 ? "The automated email is" : `All ${outage.emails} automated emails are`} failing with the same error
+            {outage.since ? ` since ${formatDateTime(outage.since)}` : ""}
+            {outage.lastSuccess ? ` (last sent ${formatDateTime(outage.lastSuccess)})` : ""}:
+          </p>
+          <p className="mt-1">{outage.error}</p>
+          <p className="mt-1 text-sm">
+            Nothing is lost: records not sent yet go out on the next successful check.{" "}
+            {canManage ? (
+              <Link href="/tools/auto-emails/settings" className="font-medium underline">
+                Test the connection in Settings
+              </Link>
+            ) : (
+              "Tell a manager of this tool."
+            )}
+          </p>
+        </Alert>
+      )}
       {(!schedule.graphReady || !schedule.sqlReady) && (
         <Alert variant="warning">
           {!schedule.sqlReady && "The SQL Server connection isn't set up. "}
