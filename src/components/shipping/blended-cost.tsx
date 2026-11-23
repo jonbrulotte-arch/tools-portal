@@ -75,13 +75,15 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
       </p>
       <p className="text-sm text-gray-700">
         Carrier:{" "}
-        {Object.entries(b.carrier.uspsShare)
-          .map(([o, s]) =>
-            b.carrier.method === "cheapest" || s == null
-              ? `${name(o)} on the cheaper of UPS and USPS${b.carrier.method === "actual-mix" ? " (no shipments at this weight to go by)" : ""}`
-              : `${name(o)} ${pct(s)} USPS, ${pct(1 - s)} UPS (what it shipped at this weight)`,
-          )
-          .join(" · ")}
+        {b.carrier.source === "product" && b.carrier.shipments
+          ? `${pct(b.carrier.shipments.usps / (b.carrier.shipments.usps + b.carrier.shipments.ups))} USPS, ${pct(b.carrier.shipments.ups / (b.carrier.shipments.usps + b.carrier.shipments.ups))} UPS, from this product's own ${b.carrier.shipments.usps + b.carrier.shipments.ups} shipments last month`
+          : Object.entries(b.carrier.uspsShare)
+              .map(([o, s]) =>
+                b.carrier.method === "cheapest" || s == null
+                  ? `${name(o)} on the cheaper of UPS and USPS${b.carrier.method === "actual-mix" ? " (no shipments at this weight to go by)" : ""}`
+                  : `${name(o)} ${pct(s)} USPS, ${pct(1 - s)} UPS (what it shipped at this weight)`,
+              )
+              .join(" · ")}
         {Object.values(b.carrier.upsUplift).some((v) => v > 0) &&
           `. UPS includes surcharges: ${Object.entries(b.carrier.upsUplift)
             .filter(([, v]) => v > 0)

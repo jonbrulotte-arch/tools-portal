@@ -42,7 +42,7 @@ export function blendFor(ctx: BlendContext, partNumber: string | null, rates: Pr
   if (!ctx.mix) return null;
   const item = inv !== undefined ? inv : partNumber ? (ctx.inventory.get(partNumber) ?? null) : null;
   const share = warehouseShare(item, ctx.mix, ctx.origins);
-  const b = blendedCost(rates, ctx.mix, share, weights);
+  const b = blendedCost(rates, ctx.mix, share, weights, item?.shipmentCarriers);
   return {
     cost: b.cost,
     best: b.best,

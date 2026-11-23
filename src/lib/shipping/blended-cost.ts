@@ -235,8 +235,12 @@ export type BlendedCost = {
   coverage: number;
   incomplete: boolean;
   share: WarehouseShare;
-  /** How carriers were chosen, and each warehouse's USPS share when the actual carrier mix was used. */
-  carrier: { method: CarrierMethod; uspsShare: Record<string, number | null>; upsUplift: Record<string, number> };
+  /**
+   * How carriers were chosen, and each warehouse's USPS share when the actual carrier mix was used. `source`:
+   * "product" = the product's own UPS/USPS shipments last month; "warehouse" = the warehouse's split at its weight;
+   * "cheapest" = the cheaper carrier (chosen in Settings, or no shipments to go by).
+   */
+  carrier: { method: CarrierMethod; source: "product" | "warehouse" | "cheapest"; shipments?: { ups: number; usps: number }; uspsShare: Record<string, number | null>; upsUplift: Record<string, number> };
   cells: BlendCell[];
 };
 
@@ -286,15 +290,27 @@ function cellOpts(mix: MixData, origin: string, w: Partial<BilledWeights> | null
   return { upsUplift, uspsShare: method === "actual-mix" && carrierLb != null ? uspsShareFor(mix, origin, carrierLb) : null };
 }
 
-export function blendedCost(rates: ProductRate[], mix: MixData, share: WarehouseShare, weights?: BilledWeights | null): BlendedCost {
+/**
+ * The product's own USPS share, from its UPS and USPS shipments last month (Mango), when it has at least
+ * MIN_OWN_SHIPMENTS of them; otherwise null and the warehouse's split at its weight is used.
+ */
+export function ownUspsShare(carriers: Record<string, number> | null | undefined): { share: number; ups: number; usps: number } | null {
+  const ups = carriers?.UPS ?? 0, usps = carriers?.USPS ?? 0;
+  return ups + usps >= MIN_OWN_SHIPMENTS ? { share: usps / (ups + usps), ups, usps } : null;
+}
+
+export function blendedCost(rates: ProductRate[], mix: MixData, share: WarehouseShare, weights?: BilledWeights | null, ownCarriers?: Record<string, number> | null): BlendedCost {
   const price = new Map(rates.map((r) => [`${r.origin}|${r.zone}|${r.service}`, r.amount]));
   const cells: BlendCell[] = [];
   let weighted = 0, covered = 0, totalWeight = 0;
   let best: number | null = null, worst: number | null = null;
-  const carrier: BlendedCost["carrier"] = { method: mix.blend.carrierMethod, uspsShare: {}, upsUplift: {} };
+  const own = mix.blend.carrierMethod === "actual-mix" ? ownUspsShare(ownCarriers) : null;
+  const carrier: BlendedCost["carrier"] = { method: mix.blend.carrierMethod, source: own ? "product" : "cheapest", ...(own ? { shipments: { ups: own.ups, usps: own.usps } } : {}), uspsShare: {}, upsUplift: {} };
   for (const [origin, s] of Object.entries(share.shares)) {
     if (s <= 0) continue;
     const opts = cellOpts(mix, origin, weights, mix.blend.carrierMethod);
+    if (own) opts.uspsShare = own.share;
+    else if (opts.uspsShare != null) carrier.source = "warehouse";
     carrier.uspsShare[origin] = opts.uspsShare;
     carrier.upsUplift[origin] = opts.upsUplift;
     for (const zone of ZONES) {

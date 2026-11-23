@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bandIndex, blendedCost, cellCost, mixFrom, realityCheck, upsUpliftFrom, uspsShareFor, warehouseShare, type ProductRate } from "@/lib/shipping/blended-cost";
+import { bandIndex, blendedCost, cellCost, mixFrom, ownUspsShare, realityCheck, upsUpliftFrom, uspsShareFor, warehouseShare, type ProductRate } from "@/lib/shipping/blended-cost";
 import type { ItemInventory } from "@/lib/shipping/mango-inventory";
 
 const origins = [{ code: "LV", name: "Las Vegas, NV" }, { code: "GV", name: "Groveport, OH" }];
@@ -174,9 +174,28 @@ describe("carrier mix and UPS surcharges", () => {
     // no weight: cheapest carrier and the warehouse's overall ratio
     // a light part UPS bills at 2 lb (box rounded up) but USPS at 0.3 lb: carrier split from the under-1 lb band
     // (no shipments there in this mix: cheapest carrier), surcharge from UPS's 1–5 lb band
-    expect(blendedCost(rates, m, share, { ups: 2, usps: 0.3 }).carrier).toEqual({ method: "actual-mix", uspsShare: { LV: null }, upsUplift: { LV: expect.closeTo(0.3) } });
+    expect(blendedCost(rates, m, share, { ups: 2, usps: 0.3 }).carrier).toEqual({ method: "actual-mix", source: "cheapest", uspsShare: { LV: null }, upsUplift: { LV: expect.closeTo(0.3) } });
     expect(blendedCost(rates, m, share, { ups: 3, usps: 3 }).carrier.uspsShare).toEqual({ LV: 0.75 });
-    expect(blendedCost(rates, m, share, null).carrier).toEqual({ method: "actual-mix", uspsShare: { LV: null }, upsUplift: { LV: 0.1 } });
+    expect(blendedCost(rates, m, share, null).carrier).toEqual({ method: "actual-mix", source: "cheapest", uspsShare: { LV: null }, upsUplift: { LV: 0.1 } });
+  });
+
+  it("uses the product's own carrier split when it has 5+ UPS/USPS shipments", () => {
+    const rates: ProductRate[] = [
+      { origin: "LV", zone: 8, service: "GROUND_ADVANTAGE", amount: 10 },
+      { origin: "LV", zone: 8, service: "GROUND_COM", amount: 20 },
+      { origin: "LV", zone: 8, service: "GROUND_RES", amount: 20 },
+    ];
+    const share = { shares: { LV: 1 }, basis: "shipments" as const, label: "", understates: false };
+    // 1 USPS, 4 UPS → 20% USPS, though the warehouse ships 75% USPS at 2 lb
+    const own = blendedCost(rates, m, share, { ups: 2, usps: 2 }, { UPS: 4, USPS: 1 });
+    expect(own.carrier).toMatchObject({ source: "product", shipments: { ups: 4, usps: 1 }, uspsShare: { LV: 0.2 } });
+    expect(own.cost).toBeCloseTo(0.2 * 10 + 0.8 * 20 * 1.3, 2);
+    expect(ownUspsShare({ UPS: 2, USPS: 2 })).toBeNull(); // 4 is too few
+    // too few → the warehouse's split at its weight
+    expect(blendedCost(rates, m, share, { ups: 2, usps: 2 }, { UPS: 2, USPS: 2 }).carrier).toMatchObject({ source: "warehouse", uspsShare: { LV: 0.75 } });
+    // cheapest-carrier setting ignores the product's own split
+    const cheapest = { ...m, blend: { ...m.blend, carrierMethod: "cheapest" as const } };
+    expect(blendedCost(rates, cheapest, share, { ups: 2, usps: 2 }, { UPS: 4, USPS: 1 }).carrier).toMatchObject({ source: "cheapest", uspsShare: { LV: null } });
   });
 
   it("reality check gives both methods and what carrier choice cost", () => {

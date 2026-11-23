@@ -47,7 +47,7 @@ Many products ship from either Las Vegas or Groveport, and the cost depends on w
   - **Company split**: if Mango has no data, the company-wide split from the cost report is used.
 - **Zone mix**: for each warehouse, its usual share of shipments per zone, from the latest cost report.
 - **Cell price**: for each warehouse and zone, the product's UPS and USPS prices combined the way your managers chose in Settings:
-  - **Our actual carrier mix** (the default): the share of that warehouse's packages at this weight that really went USPS, and the rest UPS, from the cost report.
+  - **Our actual carrier mix** (the default): the product's own UPS/USPS split if it had at least 5 shipments last month; otherwise the share of that warehouse's packages at this weight that really went USPS, from the cost report.
   - **Cheapest carrier**: the cheaper carrier for a home address and for a business address.
 
   Either way, UPS home and business prices are weighted by how many of that warehouse's UPS shipments go to homes. UPS prices also include the warehouse's usual surcharges (additional handling, delivery area and so on) when that's turned on.
