@@ -21,6 +21,12 @@ const MIN_ORIGIN_SHIPMENTS_FOR_RES_SHARE = 50;
 export const MIN_BAND_MIX_SHIPMENTS = 20;
 /** UPS surcharge ratios are capped here, so a report with odd adjustments can't run away with the cost. */
 const MAX_UPS_UPLIFT = 0.6;
+/**
+ * Weight bands starting at or above this get no UPS surcharge. Quotes there already carry additional handling (by
+ * the billed weight, so even for boxes UPS bills by size that weigh less), which covers the few large-package and
+ * address-correction charges; the 50–150 lb band matched what we paid without surcharges and overshot with them.
+ */
+export const NO_UPS_SURCHARGE_FROM_LB = 50;
 const COVERAGE_OK = 0.8;
 
 export type CarrierMethod = BlendSettings["carrierMethod"];
@@ -110,7 +116,7 @@ export function mixFrom(
       Object.keys(byOrigin).map((o) => {
         const c = upsCharges?.[o];
         const all = blend.upsSurcharges ? upsUpliftFrom(c, blend.upsQuotesIncludeFuel) : 0;
-        return [o, WEIGHT_BANDS.map((_, i) => (blend.upsSurcharges && c?.bands?.[i] && c.bands[i].packages >= MIN_BAND_MIX_SHIPMENTS ? upsUpliftFrom(c.bands[i], blend.upsQuotesIncludeFuel) : all))];
+        return [o, WEIGHT_BANDS.map((b, i) => (b.min >= NO_UPS_SURCHARGE_FROM_LB ? 0 : blend.upsSurcharges && c?.bands?.[i] && c.bands[i].packages >= MIN_BAND_MIX_SHIPMENTS ? upsUpliftFrom(c.bands[i], blend.upsQuotesIncludeFuel) : all))];
       }),
     ),
     zoneMix:Object.fromEntries(Object.entries(byOriginZone).map(([o, z]) => [o, Object.fromEntries(Object.entries(z).map(([zone, n]) => [Number(zone), n / byOrigin[o]]))])),

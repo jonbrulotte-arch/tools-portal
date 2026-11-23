@@ -113,7 +113,7 @@ How the blended cost, the Salsify push and the reality check pick a carrier and 
 | --- | --- | --- |
 | **Carrier choice: Our actual carrier mix** | Each warehouse's packages at a weight band split between UPS and USPS the way the cost report shows it really shipped them. Matches what we pay. | On |
 | **Carrier choice: Cheapest carrier** | Every package on the cheaper of UPS and USPS. What shipping could cost if carrier choice were perfect; usually below what we pay. | |
-| **Add UPS surcharges to UPS quotes** | Raises each warehouse's UPS quotes by its surcharge ratio for the product's weight band, from the cost report: size-based handling, delivery area, address corrections and so on, as a share of what quotes cover. | On |
+| **Add UPS surcharges to UPS quotes** | Raises each warehouse's UPS quotes by its surcharge ratio for the product's weight band, from the cost report: size-based handling, delivery area, address corrections and so on, as a share of what quotes cover. Products billed over 50 lb get none (their quotes already cover it; see the methodology page). | On |
 | **UPS quotes already include the fuel surcharge** | Leave on. Turn off only if a live UPS quote comes back without fuel; fuel is then added from the cost report too. | On |
 
 The reality check on the Products tab shows both carrier choices either way, marks the one in use, and shows each warehouse's surcharge ratios (overall and per weight band) under the table.

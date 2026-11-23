@@ -139,7 +139,8 @@ describe("carrier mix and UPS surcharges", () => {
     expect(m.upsUplift).toEqual({ LV: 0.1, GV: 0 });
     expect(m.upsUpliftByBand.LV[1]).toBeCloseTo(0.3);
     expect(m.upsUpliftByBand.LV[0]).toBeCloseTo(0.1); // no packages in the band: the warehouse's overall ratio
-    expect(m.upsUpliftByBand.LV[5]).toBeCloseTo(0.1); // 5 packages are too few
+    expect(m.upsUpliftByBand.LV[4]).toBeCloseTo(0.1); // no packages in 20–50 lb: the overall ratio
+    expect(m.upsUpliftByBand.LV[5]).toBe(0); // 50–150 lb never gets a surcharge
     expect(m.upsUpliftByBand.GV).toEqual([0, 0, 0, 0, 0, 0]);
     const off = mixFrom(rows, meta, { blend: { carrierMethod: "actual-mix", upsSurcharges: false, upsQuotesIncludeFuel: true }, upsCharges: charges });
     expect(off.upsUplift).toEqual({ LV: 0, GV: 0 });

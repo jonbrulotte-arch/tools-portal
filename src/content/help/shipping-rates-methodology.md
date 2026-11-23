@@ -103,7 +103,8 @@ UPS price = UPS quote × (1 + surcharge ratio)
 surcharge ratio = other ÷ (freight + residential + handling by weight + fuel)
 
 - It's worked out **per warehouse and weight band** (the reality check's bands), because the charges differ: delivery-area charges weigh most on light packages, size-based handling on big boxes. A band with fewer than 20 UPS packages uses the warehouse's overall ratio, and so does a product with no weight.
-- Residential isn't added: the residential quotes already include it. Nor is additional handling on packages over 50 lb: a quote at that weight already includes it. Large package (by size) is still added.
+- Residential isn't added: the residential quotes already include it. Nor is additional handling on packages over 50 lb: a quote at that weight already includes it.
+- **No surcharge on the 50–150 lb band.** Products billed over 50 lb are priced at the quote alone. See *Why the 50–150 lb band gets no surcharge* below.
 - **UPS quotes already include the fuel surcharge** (on by default). UPS's rating API returns totals with fuel, and the 50–150 lb band, which is nearly all UPS, matching what we paid confirms it. If it's turned off, fuel moves to the top line: ratio = (other + fuel) ÷ (freight + residential).
 - The ratio is capped at 60%, so a report with odd adjustments can't run away with the cost.
 
@@ -164,11 +165,26 @@ A product stocked in both warehouses (Groveport 1,283, Las Vegas 480) with no sh
 - UPS = 0.25 × 12.40 × 1.08 + 0.75 × 9.10 × 1.08 = 3.35 + 7.37 = $10.72.
 - Cell = 0.60 × 8.39 + 0.40 × 10.72 = 5.03 + 4.29 = **$9.32** (cheapest carrier would say $8.39).
 
+### Why the 50–150 lb band gets no surcharge
+
+A quote over 50 lb already carries UPS's additional handling, because UPS adds it for weight alone. We quote at the **billed** weight, so a box billed over 50 lb only because of its size, but weighing less, is quoted with handling UPS never charges it. That over-quote roughly covers the few charges a heavy-band quote doesn't include: large-package surcharges on oversized boxes, and address corrections.
+
+The reality check (cost report Aug 10 – Nov 20, 2026, live quote run of Nov 23, 336 shipments in the band) bore this out:
+
+| 50–150 lb band | Difference from what we paid |
+| --- | --- |
+| No surcharges | +2.6% |
+| Surcharge ratio, all charges but residential, fuel and handling by weight | +29.5% |
+| Also counting all handling over 50 lb as quoted | +16.5% |
+| **No surcharge for this band (current)** | about +2.6% |
+
+So bands from 50 lb up get no surcharge, whatever the cost report shows. If the reality check later shows this band well **under** what we paid, revisit it: for example, if more oversized boxes start shipping.
+
 ### Known limits
 
 - **Products that ship from one warehouse** (rules 2 and 3) ship every order from there, including customers the other warehouse would normally serve. The estimate uses that warehouse's usual zone mix, which leans toward its nearby zones, so the cost **may be low**. These are flagged *may understate*.
 - **A month of orders** is thin for slow movers; they fall back to stock.
-- **UPS surcharges** are added as one ratio per warehouse and weight band. Within a band, a big box pays more handling than a small one, and an address in a delivery area pays more than one in a city. USPS surcharges (non-standard length) are only included if the live quote includes them.
+- **UPS surcharges** are added as one ratio per warehouse and weight band, except 50–150 lb, which gets none (see above). Within a band, a big box pays more handling than a small one, and an address in a delivery area pays more than one in a city. USPS surcharges (non-standard length) are only included if the live quote includes them.
 - **The carrier mix** is a warehouse's habit at a weight, not this product's. A product sold mostly through a retailer that requires UPS will cost more than shown.
 - **USPS cubic pricing** for small, dense parcels isn't modelled.
 
@@ -186,6 +202,15 @@ This checks the **method**, not each product. It uses the newest processed cost 
 - Both columns low: the quotes miss charges. Check that UPS surcharges are on and the note under the table shows each warehouse's ratios.
 - *At our carrier mix* close to *Paid* but *If cheapest carrier* well below: the prices are right, and the gap is carrier choice.
 - One band off: look at what's special about it, for example additional handling on 50 lb+ boxes or retailer drop-ships under 3 lb.
+
+### Method changes
+
+| Date | Change | Why |
+| --- | --- | --- |
+| Nov 23, 2026 | Carrier choice can be **our actual carrier mix** (now the default) or the cheapest carrier. The reality check shows both, and the carrier choice cost. | Cheapest carrier was 15–26% under what we paid for packages under 10 lb: many light packages go UPS (retailer orders, among others). The actual mix landed within 4%. |
+| Nov 23, 2026 | UPS quotes raised by each warehouse's **surcharge ratio** per weight band, from the cost report. | About a third of UPS spend is charges other than freight; quotes priced by weight to a typical ZIP leave out size- and address-based ones. |
+| Nov 23, 2026 | On packages over 50 lb, all additional handling counts as already quoted. | UPS charges one additional handling per package, and the quote over 50 lb has it. |
+| Nov 23, 2026 | No surcharge on the 50–150 lb band. | The band matched what we paid without surcharges (+2.6%) and overshot with them (+16.5% to +29.5%). |
 
 ## 9. API Report
 
