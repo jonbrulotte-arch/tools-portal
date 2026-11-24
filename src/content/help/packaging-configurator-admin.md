@@ -64,6 +64,7 @@ Saving a change re-runs the report.
 - **Product list:** paste the list's Salsify address or its ID. This tool has its own list, separate from Shipping Rates.
 - **Whose key scheduled jobs use:** a person with a saved Salsify key. Pushing needs edit rights in Salsify.
 - **Fields:** the Salsify property names (exactly as in Salsify) for name, length, width, height, weight, and optionally UPC, Foldable and Ships in own packaging. The flags read *Yes/True/1* as yes.
+- **How products ship today (optional):** the packaged length, width, height and weight (by default the *Shipping … (Inches/Pounds)* fields, the same ones the Shipping Rates Generator reads). They're compared with our recommendation on the **Packaging review** tab. A product needs all four to be compared.
 
 **Test the list** reads the first five products with the fields as typed (before saving) and shows how they come out. It warns if a required field isn't on any of them, which usually means a typo.
 

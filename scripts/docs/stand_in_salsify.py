@@ -21,6 +21,8 @@ for i, name in enumerate(NAMES):
         pass
     else:
         rec.update({"Shipping Weight (Pounds)": f"{w:.2f}", "Shipping Length (Inches)": f"{l:.2f}", "Shipping Width (Inches)": f"{wd:.2f}", "Shipping Height (Inches)": f"{h:.2f}"})
+        if i in (2, 5, 10, 17):  # shipped today in a box much bigger than needed (Packaging review demo)
+            rec.update({"Shipping Length (Inches)": f"{l + 8:.2f}", "Shipping Width (Inches)": f"{wd + 6:.2f}", "Shipping Height (Inches)": f"{h + 6:.2f}", "Shipping Weight (Pounds)": f"{w + 1.2:.2f}"})
         # the product's own (retail package) size, a little smaller than its shipping box
         rec.update({"UPC Weight (Pounds)": f"{w * 0.95:.2f}", "UPC Length (Inches)": f"{l - 0.75:.2f}", "UPC Width (Inches)": f"{wd - 0.5:.2f}", "UPC Height (Inches)": f"{max(h - 0.5, 0.5):.2f}"})
     if i % 11 != 7:

@@ -10,7 +10,7 @@ How the Packaging Configurator decides what fits and what each shipping method b
 ## 1. The products
 
 Each product's **length, width, height (inches) and weight (pounds)** come from the Salsify fields set in Settings: by default the *UPC* (retail package) fields, which are the product's own size. Two optional flags change how it packs:
-- **Foldable:** it can be folded in half. Its longest side is halved and its thinnest doubled (the volume stays the same). Example: a 20 × 10 × 1 in. item packs as 10 × 10 × 2.
+- **Foldable:** it can be folded in half: its longest side is halved and its thinnest doubled (the volume stays the same). Example: a 20 × 10 × 1 in. item packs as 10 × 10 × 2. Each packaging option is tried with the items as they are and folded, and the fuller fit is used (folding can make an item too thick for a box it fits flat). Cards show *Folded* when folding was used.
 - **Ships in own packaging:** its carton is the shipping box. It isn't put in packaging; it's priced on its own size, one carton per unit.
 
 A product missing any of the four values isn't packed or checked. The Products tab lists these.
@@ -91,9 +91,25 @@ For each product with a best option, the push writes four values: its **shipping
 
 **Chosen by hand:** someone with the permission can pick any option that fits a product (one unit) in the Configurator and push it. The same four values are worked out for that option, again on the server, and written at once. The product is then marked as chosen by hand, and the scheduled push skips it until it's returned to automatic.
 
+## 10. Packaging review
+
+For each product with all four **packaged** values in Salsify (how it ships today: length, width, height and weight; by default the *Shipping … (Inches/Pounds)* fields):
+1. **Today's package** is priced as a box of that size and that weight (the packaged weight already includes the packaging): DIM weight, billed weight, and each method's billed weight and price (section 6). The cheapest priced method is kept.
+2. **The recommendation** is the product's best packaging (one unit), priced the same way from its shipping size and actual weight. A product that ships in its own packaging is compared with its own size.
+3. **Saving** = today's cheapest price − the recommendation's cheapest price. Without rates on both sides it's compared on billed weight (at the global divisor) instead.
+4. **Verdict:**
+   - *Packaged size smaller than the product*: today's package is smaller than the product on any side, folded or not (0.05 in. allowed).
+   - *No packaging of ours fits*: there's no recommendation.
+   - *Configured correctly*: today's package matches the recommended packaging (every side within 0.5 in., any orientation; a mailer's sealed size), or the saving is under half a cent (or a hundredth of a pound).
+   - *Could be packaged better*: the saving is positive.
+   - *Current packaging beats our options*: the saving is negative.
+
+"Looks like" is the packaging option whose size today's package matches within 0.5 in. on every side. Totals on the review add up the savings of the *could be packaged better* products, one shipment each.
+
 ## Changes from the stand-alone app
 
 - Packaging over its weight limit is ranked after the rest (it was flagged but could still be the best fit).
 - A mailer must fit the product after wrapping its thickness. The old app checked only the flat size, so a thick product could "fit" a mailer whose sealed size was smaller than the product (more than 100% used).
 - Products, with their size, weight, UPC and flags, come only from Salsify; they aren't edited in the tool.
 - Weights a hair over a whole pound from rounding (for example 3.0000001 lb) no longer round up to the next pound.
+- Foldable products are tried both flat and folded; the old app always folded them, which could rule out a box they fit flat.

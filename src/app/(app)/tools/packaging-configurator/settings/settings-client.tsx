@@ -114,6 +114,12 @@ const FIELD_LABELS: { key: keyof PackagingSettings["salsify"]["fields"]; label: 
   { key: "foldable", label: "Foldable (optional)", hint: "Yes/true/1 = can be folded flat" },
   { key: "shipsOwn", label: "Ships in own packaging (optional)", hint: "Yes/true/1 = its carton is the shipping box" },
 ];
+const PACKED_LABELS: { key: keyof PackagingSettings["salsify"]["fields"]; label: string }[] = [
+  { key: "packedLength", label: "Packaged length (in)" },
+  { key: "packedWidth", label: "Packaged width (in)" },
+  { key: "packedHeight", label: "Packaged height (in)" },
+  { key: "packedWeight", label: "Packaged weight (lb)" },
+];
 
 export function SettingsClient({
   initial,
@@ -297,6 +303,18 @@ export function SettingsClient({
               ))}
             </div>
           </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">How products ship today (optional)</p>
+            <p className="mb-2 text-xs text-gray-500">Their packaged size and weight, compared with our recommendation on the Packaging review tab. All four are needed for a product to be compared.</p>
+            <div className="grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {PACKED_LABELS.map((f) => (
+                <div key={f.key}>
+                  <Label htmlFor={`sf-${f.key}`}>{f.label}</Label>
+                  <Input id={`sf-${f.key}`} value={s.salsify.fields[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={testList} disabled={!!busy || !s.salsify.listId}>
               {busy === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} Test the list
@@ -317,6 +335,7 @@ export function SettingsClient({
                     <Th className="text-right">L × W × H (in)</Th>
                     <Th className="text-right">Weight</Th>
                     <Th>UPC</Th>
+                    <Th className="text-right">Packaged</Th>
                     <Th>Flags</Th>
                   </tr>
                 </thead>
@@ -333,6 +352,7 @@ export function SettingsClient({
                       </Td>
                       <Td className="text-right tabular-nums">{p.weight ?? "?"}</Td>
                       <Td className="font-mono text-xs">{p.upc ?? "—"}</Td>
+                      <Td className="text-right text-xs tabular-nums">{p.packedLength != null ? `${p.packedLength} × ${p.packedWidth} × ${p.packedHeight}, ${p.packedWeight} lb` : "—"}</Td>
                       <Td className="text-xs">{[p.foldable && "Foldable", p.shipsOwn && "Own packaging"].filter(Boolean).join(", ") || "—"}</Td>
                     </Tr>
                   ))}

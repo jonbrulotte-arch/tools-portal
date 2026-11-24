@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { TableWrap, Th, Td, Tr, EmptyRow } from "@/components/ui/table";
 import { cn, formatDateTime } from "@/lib/utils";
 import { FIT_LABELS, type FitQuality } from "@/lib/packaging/engine";
+import { VERDICT_LABELS, type ReviewVerdict } from "@/lib/packaging/review";
 
 export type ProductRow = {
   partNumber: string;
@@ -26,6 +27,9 @@ export type ProductRow = {
   error: string | null;
   /** Packaging chosen by hand and pushed to Salsify. */
   chosen: string | null;
+  /** How it ships today (Salsify's packaged size and weight). */
+  packed: { length: number; width: number; height: number; weight: number } | null;
+  verdict: ReviewVerdict | null;
   best: { name: string | null; fit: FitQuality | null; billedWeight: number | null; shippedDims: { height: number; width: number; length: number } | null; options: number; dimExposed: boolean } | null;
 };
 
@@ -117,6 +121,7 @@ export function ProductsClient({
                 <Th className="text-right">L × W × H (in)</Th>
                 <Th className="text-right">Weight</Th>
                 <Th>UPC</Th>
+                <Th className="text-right">Packaged today</Th>
                 <Th>Best packaging</Th>
                 <Th className="text-right">Billed</Th>
                 <Th />
@@ -136,6 +141,21 @@ export function ProductsClient({
                   </Td>
                   <Td className={cn("text-right tabular-nums", p.weight == null && "text-amber-700")}>{p.weight == null ? "?" : `${p.weight} lb`}</Td>
                   <Td className="font-mono text-xs text-gray-500">{p.upc ?? "—"}</Td>
+                  <Td className="text-right text-sm tabular-nums">
+                    {p.packed ? (
+                      <>
+                        <p>
+                          {p.packed.length} × {p.packed.width} × {p.packed.height}
+                        </p>
+                        <p className="text-xs text-gray-500">{p.packed.weight} lb</p>
+                        {p.verdict && p.verdict !== "noPacked" && (
+                          <p className={cn("text-xs", p.verdict === "ok" ? "text-green-700" : p.verdict === "better" ? "text-amber-700" : p.verdict === "currentBetter" ? "text-blue-700" : "text-red-700")}>{VERDICT_LABELS[p.verdict]}</p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </Td>
                   <Td>
                     {p.error ? (
                       <span className="text-xs text-amber-700">{p.error}</span>
@@ -173,7 +193,7 @@ export function ProductsClient({
                   </Td>
                 </Tr>
               ))}
-              {!products.length && <EmptyRow colSpan={8}>{counts.all ? "No products match." : "No products yet."}</EmptyRow>}
+              {!products.length && <EmptyRow colSpan={9}>{counts.all ? "No products match." : "No products yet."}</EmptyRow>}
             </tbody>
           </TableWrap>
           {pages > 1 && (

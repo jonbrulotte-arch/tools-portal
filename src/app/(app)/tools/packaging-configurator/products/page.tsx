@@ -49,6 +49,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       shipsOwn: p.shipsOwn,
       error: p.error,
       chosen: chosen.get(p.partNumber) ?? null,
+      packed: p.packedLength != null ? { length: p.packedLength, width: p.packedWidth!, height: p.packedHeight!, weight: p.packedWeight! } : null,
+      verdict: r?.review?.verdict ?? null,
       best: r ? { name: r.packagingName, fit: r.fitQuality, billedWeight: r.billedWeight, shippedDims: r.shippedDims, options: r.options, dimExposed: r.dimExposed } : null,
     };
   });

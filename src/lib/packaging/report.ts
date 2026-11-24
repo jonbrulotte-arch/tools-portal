@@ -13,6 +13,7 @@ import {
   type ShippingMatch,
   type ShippingMethod,
 } from "@/lib/packaging/engine";
+import { reviewProduct, type Review, type ReviewVerdict } from "@/lib/packaging/review";
 
 // Packaging analysis: every product (one unit) against every active packaging option. Coverage, gaps,
 // DIM exposure by shipping method, and how much each packaging option is used. Pure: the caller loads
@@ -44,6 +45,17 @@ export type ProductResult = {
   cheapest: { methodName: string; billedWeight: number; rate: number } | null;
   /** Shipping methods that bill it by DIM: name, DIM weight, billed weight. */
   dimMethods: { methodName: string; dimWeight: number; billedWeight: number }[];
+  /** How it ships today against the recommendation (missing on reports made before the review existed). */
+  review?: Review;
+};
+
+export type ReviewSummary = {
+  /** Products with a packaged size and weight in Salsify. */
+  withPacked: number;
+  counts: Record<ReviewVerdict, number>;
+  /** Across "could be packaged better": per shipment of one unit of each, summed. */
+  savingRate: number;
+  savingLb: number;
 };
 
 export type PackagingStat = {
@@ -73,6 +85,7 @@ export type CatalogReport = {
   packagingStats: PackagingStat[];
   dimByMethod: { methodId: string; methodName: string; count: number; pct: number }[];
   typeBreakdown: { type: PackagingType; options: number; bestFits: number; avgUtilization: number | null }[];
+  review?: ReviewSummary;
   results: ProductResult[];
 };
 
@@ -151,6 +164,21 @@ export async function analyzeCatalog(products: Product[], packaging: Packaging[]
     if (onProgress && (i + 1) % 200 === 0) await onProgress(i + 1);
   }
 
+  // packaging review: today's package (from Salsify) against the recommendation, product by product
+  const review: ReviewSummary = { withPacked: 0, counts: { ok: 0, better: 0, currentBetter: 0, undersized: 0, noOption: 0, noPacked: 0 }, savingRate: 0, savingLb: 0 };
+  results.forEach((r, i) => {
+    const rec = r.packagingName && r.shippedDims ? { name: r.packagingName, shippedDims: r.shippedDims, actualWeight: r.actualWeight } : null;
+    r.review = reviewProduct(products[i], rec, packaging, s, methods);
+    review.counts[r.review.verdict]++;
+    if (r.review.current) review.withPacked++;
+    if (r.review.verdict === "better") {
+      review.savingRate += r.review.savingRate ?? 0;
+      review.savingLb += r.review.savingLb ?? 0;
+    }
+  });
+  review.savingRate = Math.round(review.savingRate * 100) / 100;
+  review.savingLb = Math.round(review.savingLb * 100) / 100;
+
   const packagingStats: PackagingStat[] = [...stats.values()]
     .map(({ utilSum, ...st }) => ({ ...st, avgUtilization: st.fits ? Math.round((utilSum / st.fits) * 10) / 10 : null }))
     .sort((a, b) => b.bestFits - a.bestFits || b.fits - a.fits);
@@ -180,6 +208,7 @@ export async function analyzeCatalog(products: Product[], packaging: Packaging[]
     dimExposureRate: pct(dimExposed, products.length),
     packagingStats,
     dimByMethod: [...byMethod.values()].map((m) => ({ ...m, pct: pct(m.count, products.length) })).sort((a, b) => b.count - a.count),
+    review,
     typeBreakdown: [...types.entries()]
       .map(([type, t]) => ({ type, options: t.options, bestFits: t.bestFits, avgUtilization: t.fits ? Math.round((t.utilSum / t.fits) * 10) / 10 : null }))
       .sort((a, b) => b.bestFits - a.bestFits),

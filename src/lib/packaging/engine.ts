@@ -16,6 +16,8 @@ export type Product = {
   foldable: boolean;
   shipsOwn: boolean;
   upc?: string | null;
+  /** How it ships today, from Salsify (only the Packaging review uses it). */
+  packed?: { height: number; width: number; length: number; weight: number } | null;
 };
 
 export type Packaging = {
@@ -241,9 +243,19 @@ export function standaloneResult(product: Product, quantity: number, s: EngineSe
   };
 }
 
-/** One packaging option for a set of items, or null if they don't fit. Folded items are folded first. */
+/**
+ * One packaging option for a set of items, or null if they don't fit. Foldable items are tried both as they
+ * are and folded (folding can make an item too thick for a box it fits flat); the fuller fit wins.
+ */
 export function packIn(items: ShipmentItem[], pkg: Packaging, s: EngineSettings, methods: ShippingMethod[]): PackagingResult | null {
-  const folded = items.map((i) => ({ ...i, product: foldedProduct(i.product) }));
+  const flat = packAs(items, items, pkg, s, methods, false);
+  if (!items.some((i) => i.product.foldable)) return flat;
+  const folded = packAs(items, items.map((i) => ({ ...i, product: foldedProduct(i.product) })), pkg, s, methods, true);
+  if (!flat || !folded) return flat ?? folded;
+  return folded.volumeUtilization > flat.volumeUtilization ? folded : flat;
+}
+
+function packAs(items: ShipmentItem[], folded: ShipmentItem[], pkg: Packaging, s: EngineSettings, methods: ShippingMethod[], didFold: boolean): PackagingResult | null {
   if (!allItemsFit(folded, pkg, s.packEfficiency, s.fitClearance)) return null;
   const productsWeight = items.reduce((sum, i) => sum + i.product.weight * i.quantity, 0);
   const productVolume = folded.reduce((sum, i) => sum + i.product.height * i.product.width * i.product.length * i.quantity, 0);
@@ -287,7 +299,7 @@ export function packIn(items: ShipmentItem[], pkg: Packaging, s: EngineSettings,
     overweight: pkg.maxWeight != null && actualWeight > pkg.maxWeight,
     volumeUtilization,
     fitQuality: fitQuality(volumeUtilization),
-    hasFoldedItems: items.some((i) => i.product.foldable),
+    hasFoldedItems: didFold,
     shipping,
     shippedDims,
   };

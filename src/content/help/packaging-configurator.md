@@ -84,6 +84,25 @@ A product pushed this way **keeps its chosen packaging**: the scheduled push lea
 
 **Export to Excel** saves the summary, packaging use, DIM by method, the coverage gaps and every product with its best packaging and shipping size.
 
+## Packaging review
+
+**Packaging review** shows where products are already packaged right and where they could be packaged better. For every product with a **packaged size and weight** in Salsify (how it ships today), it compares that package with our best packaging for the product, priced the same way: billed weight and the cheapest shipping method, for one unit.
+
+Each product gets one verdict; the tiles count them and pick the list below:
+
+| Verdict | Meaning |
+| --- | --- |
+| **Could be packaged better** | Our recommendation bills less than today's package. Sorted by the saving per shipment. |
+| **Configured correctly** | Today's package bills the same as the recommendation (usually it *is* that packaging). |
+| **Current packaging beats our options** | Today's package bills less than anything we have set up: worth adding it as a packaging option. |
+| **Packaged size smaller than the product** | One of the two sizes in Salsify is wrong. |
+| **No packaging of ours fits** | Nothing to compare with. |
+| **No packaged size in Salsify** | Fill in the packaged size and weight to include it. |
+
+"Looks like" names the packaging option today's package matches (every side within half an inch). The saving is per shipment of one unit, from the rate cards; multiply by how often a product ships for the real saving. **Pack it** opens the product in the Configurator, where you can push the packaging you choose to Salsify. The Products tab also shows each product's packaged size and verdict.
+
+![The packaging review](images/review.jpg)
+
 ## Common questions
 
 - **"Not on the Salsify product list".** The part isn't on the list this tool reads, or it was added since the last sync. Ask whoever manages the tool to add it to the list or run a sync.

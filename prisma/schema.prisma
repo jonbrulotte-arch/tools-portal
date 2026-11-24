@@ -573,18 +573,23 @@ model ShipmentOrigin {
 /// A product from the Packaging Configurator's Salsify list (size in inches, weight in lb). Rows not on the
 /// list at the last complete sync are removed.
 model PackProduct {
-  partNumber String   @id
-  name       String
-  height     Float?
-  width      Float?
-  length     Float?
-  weight     Float?
-  upc        String?
-  foldable   Boolean  @default(false)
-  shipsOwn   Boolean  @default(false)
+  partNumber   String   @id
+  name         String
+  height       Float?
+  width        Float?
+  length       Float?
+  weight       Float?
+  upc          String?
+  foldable     Boolean  @default(false)
+  shipsOwn     Boolean  @default(false)
+  /// How it ships today: its packaged size and weight in Salsify (optional; compared in the Packaging review)
+  packedHeight Float?
+  packedWidth  Float?
+  packedLength Float?
+  packedWeight Float?
   /// What's missing from Salsify (null when complete)
-  error      String?
-  syncedAt   DateTime @default(now())
+  error        String?
+  syncedAt     DateTime @default(now())
 
   @@index([upc])
   @@index([name])

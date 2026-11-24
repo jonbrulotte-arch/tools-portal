@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { PACKAGING_TYPE_LABELS, FIT_LABELS, type PackagingType, type ShipmentAnalysis } from "@/lib/packaging/engine";
 import type { StoredReport } from "@/lib/packaging/jobs";
+import { VERDICT_LABELS } from "@/lib/packaging/review";
 
 // Spreadsheet templates, imports and exports for the Packaging Configurator (same column names as the
 // stand-alone app, so its files still import).
@@ -280,6 +281,14 @@ export function reportSheets(r: StoredReport, computedAt: string): Sheet[] {
         ["Only loose or oversized fits", r.looseOnly],
         ["Billed by DIM on at least one method", r.dimExposed],
         ["DIM exposure (%)", r.dimExposureRate],
+        ...(r.review
+          ? ([
+              ["Products with a packaged size in Salsify", r.review.withPacked],
+              ...Object.entries(r.review.counts).map(([k, v]) => [`Review: ${VERDICT_LABELS[k as keyof typeof VERDICT_LABELS]}`, v]),
+              ["Review: total saving if each shipped once ($)", r.review.savingRate],
+              ["Review: total saving (lb billed)", r.review.savingLb],
+            ] as Cell[][])
+          : []),
         ["DIM divisor", r.settings.dimDivisor],
         ["Pack efficiency", r.settings.packEfficiency],
         ["Fit clearance (in)", r.settings.fitClearance],
@@ -305,6 +314,37 @@ export function reportSheets(r: StoredReport, computedAt: string): Sheet[] {
         .filter((x) => (!x.shipsOwn && x.packagingId == null) || x.fitQuality === "loose" || x.fitQuality === "large")
         .map((x) => [x.partNumber, x.name, x.packagingId == null ? "No packaging fits" : "Only loose or oversized fits", x.height, x.width, x.length, x.weight, x.foldable ? "Yes" : ""]),
       widths: [18, 34, 28, 11, 11, 11, 11, 10],
+    },
+    {
+      name: "Packaging review",
+      headers: ["Part Number", "Name", "Verdict", "Packaged L (in)", "Packaged W (in)", "Packaged H (in)", "Packaged weight (lb)", "Looks like", "Today billed (lb)", "Today cheapest", "Today rate ($)", "Recommended packaging", "Recommended L × W × H (in)", "Recommended billed (lb)", "Recommended cheapest", "Recommended rate ($)", "Saving per shipment ($)", "Saving (lb billed)"],
+      rows: r.results
+        .filter((x) => x.review)
+        .sort((a, b) => (b.review!.savingRate ?? b.review!.savingLb ?? -1e9) - (a.review!.savingRate ?? a.review!.savingLb ?? -1e9))
+        .map((x) => {
+          const v = x.review!;
+          return [
+            x.partNumber,
+            x.name,
+            VERDICT_LABELS[v.verdict],
+            v.current?.dims.length,
+            v.current?.dims.width,
+            v.current?.dims.height,
+            v.current?.weight,
+            v.current?.matches,
+            v.current?.billedWeight,
+            v.current?.cheapest?.methodName,
+            v.current?.cheapest?.rate,
+            x.packagingName ?? "No packaging fits",
+            x.shippedDims ? dims(x.shippedDims) : "",
+            x.billedWeight,
+            x.cheapest?.methodName,
+            x.cheapest?.rate,
+            v.savingRate,
+            v.savingLb,
+          ];
+        }),
+      widths: [18, 32, 34, 14, 14, 14, 18, 22, 16, 22, 14, 26, 24, 20, 22, 18, 20, 16],
     },
     {
       name: "Products",

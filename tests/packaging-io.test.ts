@@ -62,7 +62,11 @@ describe("Salsify fields and the push", () => {
   const f = SETTING_DEFAULTS.packagingConfigurator.salsify.fields;
   it("maps the tool's own fields, flags and what's missing", () => {
     const ok = mapPackagingProduct("P1", { "Item Name": { "en-US": "Scarf" }, "UPC Length (Inches)": "16 in", "UPC Width (Inches)": 6, "UPC Height (Inches)": "1", "UPC Weight (Pounds)": "0.5", UPC: "0123", Foldable: true, "Ships in Own Packaging": "no" }, f);
-    expect(ok).toEqual({ partNumber: "P1", name: "Scarf", length: 16, width: 6, height: 1, weight: 0.5, upc: "0123", foldable: true, shipsOwn: false, error: null });
+    expect(ok).toEqual({ partNumber: "P1", name: "Scarf", length: 16, width: 6, height: 1, weight: 0.5, upc: "0123", foldable: true, shipsOwn: false, packedHeight: null, packedWidth: null, packedLength: null, packedWeight: null, error: null });
+    // today's packaged size: all four, or none when one is missing
+    const packed = { "Shipping Length (Inches)": "17", "Shipping Width (Inches)": "7", "Shipping Height (Inches)": "2", "Shipping Weight (Pounds)": "0.7" };
+    expect(mapPackagingProduct("P1", packed, f)).toMatchObject({ packedLength: 17, packedWidth: 7, packedHeight: 2, packedWeight: 0.7 });
+    expect(mapPackagingProduct("P1", { ...packed, "Shipping Weight (Pounds)": "" }, f)).toMatchObject({ packedLength: null, packedWeight: null });
     const missing = mapPackagingProduct("P2", { "UPC Length (Inches)": "16" }, f);
     expect(missing).toMatchObject({ name: "P2", width: null, error: 'Salsify has no width, height, weight (fields "UPC Width (Inches)", "UPC Height (Inches)", "UPC Weight (Pounds)")' });
   });
@@ -95,7 +99,7 @@ describe("exports", () => {
     expect(bulk.rows[1][20]).toBe("Not on the list");
     const report = { ...(await analyzeCatalog([product], [box], [], s)), incomplete: 3 };
     const names = reportSheets(report, "2026-11-24").map((x) => x.name);
-    expect(names).toEqual(["Summary", "Packaging use", "DIM by method", "Coverage gaps", "Products"]);
+    expect(names).toEqual(["Summary", "Packaging use", "DIM by method", "Coverage gaps", "Packaging review", "Products"]);
     expect((await workbook(reportSheets(report, "2026-11-24"))).length).toBeGreaterThan(1000);
   });
 });

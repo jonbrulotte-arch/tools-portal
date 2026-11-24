@@ -46,12 +46,32 @@ function num(v: unknown): number | null {
 }
 const bool = (v: unknown) => ["1", "true", "yes", "y", "x"].includes((plainValue(v) ?? "").toLowerCase());
 
-export type MappedProduct = { partNumber: string; name: string; height: number | null; width: number | null; length: number | null; weight: number | null; upc: string | null; foldable: boolean; shipsOwn: boolean; error: string | null };
+export type MappedProduct = {
+  partNumber: string;
+  name: string;
+  height: number | null;
+  width: number | null;
+  length: number | null;
+  weight: number | null;
+  upc: string | null;
+  foldable: boolean;
+  shipsOwn: boolean;
+  /** How it ships today (optional; all four or none). */
+  packedHeight: number | null;
+  packedWidth: number | null;
+  packedLength: number | null;
+  packedWeight: number | null;
+  error: string | null;
+};
 
 /** A Salsify record in the tool's own fields. Missing size or weight is kept, with what's missing. */
 export function mapPackagingProduct(id: string, record: Record<string, unknown>, f: PackagingSettings["salsify"]["fields"]): MappedProduct {
   const size = { height: num(record[f.height]), width: num(record[f.width]), length: num(record[f.length]), weight: num(record[f.weight]) };
   const missing = (["length", "width", "height", "weight"] as const).filter((k) => size[k] == null);
+  const read = (field: string) => (field ? num(record[field]) : null);
+  const packed = { packedHeight: read(f.packedHeight), packedWidth: read(f.packedWidth), packedLength: read(f.packedLength), packedWeight: read(f.packedWeight) };
+  // a partial packaged size can't be compared: keep all four or none
+  const packedComplete = Object.values(packed).every((v) => v != null);
   return {
     partNumber: id,
     name: plainValue(record[f.name]) ?? id,
@@ -59,6 +79,7 @@ export function mapPackagingProduct(id: string, record: Record<string, unknown>,
     upc: f.upc ? plainValue(record[f.upc]) : null,
     foldable: f.foldable ? bool(record[f.foldable]) : false,
     shipsOwn: f.shipsOwn ? bool(record[f.shipsOwn]) : false,
+    ...(packedComplete ? packed : { packedHeight: null, packedWidth: null, packedLength: null, packedWeight: null }),
     error: missing.length ? `Salsify has no ${missing.join(", ")} (fields "${missing.map((k) => f[k]).join('", "')}")` : null,
   };
 }
@@ -99,7 +120,7 @@ async function executeSync(runId: string, s: PackagingSettings, orgId: string, k
           if (p.error) incomplete++;
           if (existing.has(p.partNumber)) updated++;
           else created++;
-          const data = { name: p.name, height: p.height, width: p.width, length: p.length, weight: p.weight, upc: p.upc, foldable: p.foldable, shipsOwn: p.shipsOwn, error: p.error, syncedAt };
+          const data = { name: p.name, height: p.height, width: p.width, length: p.length, weight: p.weight, upc: p.upc, foldable: p.foldable, shipsOwn: p.shipsOwn, packedHeight: p.packedHeight, packedWidth: p.packedWidth, packedLength: p.packedLength, packedWeight: p.packedWeight, error: p.error, syncedAt };
           return prisma.packProduct.upsert({ where: { partNumber: p.partNumber }, create: { partNumber: p.partNumber, ...data }, update: data });
         }),
       );

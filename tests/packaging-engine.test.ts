@@ -150,3 +150,18 @@ describe("mailers wrap around thick products", () => {
     for (const x of r) expect(x.volumeUtilization).toBeLessThanOrEqual(100);
   });
 });
+
+describe("foldable products", () => {
+  it("are tried flat and folded; the fuller fit wins", () => {
+    // 13.25 × 9.5 × 5.5 in. foldable: flat it fits a 14 × 10 × 6 box; folded (11 × 9.5 × 6.6) it's too tall for it
+    const brushes = prod({ partNumber: "W", height: 5.5, width: 9.5, length: 13.25, weight: 2.4, foldable: true });
+    const b14: Packaging = { ...box, id: "b14", name: "Box 14x10x6", height: 6, width: 10, length: 14, maxWeight: null };
+    const r = packIn([{ product: brushes, quantity: 1 }], b14, s, [])!;
+    expect(r).not.toBeNull();
+    expect(r.hasFoldedItems).toBe(false);
+    // a flat scarf only fits a small mailer folded
+    const scarf = prod({ partNumber: "F", height: 0.25, width: 6, length: 16, foldable: true, weight: 0.3 });
+    const m: Packaging = { ...mailer, id: "m", width: 8, length: 10, maxHeight: 1.5 };
+    expect(packIn([{ product: scarf, quantity: 1 }], m, s, [])!.hasFoldedItems).toBe(true);
+  });
+});

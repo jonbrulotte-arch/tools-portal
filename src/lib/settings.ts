@@ -148,7 +148,21 @@ export type PackagingSettings = {
     /** Whose saved Salsify key scheduled syncs and pushes use. */
     keyUserId: string | null;
     /** Salsify property names (case-sensitive). Size in inches, weight in lb; flags read yes/no, true/false or 1/0. */
-    fields: { name: string; length: string; width: string; height: string; weight: string; upc: string; foldable: string; shipsOwn: string };
+    fields: {
+      name: string;
+      length: string;
+      width: string;
+      height: string;
+      weight: string;
+      upc: string;
+      foldable: string;
+      shipsOwn: string;
+      /** The product as it ships today (its packaged size and weight), compared in the Packaging review. Optional. */
+      packedLength: string;
+      packedWidth: string;
+      packedHeight: string;
+      packedWeight: string;
+    };
   };
   /** Reading the product list from Salsify. The analysis runs after every sync. */
   sync: JobSchedule;
@@ -262,6 +276,10 @@ export const SETTING_DEFAULTS: SettingsMap = {
         upc: "UPC",
         foldable: "Foldable",
         shipsOwn: "Ships in Own Packaging",
+        packedLength: "Shipping Length (Inches)",
+        packedWidth: "Shipping Width (Inches)",
+        packedHeight: "Shipping Height (Inches)",
+        packedWeight: "Shipping Weight (Pounds)",
       },
     },
     // nightly at 3 AM, after the Shipping Rates jobs

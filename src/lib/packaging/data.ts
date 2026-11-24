@@ -4,12 +4,27 @@ import type { Packaging, PackagingType, Product, ShippingMethod } from "@/lib/pa
 
 // Loads the engine's inputs from the database.
 
-type ProductRow = { partNumber: string; name: string; height: number | null; width: number | null; length: number | null; weight: number | null; upc: string | null; foldable: boolean; shipsOwn: boolean };
+type ProductRow = {
+  partNumber: string;
+  name: string;
+  height: number | null;
+  width: number | null;
+  length: number | null;
+  weight: number | null;
+  upc: string | null;
+  foldable: boolean;
+  shipsOwn: boolean;
+  packedHeight?: number | null;
+  packedWidth?: number | null;
+  packedLength?: number | null;
+  packedWeight?: number | null;
+};
 
 /** A stored product as the engine sees it, or null when Salsify is missing its size or weight. */
 export function toProduct(r: ProductRow): Product | null {
   if (r.height == null || r.width == null || r.length == null || r.weight == null) return null;
-  return { partNumber: r.partNumber, name: r.name, height: r.height, width: r.width, length: r.length, weight: r.weight, upc: r.upc, foldable: r.foldable, shipsOwn: r.shipsOwn };
+  const packed = r.packedHeight != null && r.packedWidth != null && r.packedLength != null && r.packedWeight != null ? { height: r.packedHeight, width: r.packedWidth, length: r.packedLength, weight: r.packedWeight } : null;
+  return { partNumber: r.partNumber, name: r.name, height: r.height, width: r.width, length: r.length, weight: r.weight, upc: r.upc, foldable: r.foldable, shipsOwn: r.shipsOwn, packed };
 }
 
 export async function loadPackaging(): Promise<Packaging[]> {
