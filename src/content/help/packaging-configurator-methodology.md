@@ -21,7 +21,7 @@ Sides are compared largest to largest, so a product can turn any way.
 
 - **Boxes:** each product side plus the clearance must fit the matching inside side. Example: a 9 × 7 × 5 in. product needs 9.5 × 7.5 × 5.5 in. inside.
 - **Max height:** for mailers and flat-pack boxes, the max height (how thick the contents can be) stands in for the box's height.
-- **Bubble and poly mailers** (with a max height): the product's two largest sides plus clearance must fit the mailer's flat size, and its thinnest side plus clearance must be within the max height.
+- **Bubble and poly mailers** (with a max height): a mailer wraps around what's in it, so each flat side loses the contents' thickness. The product's two largest sides **plus its thickness** plus clearance must fit the mailer's flat size, and its thickness plus clearance must be within the max height. With several items, the thickness is the whole stack. Example: a 9.5 × 8 × 3 in. product needs at least 13 × 11.5 in. flat (9.5 + 3 + 0.5 and 8 + 3 + 0.5), so a 13 × 10 in. mailer doesn't fit.
 - **Several units or products:**
   - With a **max height**, items lie flat and stack: the thinnest sides add up, and the stack plus clearance must be within the max height.
   - Otherwise, by **volume**: all the items' volume must be within the box's inside volume × the pack efficiency. Example: a 480 in³ box at 70% takes 336 in³ of products.
@@ -92,5 +92,6 @@ For each product with a best option, the push writes four values: its **shipping
 ## Changes from the stand-alone app
 
 - Packaging over its weight limit is ranked after the rest (it was flagged but could still be the best fit).
+- A mailer must fit the product after wrapping its thickness. The old app checked only the flat size, so a thick product could "fit" a mailer whose sealed size was smaller than the product (more than 100% used).
 - Products, with their size, weight, UPC and flags, come only from Salsify; they aren't edited in the tool.
 - Weights a hair over a whole pound from rounding (for example 3.0000001 lb) no longer round up to the next pound.

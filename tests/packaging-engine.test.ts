@@ -134,3 +134,19 @@ describe("ranking", () => {
     expect(r.map((x) => [x.packaging.id, x.overweight])).toEqual([["box", false], ["tight", true]]);
   });
 });
+
+describe("mailers wrap around thick products", () => {
+  it("doesn't offer a mailer the product can't fit once it's wrapped (no more than 100% used)", () => {
+    // 9.5 × 8 × 3 in. headlamp, 13 × 10 in. poly mailer (3.5 in. max): flat it fits, sealed it would be 10 × 7 in.
+    const lamp = prod({ partNumber: "78834", height: 3, width: 8, length: 9.5, weight: 0.75 });
+    const poly: Packaging = { id: "poly", name: "Poly Mailer 13 x 10", type: "poly_mailer", height: 0.1, width: 10, length: 13, maxHeight: 3.5, maxWeight: null, tareWeight: 0.03 };
+    const bigBubble: Packaging = { id: "bub", name: "Bubble Mailer 17.5 x 15", type: "bubble_mailer", height: 0.15, width: 15, length: 17.5, maxHeight: 4, maxWeight: null, tareWeight: 0.12 };
+    const box10: Packaging = { ...box, id: "b10", name: "Box 10x10x5", height: 10, width: 10, length: 5, maxWeight: null, tareWeight: 0.45 };
+    expect(packIn([{ product: lamp, quantity: 1 }], poly, s, [])).toBeNull();
+    const r = rankPackaging([{ product: lamp, quantity: 1 }], [poly, bigBubble, box10], s, []);
+    expect(r.map((x) => [x.packaging.id, x.volumeUtilization])).toEqual([["b10", 45.6], ["bub", 41.6]]);
+    // sealed 14.5 × 12 × 3.15 in. still holds the 9.5 × 8 in. footprint
+    expect(r[1].shippedDims).toEqual({ height: 3.15, width: 12, length: 14.5 });
+    for (const x of r) expect(x.volumeUtilization).toBeLessThanOrEqual(100);
+  });
+});

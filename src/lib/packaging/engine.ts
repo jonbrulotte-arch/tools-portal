@@ -145,13 +145,20 @@ export function isFlexibleMailer(box: Packaging) {
   return (box.type === "bubble_mailer" || box.type === "poly_mailer") && box.maxHeight != null;
 }
 
+/**
+ * A mailer wraps around its contents: each flat side loses the contents' thickness. So the product's two
+ * larger sides plus the (stacked) thickness plus clearance must fit the flat size, and the thickness plus
+ * clearance must be within the max height.
+ */
+function mailerFits(sides: [number, number], thickness: number, box: Packaging, clearance: number) {
+  const flat1 = Math.max(box.width, box.length);
+  const flat2 = Math.min(box.width, box.length);
+  return box.maxHeight! >= thickness + clearance && flat1 >= sides[0] + thickness + clearance && flat2 >= sides[1] + thickness + clearance;
+}
+
 export function productFits(product: Product, box: Packaging, clearance = 0): boolean {
   const [p1, p2, p3] = sortedDims(product.height, product.width, product.length);
-  if (isFlexibleMailer(box)) {
-    const flat1 = Math.max(box.width, box.length);
-    const flat2 = Math.min(box.width, box.length);
-    return box.maxHeight! >= p3 + clearance && flat1 >= p1 + clearance && flat2 >= p2 + clearance;
-  }
+  if (isFlexibleMailer(box)) return mailerFits([p1, p2], p3, box, clearance);
   const [b1, b2, b3] = effectiveBoxDims(box);
   return b1 >= p1 + clearance && b2 >= p2 + clearance && b3 >= p3 + clearance;
 }
@@ -163,6 +170,7 @@ export function allItemsFit(items: ShipmentItem[], box: Packaging, packEfficienc
   if (units === 1) return true;
   if (box.maxHeight != null) {
     const thickness = items.reduce((s, i) => s + sortedDims(i.product.height, i.product.width, i.product.length)[2] * i.quantity, 0);
+    if (isFlexibleMailer(box)) return items.every((i) => mailerFits(sortedDims(i.product.height, i.product.width, i.product.length).slice(0, 2) as [number, number], thickness, box, clearance));
     return thickness + clearance <= box.maxHeight;
   }
   const volume = items.reduce((s, i) => s + i.product.height * i.product.width * i.product.length * i.quantity, 0);
