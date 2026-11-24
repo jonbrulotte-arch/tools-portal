@@ -305,7 +305,7 @@ export function SettingsClient({
           </div>
           <div>
             <p className="text-sm font-medium text-gray-900">How products ship today (optional)</p>
-            <p className="mb-2 text-xs text-gray-500">Their packaged size and weight, compared with our recommendation on the Packaging review tab. All four are needed for a product to be compared.</p>
+            <p className="mb-2 text-xs text-gray-500">Their packaged size and weight, compared with our recommendation on the Report tab. All four are needed for a product to be compared.</p>
             <div className="grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {PACKED_LABELS.map((f) => (
                 <div key={f.key}>
@@ -420,7 +420,13 @@ export function SettingsClient({
               </div>
             ))}
           </div>
-          <Schedule value={s.push} onChange={(v) => setS((x) => ({ ...x, push: { ...v, properties: x.push.properties } }))} label="Push automatically" />
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            <Switch checked={s.push.afterSync} onCheckedChange={(v) => setS((x) => ({ ...x, push: { ...x.push, afterSync: v } }))} /> Push right after each scheduled sync
+          </label>
+          <p className="-mt-2 max-w-3xl text-xs text-gray-500">
+            One schedule does it all: the scheduled sync reads Salsify, the report finds each product&apos;s best fit, then the push writes it back. Use this or the push&apos;s own schedule below (both is fine; the second finds nothing changed).
+          </p>
+          <Schedule value={s.push} onChange={(v) => setS((x) => ({ ...x, push: { ...v, properties: x.push.properties, afterSync: x.push.afterSync } }))} label="Push on its own schedule" />
           <div className="flex max-w-2xl flex-wrap items-end gap-2">
             <div className="min-w-48 flex-1">
               <Label htmlFor="pp-part">Try one product</Label>

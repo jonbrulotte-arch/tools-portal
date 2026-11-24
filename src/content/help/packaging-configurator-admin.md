@@ -64,7 +64,7 @@ Saving a change re-runs the report.
 - **Product list:** paste the list's Salsify address or its ID. This tool has its own list, separate from Shipping Rates.
 - **Whose key scheduled jobs use:** a person with a saved Salsify key. Pushing needs edit rights in Salsify.
 - **Fields:** the Salsify property names (exactly as in Salsify) for name, length, width, height, weight, and optionally UPC, Foldable and Ships in own packaging. The flags read *Yes/True/1* as yes.
-- **How products ship today (optional):** the packaged length, width, height and weight (by default the *Shipping … (Inches/Pounds)* fields, the same ones the Shipping Rates Generator reads). They're compared with our recommendation on the **Packaging review** tab. A product needs all four to be compared.
+- **How products ship today (optional):** the packaged length, width, height and weight (by default the *Shipping … (Inches/Pounds)* fields, the same ones the Shipping Rates Generator reads). They're compared with our recommendation on the **Report** tab. A product needs all four to be compared.
 
 **Test the list** reads the first five products with the fields as typed (before saving) and shows how they come out. It warns if a required field isn't on any of them, which usually means a typo.
 
@@ -82,7 +82,12 @@ The push writes each product's **calculated shipping length, width, height and w
 
 1. Enter the four **properties** (number or text properties).
 2. **Try one product:** **Show values** shows what would be written; **Write this one** writes it and reads it back from Salsify.
-3. Turn on **Push automatically** (weekly on Monday at 7 AM by default), or press **Push all now**.
+3. Choose when it runs:
+   - **Push right after each scheduled sync:** one schedule does everything. The scheduled sync reads Salsify, the report finds each product's best fit, then the push writes it back. Recommended.
+   - **Push on its own schedule** (weekly on Monday at 7 AM by default), from the newest report.
+   - Or press **Push all now**.
+
+   Using both is fine: the second run finds nothing changed. A sync started by hand (Sync now) doesn't push.
 
 The last push shows how many products were written, unchanged, skipped and failed, with the reasons.
 

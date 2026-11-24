@@ -73,35 +73,29 @@ A product pushed this way **keeps its chosen packaging**: the scheduled push lea
 
 ## Report
 
-**Report** checks every product (one unit each) against every active packaging option. It runs after each Salsify sync, and a few seconds after anyone changes packaging, shipping methods or the fit rules.
+**Report** checks every product (one unit each) against every active packaging option, and against **how it ships today**: its packaged size and weight in Salsify. It runs after each Salsify sync, and a few seconds after anyone changes packaging, shipping methods or the fit rules.
 
-- **Tiles:** the share of products with packaging, how many fit nothing, how many fit only loosely, and how many are billed by DIM on at least one method.
-- **Products needing attention:** the lists behind those tiles, each with a **Pack it** link.
-- **Packaging use:** how many products each option fits, how often it's the best fit, and how full it is on average. An option that's nobody's best fit is a candidate to drop; a product whose *only* option is one box tells you not to drop that box.
-- **Billed by DIM, per shipping method** and **By packaging type.**
+**Tiles** (click one to open its list): products with packaging, no packaging fits, only loose fits, billed by DIM, and, for products with a packaged size in Salsify, **could be packaged better** (with the total saving) and **expired packaging option** (with how many are configured correctly).
+
+**Products needing attention**, one list per tab, each row with **Pack it** (opens the product in the Configurator, where you can push the packaging you choose to Salsify):
+
+| Tab | Meaning |
+| --- | --- |
+| **Could be packaged better** | Our recommendation bills less than today's package. Sorted by the saving per shipment. |
+| **Expired packaging option** | Today's package bills less than anything we ship in, so it can't be one of our current options: Salsify still has a retired packaging. Repack it in our recommendation and update Salsify. Products that ship in their own packaging are never put here. |
+| **Salsify size to check** | The packaged size in Salsify is smaller than the product, or missing. |
+| **No packaging fits** | None of our active packaging fits the product. |
+| **Only loose fits** | Its best option is under 60% full. |
+| **Billed by DIM** | In its best packaging, at least one method bills it by dimensional weight. |
+| **Configured correctly** | Today's package bills the same as our recommendation (usually it *is* that packaging). |
+
+The comparison lists show today's package ("Looks like" names the packaging it matches, every side within half an inch), our recommendation, and the saving per shipment of one unit from the rate cards. Multiply by how often a product ships for the real saving.
+
+**Our packaging list:** how many products each option fits, how often it's the best fit, and how full it is on average. An option that's nobody's best fit is a candidate to drop; a product whose *only* option is one box tells you not to drop that box. Below: **billed by DIM per shipping method** and **by packaging type**.
 
 ![The packaging report](images/report.jpg)
 
-**Export to Excel** saves the summary, packaging use, DIM by method, the coverage gaps and every product with its best packaging and shipping size.
-
-## Packaging review
-
-**Packaging review** shows where products are already packaged right and where they could be packaged better. For every product with a **packaged size and weight** in Salsify (how it ships today), it compares that package with our best packaging for the product, priced the same way: billed weight and the cheapest shipping method, for one unit.
-
-Each product gets one verdict; the tiles count them and pick the list below:
-
-| Verdict | Meaning |
-| --- | --- |
-| **Could be packaged better** | Our recommendation bills less than today's package. Sorted by the saving per shipment. |
-| **Configured correctly** | Today's package bills the same as the recommendation (usually it *is* that packaging). |
-| **Expired packaging option** | Today's package bills less than anything we ship in, so it can't be one of our current options: Salsify still has a retired packaging. Repack it in our recommendation and update Salsify (**Pack it**, then push). Products that ship in their own packaging are never put here. |
-| **Packaged size smaller than the product** | One of the two sizes in Salsify is wrong. |
-| **No packaging of ours fits** | Nothing to compare with. |
-| **No packaged size in Salsify** | Fill in the packaged size and weight to include it. |
-
-"Looks like" names the packaging option today's package matches (every side within half an inch). The saving is per shipment of one unit, from the rate cards; multiply by how often a product ships for the real saving. **Pack it** opens the product in the Configurator, where you can push the packaging you choose to Salsify. The Products tab also shows each product's packaged size and verdict.
-
-![The packaging review](images/review.jpg)
+**Export to Excel** saves the summary, packaging use, DIM by method, the coverage gaps, the comparison with how products ship today, and every product with its best packaging and shipping size.
 
 ## Common questions
 

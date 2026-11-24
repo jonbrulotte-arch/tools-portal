@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Boxes, Download, Loader2, PackageCheck, PackageX, Play, Scale } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, Boxes, CalendarX, Download, Loader2, PackageCheck, PackageX, Play, Scale } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TableWrap, Th, Td, Tr, EmptyRow } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
-import { formatDateTime } from "@/lib/utils";
-import { FIT_LABELS, PACKAGING_TYPE_LABELS, type EngineSettings, type FitQuality } from "@/lib/packaging/engine";
+import { cn, formatDateTime } from "@/lib/utils";
+import { FIT_LABELS, PACKAGING_TYPE_LABELS, type Dims, type EngineSettings, type FitQuality } from "@/lib/packaging/engine";
+import type { Review, ReviewVerdict } from "@/lib/packaging/review";
 import type { PackagingStat, CatalogReport } from "@/lib/packaging/report";
 import type { PackagingJobStatus } from "@/lib/packaging/jobs";
 
@@ -29,48 +30,79 @@ export type GapRow = {
   fit: FitQuality | null;
   utilization: number | null;
   billedWeight: number | null;
+  shippedDims: Dims | null;
+  cheapest: { methodName: string; billedWeight: number; rate: number } | null;
   dimMethods: { methodName: string; dimWeight: number; billedWeight: number }[];
+  /** How it ships today vs the recommendation (null on reports made before the review). */
+  verdict: ReviewVerdict | null;
+  current: Review["current"];
+  savingRate: number | null;
+  savingLb: number | null;
 };
 type Gap = { total: number; rows: GapRow[] };
+export type GapKind = "better" | "expired" | "data" | "noFit" | "loose" | "dim" | "ok";
 type Report = {
   at: string;
   trigger: string;
   summary: { products: number; incomplete: number; packaging: number; methods: number; covered: number; coverageRate: number; noFit: number; looseOnly: number; dimExposed: number; dimExposureRate: number };
+  review: { withPacked: number; savingRate: number; savingLb: number } | null;
   settings: EngineSettings;
   packagingStats: PackagingStat[];
   dimByMethod: CatalogReport["dimByMethod"];
   typeBreakdown: CatalogReport["typeBreakdown"];
-  gaps: { noFit: Gap; loose: Gap; dim: Gap };
+  gaps: Record<GapKind, Gap>;
 };
 
 const TRIGGERS: Record<string, string> = { manual: "run by hand", "after-sync": "after the Salsify sync", "after-change": "after a packaging or settings change" };
 const n = (v: number) => v.toLocaleString("en-US");
+const size = (d: Dims | null | undefined) => (d ? `${d.length} × ${d.width} × ${d.height}` : "—");
+const price = (c: { methodName: string; rate: number } | null) => (c ? `$${c.rate.toFixed(2)} ${c.methodName}` : "no rate");
 
-function Stat({ icon: Icon, label, value, sub, tone }: { icon: typeof Boxes; label: string; value: string; sub?: string; tone: string }) {
-  return (
+const TABS: { kind: GapKind; label: string; hint: string; review?: boolean }[] = [
+  { kind: "better", label: "Could be packaged better", hint: "Our recommendation bills less than how the product ships today (its packaged size in Salsify). Sorted by the saving per shipment.", review: true },
+  { kind: "expired", label: "Expired packaging option", hint: "Today's package bills less than anything we ship in, so it isn't one of our current options: Salsify still has a retired packaging. Repack it in our recommendation and update Salsify (Pack it, then push).", review: true },
+  { kind: "data", label: "Salsify size to check", hint: "The packaged size in Salsify is smaller than the product itself, or missing, so it can't be compared. Fix it in Salsify.", review: true },
+  { kind: "noFit", label: "No packaging fits", hint: "None of our active packaging fits the product: it needs bigger or different packaging." },
+  { kind: "loose", label: "Only loose fits", hint: "The best option is under 60% full." },
+  { kind: "dim", label: "Billed by DIM", hint: "In its best packaging, at least one shipping method bills it by dimensional weight." },
+  { kind: "ok", label: "Configured correctly", hint: "Today's package bills the same as our recommendation (usually it is that packaging).", review: true },
+];
+
+function Stat({ icon: Icon, label, value, sub, tone, onClick }: { icon: typeof Boxes; label: string; value: string; sub?: string; tone: string; onClick?: () => void }) {
+  const body = (
+    <div className="flex items-center gap-4">
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${tone}`}>
+        <Icon className="h-6 w-6" />
+      </div>
+      <div>
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-2xl font-bold tabular-nums text-gray-900">{value}</p>
+        {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      </div>
+    </div>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-colors hover:bg-gray-50">
+      {body}
+    </button>
+  ) : (
     <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center gap-4">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${tone}`}>
-            <Icon className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">{label}</p>
-            <p className="text-2xl font-bold tabular-nums text-gray-900">{value}</p>
-            {sub && <p className="text-xs text-gray-500">{sub}</p>}
-          </div>
-        </div>
-      </CardContent>
+      <CardContent className="p-5">{body}</CardContent>
     </Card>
   );
 }
 
-function GapTable({ gap, kind }: { gap: Gap; kind: "noFit" | "loose" | "dim" }) {
+function GapTable({ gap, kind, review }: { gap: Gap; kind: GapKind; review: boolean }) {
   const [q, setQ] = useState("");
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return needle ? gap.rows.filter((r) => r.partNumber.toLowerCase().includes(needle) || r.name.toLowerCase().includes(needle)) : gap.rows;
   }, [gap.rows, q]);
+  const pack = (r: GapRow) => (
+    <Link href={`/tools/packaging-configurator?part=${encodeURIComponent(r.partNumber)}`} className="whitespace-nowrap text-sm text-blue-600 hover:underline">
+      Pack it
+    </Link>
+  );
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -81,52 +113,139 @@ function GapTable({ gap, kind }: { gap: Gap; kind: "noFit" | "loose" | "dim" }) 
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search part or name" className="w-56" />
       </div>
       <TableWrap>
-        <thead>
-          <tr>
-            <Th>Part</Th>
-            <Th>Name</Th>
-            <Th className="text-right">L × W × H (in)</Th>
-            <Th className="text-right">Weight</Th>
-            {kind !== "noFit" && <Th>Best packaging</Th>}
-            {kind === "loose" && <Th className="text-right">Used</Th>}
-            {kind === "dim" && <Th>Billed by DIM on</Th>}
-            <Th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <Tr key={r.partNumber}>
-              <Td className="font-mono text-xs">{r.partNumber}</Td>
-              <Td>
-                {r.name}
-                {r.foldable && <Badge variant="purple" className="ml-2">Foldable</Badge>}
-              </Td>
-              <Td className="text-right tabular-nums">{r.dims}</Td>
-              <Td className="text-right tabular-nums">{r.weight} lb</Td>
-              {kind !== "noFit" && (
-                <Td>
-                  {r.packaging}
-                  {r.fit && kind === "loose" && <Badge variant="warning" className="ml-2">{FIT_LABELS[r.fit]}</Badge>}
-                </Td>
-              )}
-              {kind === "loose" && <Td className="text-right tabular-nums">{r.utilization}%</Td>}
-              {kind === "dim" && <Td className="text-xs text-gray-600">{r.dimMethods.map((m) => `${m.methodName} (${m.billedWeight} lb)`).join(", ")}</Td>}
-              <Td className="text-right">
-                <Link href={`/tools/packaging-configurator?part=${encodeURIComponent(r.partNumber)}`} className="text-sm text-blue-600 hover:underline">
-                  Pack it
-                </Link>
-              </Td>
-            </Tr>
-          ))}
-          {!rows.length && <EmptyRow colSpan={7}>{gap.total ? "No products match." : "None."}</EmptyRow>}
-        </tbody>
+        {review ? (
+          <>
+            <thead>
+              <tr>
+                <Th>Product</Th>
+                <Th>Ships today (L × W × H in, lb)</Th>
+                <Th className="text-right">Today</Th>
+                <Th>Our recommendation</Th>
+                <Th className="text-right">Recommended</Th>
+                <Th className="text-right">Saving / shipment</Th>
+                <Th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const diff = r.savingRate ?? r.savingLb ?? 0;
+                return (
+                  <Tr key={r.partNumber}>
+                    <Td>
+                      <p className="font-mono text-xs">{r.partNumber}</p>
+                      <p className="text-sm text-gray-700">{r.name}</p>
+                    </Td>
+                    <Td className="text-sm">
+                      {r.current ? (
+                        <>
+                          <p className="tabular-nums">
+                            {size(r.current.dims)}, {r.current.weight} lb
+                          </p>
+                          <p className="text-xs text-gray-500">{r.verdict === "undersized" ? "Smaller than the product" : r.current.matches ? `Looks like ${r.current.matches}` : "Not one of our packaging options"}</p>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">No packaged size in Salsify</span>
+                      )}
+                    </Td>
+                    <Td className="text-right text-sm tabular-nums">
+                      {r.current ? (
+                        <>
+                          <p>{r.current.billedWeight} lb billed</p>
+                          <p className="text-xs text-gray-500">{price(r.current.cheapest)}</p>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </Td>
+                    <Td className="text-sm">
+                      {r.packaging ? (
+                        <>
+                          <p>{r.packaging}</p>
+                          <p className="text-xs tabular-nums text-gray-500">ships at {size(r.shippedDims)}</p>
+                        </>
+                      ) : (
+                        <span className="text-red-700">No packaging fits</span>
+                      )}
+                    </Td>
+                    <Td className="text-right text-sm tabular-nums">
+                      {r.billedWeight != null ? (
+                        <>
+                          <p>{r.billedWeight} lb billed</p>
+                          <p className="text-xs text-gray-500">{price(r.cheapest)}</p>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </Td>
+                    <Td className={cn("text-right text-sm tabular-nums", diff > 0 ? "font-semibold text-green-700" : diff < 0 ? "text-red-700" : "text-gray-500")}>
+                      {r.savingRate != null && `$${r.savingRate.toFixed(2)}`}
+                      {r.savingLb != null && (
+                        <p className="text-xs font-normal">
+                          {r.savingLb > 0 ? "−" : r.savingLb < 0 ? "+" : ""}
+                          {Math.abs(r.savingLb)} lb billed
+                        </p>
+                      )}
+                      {r.savingRate == null && r.savingLb == null && "—"}
+                    </Td>
+                    <Td className="text-right">{pack(r)}</Td>
+                  </Tr>
+                );
+              })}
+              {!rows.length && <EmptyRow colSpan={7}>{gap.total ? "No products match." : "None."}</EmptyRow>}
+            </tbody>
+          </>
+        ) : (
+          <>
+            <thead>
+              <tr>
+                <Th>Part</Th>
+                <Th>Name</Th>
+                <Th className="text-right">L × W × H (in)</Th>
+                <Th className="text-right">Weight</Th>
+                {kind !== "noFit" && <Th>Best packaging</Th>}
+                {kind === "loose" && <Th className="text-right">Used</Th>}
+                {kind === "dim" && <Th>Billed by DIM on</Th>}
+                <Th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <Tr key={r.partNumber}>
+                  <Td className="font-mono text-xs">{r.partNumber}</Td>
+                  <Td>
+                    {r.name}
+                    {r.foldable && <Badge variant="purple" className="ml-2">Foldable</Badge>}
+                  </Td>
+                  <Td className="text-right tabular-nums">{r.dims}</Td>
+                  <Td className="text-right tabular-nums">{r.weight} lb</Td>
+                  {kind !== "noFit" && (
+                    <Td>
+                      {r.packaging}
+                      {r.fit && kind === "loose" && <Badge variant="warning" className="ml-2">{FIT_LABELS[r.fit]}</Badge>}
+                    </Td>
+                  )}
+                  {kind === "loose" && <Td className="text-right tabular-nums">{r.utilization}%</Td>}
+                  {kind === "dim" && <Td className="text-xs text-gray-600">{r.dimMethods.map((m) => `${m.methodName} (${m.billedWeight} lb)`).join(", ")}</Td>}
+                  <Td className="text-right">{pack(r)}</Td>
+                </Tr>
+              ))}
+              {!rows.length && <EmptyRow colSpan={7}>{gap.total ? "No products match." : "None."}</EmptyRow>}
+            </tbody>
+          </>
+        )}
       </TableWrap>
     </div>
   );
 }
 
-export function ReportClient({ report, status, canRun }: { report: Report | null; status: PackagingJobStatus; canRun: boolean }) {
+export function ReportClient({ report, packedFields, status, canRun }: { report: Report | null; packedFields: string[]; status: PackagingJobStatus; canRun: boolean }) {
   const router = useRouter();
+  const [tab, setTab] = useState<GapKind>(report?.review ? "better" : "noFit");
+  const listRef = useRef<HTMLDivElement>(null);
+  const show = (k: GapKind) => {
+    setTab(k);
+    listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const running = status.analysis?.status === "RUNNING" || status.analysis?.status === "PENDING" || status.sync?.status === "RUNNING";
@@ -158,7 +277,7 @@ export function ReportClient({ report, status, canRun }: { report: Report | null
           <div>
             <CardTitle>Packaging analysis</CardTitle>
             <CardDescription>
-              Every Salsify product (one unit) against every active packaging option. It runs after each Salsify sync and a few seconds after packaging, shipping methods or fit rules change.
+              Every Salsify product (one unit) against every active packaging option, and against how it ships today (its packaged size in Salsify{packedFields.length ? `: ${packedFields.map((x) => `"${x}"`).join(", ")}` : ""}). It runs after each Salsify sync and a few seconds after packaging, shipping methods or fit rules change.
               {report && (
                 <>
                   {" "}
@@ -200,11 +319,24 @@ export function ReportClient({ report, status, canRun }: { report: Report | null
         <Alert variant="info">No report yet. It appears after the first Salsify sync{canRun ? " (Settings → Sync now), or press Run now once products are in." : "."}</Alert>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Stat icon={PackageCheck} label="Products with packaging" value={`${s.coverageRate}%`} sub={`${n(s.covered)} of ${n(s.products)} checked`} tone="bg-green-50 text-green-600" />
-            <Stat icon={PackageX} label="No packaging fits" value={n(s.noFit)} sub="need bigger or different packaging" tone="bg-red-50 text-red-600" />
-            <Stat icon={AlertTriangle} label="Only loose fits" value={n(s.looseOnly)} sub="best option under 60% full" tone="bg-amber-50 text-amber-600" />
-            <Stat icon={Scale} label="Billed by DIM" value={`${s.dimExposureRate}%`} sub={`${n(s.dimExposed)} on at least one method`} tone="bg-blue-50 text-blue-600" />
+            <Stat icon={PackageX} label="No packaging fits" value={n(s.noFit)} sub="need bigger or different packaging" tone="bg-red-50 text-red-600" onClick={() => show("noFit")} />
+            <Stat icon={AlertTriangle} label="Only loose fits" value={n(s.looseOnly)} sub="best option under 60% full" tone="bg-amber-50 text-amber-600" onClick={() => show("loose")} />
+            <Stat icon={Scale} label="Billed by DIM" value={`${s.dimExposureRate}%`} sub={`${n(s.dimExposed)} on at least one method`} tone="bg-blue-50 text-blue-600" onClick={() => show("dim")} />
+            {report.review && (
+              <>
+                <Stat
+                  icon={ArrowDownCircle}
+                  label="Could be packaged better"
+                  value={n(report.gaps.better.total)}
+                  sub={report.gaps.better.total ? `${report.review.savingRate ? `$${report.review.savingRate.toFixed(2)}, ` : ""}${n(report.review.savingLb)} lb billed less if each shipped once` : "vs how they ship today"}
+                  tone="bg-amber-50 text-amber-600"
+                  onClick={() => show("better")}
+                />
+                <Stat icon={CalendarX} label="Expired packaging option" value={n(report.gaps.expired.total)} sub={`${n(report.gaps.ok.total)} configured correctly`} tone="bg-red-50 text-red-600" onClick={() => show("expired")} />
+              </>
+            )}
           </div>
           {s.incomplete > 0 && (
             <Alert variant="warning">
@@ -216,30 +348,33 @@ export function ReportClient({ report, status, canRun }: { report: Report | null
             </Alert>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Products needing attention</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="noFit">
-                <TabsList>
-                  <TabsTrigger value="noFit">No packaging fits ({n(report.gaps.noFit.total)})</TabsTrigger>
-                  <TabsTrigger value="loose">Only loose fits ({n(report.gaps.loose.total)})</TabsTrigger>
-                  <TabsTrigger value="dim">Billed by DIM ({n(report.gaps.dim.total)})</TabsTrigger>
-                </TabsList>
-                <TabsContent value="noFit" className="pt-3">
-                  <GapTable gap={report.gaps.noFit} kind="noFit" />
-                </TabsContent>
-                <TabsContent value="loose" className="pt-3">
-                  <GapTable gap={report.gaps.loose} kind="loose" />
-                </TabsContent>
-                <TabsContent value="dim" className="pt-3">
-                  <GapTable gap={report.gaps.dim} kind="dim" />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          {!report.review && <Alert variant="info">This report was made before products&apos; packaged sizes were compared. {canRun ? "Press Run now" : "It updates after the next sync"} to see which could be packaged better.</Alert>}
+          <div ref={listRef} className="scroll-mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Products needing attention</CardTitle>
+                <CardDescription>{TABS.find((t) => t.kind === tab)?.hint}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={tab} onValueChange={(v) => setTab(v as GapKind)}>
+                  <TabsList className="h-auto flex-wrap justify-start">
+                    {TABS.filter((t) => report.review || !t.review).map((t) => (
+                      <TabsTrigger key={t.kind} value={t.kind}>
+                        {t.label} ({n(report.gaps[t.kind].total)})
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {TABS.map((t) => (
+                    <TabsContent key={t.kind} value={t.kind} className="pt-3">
+                      <GapTable gap={report.gaps[t.kind]} kind={t.kind} review={!!t.review} />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
 
+          <h2 className="pt-2 text-lg font-semibold text-gray-900">Our packaging list</h2>
           <Card>
             <CardHeader>
               <CardTitle>Packaging use</CardTitle>

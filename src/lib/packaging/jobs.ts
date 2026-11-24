@@ -133,12 +133,28 @@ async function executeSync(runId: string, s: PackagingSettings, orgId: string, k
     await prisma.packSyncRun.update({ where: { id: runId }, data: { status: "READY", total: done, removed: gone.length, finishedAt: new Date() } });
     await audit(actor, "packaging.sync_ready", true, "PackSyncRun", runId, { products: done, created, updated, removed: gone.length, incomplete });
     await pruneRuns();
-    void startAnalysis(actor, "after-sync").catch((err) => console.error("[packaging] analysis after sync:", errorMessage(err)));
+    void analyseThenPush(actor).catch((err) => console.error("[packaging] analysis after sync:", errorMessage(err)));
   } catch (err) {
     // keep what was read; nothing is removed after a partial read
     const msg = done ? `Salsify stopped answering after ${done.toLocaleString("en-US")} products: ${errorMessage(err)}` : errorMessage(err);
     await prisma.packSyncRun.update({ where: { id: runId }, data: { status: "FAILED", error: msg.slice(0, 500), done, created, updated, incomplete, finishedAt: new Date() } });
     await audit(actor, "packaging.sync_failed", false, "PackSyncRun", runId, { error: errorMessage(err), done });
+  }
+}
+
+/**
+ * After a sync: the analysis, then (for a scheduled sync with "push right after each sync" on) the push, so
+ * one schedule reads Salsify, finds each product's best fit and writes it back.
+ */
+async function analyseThenPush(actor: Actor) {
+  const analysis = await startAnalysis(actor, "after-sync");
+  await analysis.finished;
+  const s = await getSetting("packagingConfigurator");
+  if (actor.id !== PACKAGING_SCHEDULE_ACTOR.id || actor.email !== PACKAGING_SCHEDULE_ACTOR.email || !s.push.afterSync) return;
+  try {
+    await (await startPush(actor)).finished;
+  } catch (err) {
+    await logAudit({ action: "packaging.push_after_sync", category: "TOOL", actorEmail: actor.email, success: false, metadata: { error: errorMessage(err) }, ip: null, userAgent: null });
   }
 }
 

@@ -15,7 +15,6 @@ export function ToolNav({ canManageSettings }: { canManageSettings: boolean }) {
     { href: `${BASE}/packaging`, label: "Packaging" },
     { href: `${BASE}/methods`, label: "Shipping methods" },
     { href: `${BASE}/report`, label: "Report" },
-    { href: `${BASE}/review`, label: "Packaging review" },
     ...(canManageSettings ? [{ href: `${BASE}/settings`, label: "Settings" }] : []),
   ];
   return (

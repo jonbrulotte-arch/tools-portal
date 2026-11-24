@@ -167,7 +167,11 @@ export type PackagingSettings = {
   /** Reading the product list from Salsify. The analysis runs after every sync. */
   sync: JobSchedule;
   /** Writing each product's calculated shipping size and weight back to Salsify. */
-  push: JobSchedule & { properties: { length: string; width: string; height: string; weight: string } };
+  push: JobSchedule & {
+    properties: { length: string; width: string; height: string; weight: string };
+    /** Push right after each scheduled sync's analysis (one schedule: read Salsify, find the best fits, write them back). */
+    afterSync: boolean;
+  };
 };
 
 type SettingsMap = {
@@ -291,6 +295,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
       hour: 7,
       timezone: "America/Los_Angeles",
       properties: { length: "Calculated Shipping Length (Inches)", width: "Calculated Shipping Width (Inches)", height: "Calculated Shipping Height (Inches)", weight: "Calculated Shipping Weight (Pounds)" },
+      afterSync: false,
     },
   },
 };

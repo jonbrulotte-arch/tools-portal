@@ -109,11 +109,11 @@ export const packagingSettingsSchema = z
       }),
     }),
     sync: z.object(schedule),
-    push: z.object({ ...schedule, properties: z.object({ length: prop, width: prop, height: prop, weight: prop }) }),
+    push: z.object({ ...schedule, afterSync: z.boolean().default(false), properties: z.object({ length: prop, width: prop, height: prop, weight: prop }) }),
   })
   .superRefine((s, ctx) => {
     if (s.sync.enabled && !s.salsify.listId) ctx.addIssue({ code: "custom", path: ["salsify", "listId"], message: "Set the Salsify list before turning on the scheduled sync" });
-    if (s.push.enabled) {
+    if (s.push.enabled || s.push.afterSync) {
       for (const k of ["length", "width", "height", "weight"] as const)
         if (!s.push.properties[k]) ctx.addIssue({ code: "custom", path: ["push", "properties", k], message: `Enter the Salsify property for the shipping ${k}` });
     }

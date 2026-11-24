@@ -91,7 +91,7 @@ For each product with a best option, the push writes four values: its **shipping
 
 **Chosen by hand:** someone with the permission can pick any option that fits a product (one unit) in the Configurator and push it. The same four values are worked out for that option, again on the server, and written at once. The product is then marked as chosen by hand, and the scheduled push skips it until it's returned to automatic.
 
-## 10. Packaging review
+## 10. How products ship today (the Report's comparison)
 
 For each product with all four **packaged** values in Salsify (how it ships today: length, width, height and weight; by default the *Shipping … (Inches/Pounds)* fields):
 1. **Today's package** is priced as a box of that size and that weight (the packaged weight already includes the packaging): DIM weight, billed weight, and each method's billed weight and price (section 6). The cheapest priced method is kept.
@@ -104,12 +104,13 @@ For each product with all four **packaged** values in Salsify (how it ships toda
    - *Could be packaged better*: the saving is positive.
    - *Expired packaging option*: the saving is negative. Our packaging options are what we ship in, so a package that bills less than all of them isn't one we use any more: Salsify still has a retired packaging. A product that **ships in its own packaging** is *configured correctly* here instead, since its own carton is its packaging.
 
-"Looks like" is the packaging option whose size today's package matches within 0.5 in. on every side. Totals on the review add up the savings of the *could be packaged better* products, one shipment each.
+"Looks like" is the packaging option whose size today's package matches within 0.5 in. on every side. Totals on the Report add up the savings of the *could be packaged better* products, one shipment each.
 
 ### Method changes
 
 | Date | Change | Why |
 | --- | --- | --- |
+| Nov 24, 2026 | The Packaging review became part of the Report. | One place for the analysis. |
 | Nov 24, 2026 | "Current packaging beats our options" became **Expired packaging option** (except products that ship in their own packaging). | Our options are the packaging we ship in; a cheaper package in Salsify is a retired one, not a better one. |
 
 ## Changes from the stand-alone app

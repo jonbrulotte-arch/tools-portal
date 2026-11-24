@@ -207,8 +207,6 @@ const shots = {
     await save(doc, "products", p);
     await go(p, `${T}/report`);
     await save(doc, "report", p);
-    await go(p, `${T}/review`);
-    await save(doc, "review", p);
   },
   "packaging-configurator-admin": async () => {
     const doc = "packaging-configurator-admin";
