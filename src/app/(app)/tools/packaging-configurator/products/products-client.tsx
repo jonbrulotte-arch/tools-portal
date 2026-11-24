@@ -24,6 +24,8 @@ export type ProductRow = {
   foldable: boolean;
   shipsOwn: boolean;
   error: string | null;
+  /** Packaging chosen by hand and pushed to Salsify. */
+  chosen: string | null;
   best: { name: string | null; fit: FitQuality | null; billedWeight: number | null; shippedDims: { height: number; width: number; length: number } | null; options: number; dimExposed: boolean } | null;
 };
 
@@ -152,7 +154,14 @@ export function ProductsClient({
                       <Badge variant="destructive">No packaging fits</Badge>
                     )}
                   </Td>
-                  <Td className="text-right tabular-nums text-sm">{p.best?.billedWeight != null ? `${p.best.billedWeight} lb` : "—"}</Td>
+                  <Td className="text-right tabular-nums text-sm">
+                    {p.best?.billedWeight != null ? `${p.best.billedWeight} lb` : "—"}
+                    {p.chosen && (
+                      <p className="mt-1 text-xs text-blue-700" title="Chosen by hand in the Configurator and pushed to Salsify; the scheduled push leaves it alone">
+                        Salsify: {p.chosen}
+                      </p>
+                    )}
+                  </Td>
                   <Td className="text-right">
                     {!p.error && (
                       <Button asChild variant="ghost" size="sm">

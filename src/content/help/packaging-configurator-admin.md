@@ -6,6 +6,7 @@ Setting up and running the Packaging Configurator: packaging, shipping methods a
 | --- | --- |
 | Access to the tool | Use the Configurator and Bulk, see Products, Packaging, Shipping methods and the Report, and download exports. |
 | **Packaging Configurator: manage packaging & shipping methods** | Add, edit, import and delete packaging and shipping methods, and edit rate cards. |
+| **Packaging Configurator: push a chosen packaging to Salsify** | In the Configurator, choose one packaging option for a product and push its shipping size and weight to Salsify, or return a product to automatic. |
 | **Packaging Configurator: manage tool settings** | The Settings tab: fit rules, Salsify, and running a sync, the report or a push. |
 
 Give these in **Admin → Roles**. Anyone who starts a sync or push uses their own Salsify key (**My Profile → Salsify API key**) when they have one.
@@ -83,6 +84,8 @@ The push writes each product's **calculated shipping length, width, height and w
 3. Turn on **Push automatically** (weekly on Monday at 7 AM by default), or press **Push all now**.
 
 The last push shows how many products were written, unchanged, skipped and failed, with the reasons.
+
+**Packaging chosen by hand:** a product whose packaging someone chose and pushed from the Configurator is **kept**. The push doesn't overwrite it, and counts it as "kept at a packaging chosen by hand". The Products tab shows it as *Salsify: (packaging)*. To hand it back to the push, look it up in the Configurator and press **Return to automatic**.
 
 ![The push](images/push.jpg)
 

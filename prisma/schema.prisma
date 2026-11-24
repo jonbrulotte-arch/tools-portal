@@ -674,13 +674,18 @@ model PackAnalysisRun {
 
 /// The last calculated shipping size and weight written to each product in Salsify.
 model PackPush {
-  partNumber  String    @id
+  partNumber    String    @id
   /// { length, width, height, weight } as written
-  values      Json?
-  pushedAt    DateTime?
-  lastError   String?
-  lastErrorAt DateTime?
-  updatedAt   DateTime  @updatedAt
+  values        Json?
+  pushedAt      DateTime?
+  lastError     String?
+  lastErrorAt   DateTime?
+  /// Packaging chosen by hand in the Configurator: the scheduled push keeps its values until it's cleared
+  manual        Boolean   @default(false)
+  packagingName String?
+  chosenBy      String?
+  chosenAt      DateTime?
+  updatedAt     DateTime  @updatedAt
 }
 
 model PackPushRun {
@@ -695,6 +700,8 @@ model PackPushRun {
   unchanged     Int               @default(0)
   skipped       Int               @default(0)
   failed        Int               @default(0)
+  /// products kept at a packaging chosen by hand
+  manual        Int               @default(0)
   /// [{ partNumber, reason }] for skipped and failed products (capped)
   problems      Json              @default("[]")
   error         String?

@@ -444,7 +444,7 @@ export function SettingsClient({
               <Badge variant={STATUS[push.status].variant} className="mr-2">
                 {STATUS[push.status].label}
               </Badge>
-              Last push {formatDateTime(push.createdAt)} by {push.startedBy}: {n(push.done)} of {n(push.products)} checked, {n(push.written)} written, {n(push.unchanged)} unchanged, {n(push.skipped)} skipped, {n(push.failed)} failed.
+              Last push {formatDateTime(push.createdAt)} by {push.startedBy}: {n(push.done)} of {n(push.products)} checked, {n(push.written)} written, {n(push.unchanged)} unchanged, {n(push.skipped)} skipped, {n(push.failed)} failed{push.manual ? `, ${n(push.manual)} kept at a packaging chosen by hand` : ""}.
               {push.error && <p className="mt-1 text-red-700">{push.error}</p>}
               {push.problems.length > 0 && (
                 <details className="mt-1">

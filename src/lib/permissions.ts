@@ -36,6 +36,12 @@ const EXTRA_TOOL_PERMISSIONS: ToolPermissionInfo[] = [
     label: "Packaging Configurator: manage packaging & shipping methods",
     description: "Add, edit, import and delete packaging options and shipping methods (with their rate cards).",
   },
+  {
+    key: "tool.packaging-configurator.push-choice",
+    tool: "packaging-configurator",
+    label: "Packaging Configurator: push a chosen packaging to Salsify",
+    description: "In the Configurator, pick a packaging option for a product and write its shipping size and weight to Salsify (kept until returned to automatic).",
+  },
 ];
 
 export const TOOL_PERMISSIONS: ToolPermissionInfo[] = TOOL_REGISTRY.flatMap((t) => [

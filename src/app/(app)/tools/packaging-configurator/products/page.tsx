@@ -34,6 +34,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     Promise.all([prisma.packProduct.count(), prisma.packProduct.count({ where: { error: { not: null } } }), prisma.packProduct.count({ where: { foldable: true } }), prisma.packProduct.count({ where: { shipsOwn: true } })]),
   ]);
 
+  const chosen = new Map((await prisma.packPush.findMany({ where: { manual: true, partNumber: { in: rows.map((r) => r.partNumber) } }, select: { partNumber: true, packagingName: true } })).map((c) => [c.partNumber, c.packagingName]));
   const products: ProductRow[] = rows.map((p) => {
     const r = byPart.get(p.partNumber);
     return {
@@ -47,6 +48,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       foldable: p.foldable,
       shipsOwn: p.shipsOwn,
       error: p.error,
+      chosen: chosen.get(p.partNumber) ?? null,
       best: r ? { name: r.packagingName, fit: r.fitQuality, billedWeight: r.billedWeight, shippedDims: r.shippedDims, options: r.options, dimExposed: r.dimExposed } : null,
     };
   });

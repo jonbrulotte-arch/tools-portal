@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Download, Loader2, Plus, ScanBarcode, Search, Upload, X } from "lucide-react";
+import { CloudUpload, Download, Loader2, Plus, RotateCcw, ScanBarcode, Search, Upload, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,9 @@ import { Alert } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
-import { ShipmentResults } from "@/components/packaging/shipment-results";
+import { ShipmentResults, type OptionSelection } from "@/components/packaging/shipment-results";
+import { formatDateTime } from "@/lib/utils";
+import type { SavedChoice } from "@/lib/packaging/choice";
 import { downloadFrom } from "@/components/packaging/download";
 import type { ShipmentAnalysis } from "@/lib/packaging/engine";
 
@@ -21,13 +23,27 @@ type PartRow = { key: number; partNumber: string; quantity: string };
 type SizeRow = { key: number; name: string; length: string; width: string; height: string; weight: string; quantity: string; foldable: boolean; shipsOwn: boolean };
 let nextKey = 1;
 const partRow = (partNumber = ""): PartRow => ({ key: nextKey++, partNumber, quantity: "1" });
+type Analysis = ShipmentAnalysis & { choice?: SavedChoice | null };
+type PushResult = { partNumber: string; packaging: string; properties: Record<string, string>; readBack: Record<string, string | null> };
 const sizeRow = (): SizeRow => ({ key: nextKey++, name: "", length: "", width: "", height: "", weight: "", quantity: "1", foldable: false, shipsOwn: false });
 
-export function ConfiguratorClient({ counts, initialPart }: { counts: { products: number; packaging: number; methods: number }; initialPart: string }) {
+export function ConfiguratorClient({
+  counts,
+  initialPart,
+  push,
+}: {
+  counts: { products: number; packaging: number; methods: number };
+  initialPart: string;
+  /** Allowed to push a chosen packaging to Salsify (null: not allowed); `blocker` says why it can't be used yet. */
+  push: { blocker: string | null } | null;
+}) {
   const [mode, setMode] = useState<"parts" | "manual">("parts");
   const [parts, setParts] = useState<PartRow[]>(() => [partRow(initialPart)]);
   const [sizes, setSizes] = useState<SizeRow[]>(() => [sizeRow()]);
-  const [result, setResult] = useState<{ mode: "parts" | "manual"; analysis: ShipmentAnalysis; body: unknown } | null>(null);
+  const [result, setResult] = useState<{ mode: "parts" | "manual"; analysis: Analysis; body: unknown } | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [pushing, setPushing] = useState(false);
+  const [pushNote, setPushNote] = useState<{ type: "success" | "error"; text: string; result?: PushResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -54,8 +70,10 @@ export function ConfiguratorClient({ counts, initialPart }: { counts: { products
     try {
       const body = which === "parts" ? partsBody() : sizesBody();
       if (which === "parts" && !body.items.length) throw new Error("Enter a part number or scan a UPC.");
-      const analysis = await apiFetch<ShipmentAnalysis>(`${BASE}/${which === "parts" ? "analyze" : "analyze-manual"}`, { method: "POST", json: body });
+      const analysis = await apiFetch<Analysis>(`${BASE}/${which === "parts" ? "analyze" : "analyze-manual"}`, { method: "POST", json: body });
       setResult({ mode: which, analysis, body });
+      setChosen(null);
+      setPushNote(null);
     } catch (err) {
       setError((err as Error).message);
       setResult(null);
@@ -83,6 +101,95 @@ export function ConfiguratorClient({ counts, initialPart }: { counts: { products
       setExporting(false);
     }
   }
+
+  // one product, one unit, looked up by part number: its packaging can be chosen and pushed to Salsify
+  const single = result?.mode === "parts" && result.analysis.items.length === 1 && result.analysis.items[0].quantity === 1 && !result.analysis.items[0].product.shipsOwn ? result.analysis.items[0].product : null;
+
+  async function pushChosen() {
+    if (!single || !chosen) return;
+    const option = result!.analysis.results.find((r) => r.packaging.id === chosen);
+    if (!confirm(`Write ${option?.packaging.name}'s shipping size and weight to ${single.partNumber} in Salsify? It stays until someone returns the product to automatic.`)) return;
+    setPushing(true);
+    setPushNote(null);
+    try {
+      const r = await apiFetch<PushResult>(`${BASE}/push-choice`, { method: "POST", json: { partNumber: single.partNumber, packagingId: chosen } });
+      setPushNote({ type: "success", text: `${r.packaging} pushed to ${r.partNumber} in Salsify. Salsify now has:`, result: r });
+      setResult((cur) => cur && { ...cur, analysis: { ...cur.analysis, choice: { partNumber: r.partNumber, packagingName: r.packaging, values: null, chosenBy: "you", chosenAt: new Date().toISOString() } } });
+    } catch (err) {
+      setPushNote({ type: "error", text: (err as Error).message });
+    } finally {
+      setPushing(false);
+    }
+  }
+
+  async function backToAutomatic() {
+    if (!single || !confirm(`Return ${single.partNumber} to automatic? The next push to Salsify writes its best fit again.`)) return;
+    setPushing(true);
+    try {
+      await apiFetch(`${BASE}/push-choice`, { method: "DELETE", json: { partNumber: single.partNumber } });
+      setResult((cur) => cur && { ...cur, analysis: { ...cur.analysis, choice: null } });
+      setPushNote({ type: "success", text: `${single.partNumber} is back to automatic; the next push writes its best fit.` });
+    } catch (err) {
+      setPushNote({ type: "error", text: (err as Error).message });
+    } finally {
+      setPushing(false);
+    }
+  }
+
+  const choice = result?.analysis.choice ?? null;
+  const selection: OptionSelection | undefined =
+    single && push && result!.analysis.results.length
+      ? {
+          selectedId: chosen,
+          onSelect: (id) => {
+            setChosen(id);
+            setPushNote(null);
+          },
+          action: (
+            <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+              <Button onClick={pushChosen} disabled={pushing || !!push.blocker}>
+                {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />} Push to Salsify
+              </Button>
+              <span className="text-sm text-gray-500">{push.blocker ?? `Writes this packaging's shipping size and billed weight to ${single.partNumber}, and keeps it there.`}</span>
+            </div>
+          ),
+        }
+      : undefined;
+  const notice =
+    single && (choice || pushNote) ? (
+      <div className="space-y-2">
+        {choice && (
+          <Alert variant="info">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Salsify has <strong>{choice.packagingName}</strong> for {choice.partNumber}, chosen by hand{choice.chosenBy ? ` by ${choice.chosenBy}` : ""}
+                {choice.chosenAt ? ` on ${formatDateTime(choice.chosenAt)}` : ""}. The scheduled push leaves it alone.
+              </span>
+              {push && (
+                <Button variant="outline" size="sm" onClick={backToAutomatic} disabled={pushing}>
+                  <RotateCcw className="h-4 w-4" /> Return to automatic
+                </Button>
+              )}
+            </div>
+          </Alert>
+        )}
+        {pushNote && (
+          <Alert variant={pushNote.type}>
+            <p>{pushNote.text}</p>
+            {pushNote.result && (
+              <ul className="mt-1 list-disc pl-5">
+                {Object.entries(pushNote.result.properties).map(([p, v]) => (
+                  <li key={p}>
+                    {p}: {pushNote.result!.readBack[p] ?? "(empty)"}
+                    {pushNote.result!.readBack[p] !== v && ` (expected ${v})`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Alert>
+        )}
+      </div>
+    ) : null;
 
   async function importFile(file: File) {
     setError(null);
@@ -259,7 +366,7 @@ export function ConfiguratorClient({ counts, initialPart }: { counts: { products
         </CardContent>
       </Card>
 
-      {result && <ShipmentResults a={result.analysis} onExport={exportResult} exporting={exporting} />}
+      {result && <ShipmentResults a={result.analysis} onExport={exportResult} exporting={exporting} selection={selection} notice={notice} />}
       {!result && !error && (
         <p className="text-sm text-gray-500">
           Products, packaging and shipping methods are managed on their tabs. Packing many orders at once? Use <Link href="/tools/packaging-configurator/bulk" className="text-blue-600 hover:underline">Bulk</Link>.

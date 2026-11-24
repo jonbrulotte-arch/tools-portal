@@ -52,11 +52,21 @@ function Tile({ label, value, tone }: { label: string; value: string; tone?: "wa
   );
 }
 
-function OptionCard({ r, rank }: { r: PackagingResult; rank: number }) {
+/** Picking one packaging option (one at a time) to push to Salsify; `action` shows on the picked card. */
+export type OptionSelection = { selectedId: string | null; onSelect: (id: string) => void; action: React.ReactNode };
+
+function OptionCard({ r, rank, selection }: { r: PackagingResult; rank: number; selection?: OptionSelection }) {
   const resized = r.shippedDims.height !== r.packaging.height || r.shippedDims.width !== r.packaging.width || r.shippedDims.length !== r.packaging.length;
+  const selected = selection?.selectedId === r.packaging.id;
   return (
-    <Card className={cn(rank === 0 && "border-green-300 ring-1 ring-green-200")}>
+    <Card className={cn(selected ? "border-blue-600 ring-1 ring-blue-600" : rank === 0 && "border-green-300 ring-1 ring-green-200")}>
       <CardContent className="p-5 space-y-4">
+        {selection && (
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+            <input type="radio" name="packaging-choice" className="h-4 w-4 accent-blue-600" checked={selected} onChange={() => selection.onSelect(r.packaging.id)} />
+            Choose for Salsify
+          </label>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -95,6 +105,7 @@ function OptionCard({ r, rank }: { r: PackagingResult; rank: number }) {
         {r.dimFlag && <Alert variant="warning">Every shipping method bills this package by dimensional weight ({lb(r.dimWeight)}, more than its actual {lb(r.actualWeight)}).</Alert>}
         {r.overweight && <Alert variant="error">At {lb(r.actualWeight)} it&apos;s over this packaging&apos;s limit of {lb(r.packaging.maxWeight!)}.</Alert>}
         {r.packaging.notes && <p className="text-xs text-gray-500">Note: {r.packaging.notes}</p>}
+        {selected && selection?.action}
       </CardContent>
     </Card>
   );
@@ -137,7 +148,7 @@ function StandaloneCard({ s }: { s: StandaloneResult }) {
   );
 }
 
-export function ShipmentResults({ a, onExport, exporting }: { a: ShipmentAnalysis; onExport: () => void; exporting: boolean }) {
+export function ShipmentResults({ a, onExport, exporting, selection, notice }: { a: ShipmentAnalysis; onExport: () => void; exporting: boolean; selection?: OptionSelection; notice?: React.ReactNode }) {
   const [showAll, setShowAll] = useState(false);
   const needsBox = a.items.some((i) => !i.product.shipsOwn);
   const shown = showAll ? a.results : a.results.slice(0, 3);
@@ -214,6 +225,7 @@ export function ShipmentResults({ a, onExport, exporting }: { a: ShipmentAnalysi
           <h2 className="text-base font-semibold text-gray-900">
             {a.results.length ? `${a.results.length} packaging option${a.results.length === 1 ? "" : "s"} fit, best first` : "No packaging fits"}
           </h2>
+          {notice}
           {!a.results.length && (
             <Alert variant="warning">
               {a.ltlRequired
@@ -222,7 +234,7 @@ export function ShipmentResults({ a, onExport, exporting }: { a: ShipmentAnalysi
             </Alert>
           )}
           {shown.map((r) => (
-            <OptionCard key={r.packaging.id} r={r} rank={a.results.indexOf(r)} />
+            <OptionCard key={r.packaging.id} r={r} rank={a.results.indexOf(r)} selection={selection} />
           ))}
           {a.results.length > 3 && (
             <Button variant="ghost" size="sm" onClick={() => setShowAll(!showAll)}>

@@ -230,7 +230,7 @@ export async function startPush(actor: Actor) {
 }
 
 async function executePush(runId: string, s: PackagingSettings, orgId: string, key: string, results: ProductResult[], actor: Actor) {
-  const counts = { done: 0, written: 0, unchanged: 0, skipped: 0, failed: 0 };
+  const counts = { done: 0, written: 0, unchanged: 0, skipped: 0, failed: 0, manual: 0 };
   const problems: { partNumber: string; reason: string }[] = [];
   const note = (partNumber: string, reason: string) => problems.length < 200 && problems.push({ partNumber, reason });
   try {
@@ -246,6 +246,11 @@ async function executePush(runId: string, s: PackagingSettings, orgId: string, k
         await prisma.packPushRun.update({ where: { id: runId }, data: { ...counts, problems } });
       }
       counts.done++;
+      // a packaging chosen by hand in the Configurator stays until someone returns it to automatic
+      if (prev.get(r.partNumber)?.manual) {
+        counts.manual++;
+        continue;
+      }
       const values = pushValuesFor(r);
       if (!values) {
         counts.skipped++;
@@ -340,7 +345,7 @@ export async function jobStatus() {
     incomplete,
     sync: sync && { id: sync.id, status: sync.status, startedBy: sync.startedBy, total: sync.total, done: sync.done, created: sync.created, updated: sync.updated, removed: sync.removed, incomplete: sync.incomplete, error: sync.error, createdAt: iso(sync.createdAt)!, finishedAt: iso(sync.finishedAt) },
     analysis: analysis && { id: analysis.id, status: analysis.status, trigger: analysis.trigger, startedBy: analysis.startedBy, products: analysis.products, done: analysis.done, error: analysis.error, createdAt: iso(analysis.createdAt)!, finishedAt: iso(analysis.finishedAt) },
-    push: push && { id: push.id, status: push.status, startedBy: push.startedBy, products: push.products, done: push.done, written: push.written, unchanged: push.unchanged, skipped: push.skipped, failed: push.failed, problems: push.problems as { partNumber: string; reason: string }[], error: push.error, createdAt: iso(push.createdAt)!, finishedAt: iso(push.finishedAt) },
+    push: push && { id: push.id, status: push.status, startedBy: push.startedBy, products: push.products, done: push.done, written: push.written, unchanged: push.unchanged, skipped: push.skipped, failed: push.failed, manual: push.manual, problems: push.problems as { partNumber: string; reason: string }[], error: push.error, createdAt: iso(push.createdAt)!, finishedAt: iso(push.finishedAt) },
   };
 }
 export type PackagingJobStatus = Awaited<ReturnType<typeof jobStatus>>;
