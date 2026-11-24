@@ -35,6 +35,7 @@ export default async function ReportPage() {
           fit: x.fitQuality,
           utilization: x.volumeUtilization,
           billedWeight: x.billedWeight,
+          actualWeight: x.actualWeight,
           shippedDims: x.shippedDims,
           cheapest: x.cheapest,
           dimMethods: x.dimMethods,
@@ -59,6 +60,9 @@ export default async function ReportPage() {
     : null;
   const review = r?.review;
   const f = s.salsify.fields;
+  // packaged fields that are the push's own properties: the comparison would only check our calculation against itself
+  const pushed = new Set(Object.values(s.push.properties).map((x) => x.trim().toLowerCase()).filter(Boolean));
+  const selfCompare = [f.packedLength, f.packedWidth, f.packedHeight, f.packedWeight].filter((x) => x && pushed.has(x.trim().toLowerCase()));
   return (
     <ReportClient
       report={
@@ -77,6 +81,7 @@ export default async function ReportPage() {
           : null
       }
       packedFields={[f.packedLength, f.packedWidth, f.packedHeight, f.packedWeight].filter(Boolean)}
+      selfCompare={selfCompare}
       status={status}
       canRun={user.can(PACKAGING_SETTINGS_PERMISSION)}
     />

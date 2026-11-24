@@ -1,4 +1,5 @@
 import {
+  billedOn,
   cheapest,
   foldedProduct,
   packIn,
@@ -118,7 +119,7 @@ export async function analyzeCatalog(products: Product[], packaging: Packaging[]
       const exposed = shipping.some((m) => m.dimApplied);
       if (exposed) dimExposed++;
       for (const m of shipping) if (m.dimApplied) byMethod.get(m.methodId)!.count++;
-      results.push({ ...base, packagingId: null, packagingName: "Ships in own packaging", fitQuality: null, volumeUtilization: null, actualWeight: p.weight, dimWeight, billedWeight: roundWeight(Math.max(p.weight, dimWeight)), dimExposed: exposed, options: 0, shippedDims: { height: p.height, width: p.width, length: p.length }, cheapest: cheapestOf(shipping), dimMethods: dimRows(shipping) });
+      results.push({ ...base, packagingId: null, packagingName: "Ships in own packaging", fitQuality: null, volumeUtilization: null, actualWeight: p.weight, dimWeight, billedWeight: billedOn(shipping, p.weight, dimWeight), dimExposed: exposed, options: 0, shippedDims: { height: p.height, width: p.width, length: p.length }, cheapest: cheapestOf(shipping), dimMethods: dimRows(shipping) });
     } else {
       const fits = packaging
         .map((pkg) => packIn([{ product: p, quantity: 1 }], pkg, s, parcel))

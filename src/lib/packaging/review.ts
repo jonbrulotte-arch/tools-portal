@@ -1,4 +1,4 @@
-import { cheapest, foldedProduct, roundWeight, shippingFor, sortedDims, type Dims, type EngineSettings, type Packaging, type Product, type ShippingMethod } from "@/lib/packaging/engine";
+import { billedOn, cheapest, foldedProduct, roundWeight, shippingFor, sortedDims, type Dims, type EngineSettings, type Packaging, type Product, type ShippingMethod } from "@/lib/packaging/engine";
 
 // Packaging review: how each product ships today (its packaged size and weight in Salsify) against the
 // configurator's recommendation, priced the same way. Pure.
@@ -47,8 +47,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export function pricePackage(dims: Dims, weight: number, s: EngineSettings, methods: ShippingMethod[]): PricedPackage {
   const volume = dims.height * dims.width * dims.length;
   const dimWeight = roundWeight(volume / s.dimDivisor);
-  const c = cheapest(shippingFor(volume, weight, s.dimDivisor, methods.filter((m) => !m.isLtl)));
-  return { dims, weight, dimWeight, billedWeight: roundWeight(Math.max(weight, dimWeight)), cheapest: c ? { methodName: c.methodName, billedWeight: c.billedWeight, rate: c.rate! } : null };
+  const shipping = shippingFor(volume, weight, s.dimDivisor, methods.filter((m) => !m.isLtl));
+  const c = cheapest(shipping);
+  return { dims, weight, dimWeight, billedWeight: billedOn(shipping, weight, dimWeight), cheapest: c ? { methodName: c.methodName, billedWeight: c.billedWeight, rate: c.rate! } : null };
 }
 
 const sameSize = (a: Dims, b: Dims) => {

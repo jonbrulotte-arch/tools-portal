@@ -82,7 +82,7 @@ export type PackagingResult = {
   packagingWeight: number;
   /** Products + tare. */
   actualWeight: number;
-  /** max(actual, DIM) at the global divisor, rounded the carrier way. */
+  /** The lowest billed weight among the shipping methods that take it (see billedOn). */
   billedWeight: number;
   dimWeight: number;
   /** Every shipping method bills this package by DIM (no DIM-free option). */
@@ -219,6 +219,15 @@ export function ltlShippingFor(actualWeight: number, methods: ShippingMethod[]):
     });
 }
 
+/**
+ * The weight a package is billed at: the lowest billed weight among the shipping methods that take it (each
+ * applies its own DIM divisor and threshold); with no method, the larger of actual and DIM weight at the
+ * global divisor.
+ */
+export function billedOn(shipping: ShippingMatch[], actualWeight: number, dimWeight: number): number {
+  return shipping.length ? Math.min(...shipping.map((m) => m.billedWeight)) : roundWeight(Math.max(actualWeight, dimWeight));
+}
+
 /** The cheapest rated method, or null when none has a rate. */
 export function cheapest(matches: ShippingMatch[]): ShippingMatch | null {
   let best: ShippingMatch | null = null;
@@ -230,16 +239,17 @@ export function cheapest(matches: ShippingMatch[]): ShippingMatch | null {
 export function standaloneResult(product: Product, quantity: number, s: EngineSettings, methods: ShippingMethod[]): StandaloneResult {
   const volume = product.height * product.width * product.length;
   const unitDimWeight = roundWeight(volume / s.dimDivisor);
-  const unitBilledWeight = roundWeight(Math.max(product.weight, unitDimWeight));
+  const shipping = shippingFor(volume, product.weight, s.dimDivisor, methods);
+  const unitBilledWeight = billedOn(shipping, product.weight, unitDimWeight);
   return {
     product,
     quantity,
     productsWeight: r3(product.weight * quantity),
     unitDimWeight,
     unitBilledWeight,
-    totalBilledWeight: unitBilledWeight * quantity,
-    dimFlag: unitDimWeight > product.weight,
-    shipping: shippingFor(volume, product.weight, s.dimDivisor, methods),
+    totalBilledWeight: r3(unitBilledWeight * quantity),
+    dimFlag: shipping.length ? shipping.every((m) => m.dimApplied) : unitDimWeight > product.weight,
+    shipping,
   };
 }
 
@@ -292,7 +302,7 @@ function packAs(items: ShipmentItem[], folded: ShipmentItem[], pkg: Packaging, s
     productsWeight: r3(productsWeight),
     packagingWeight: tare,
     actualWeight: r3(actualWeight),
-    billedWeight: roundWeight(Math.max(actualWeight, dimWeight)),
+    billedWeight: billedOn(shipping, actualWeight, dimWeight),
     dimWeight,
     // flag only when no method bills by actual weight (otherwise DIM can be avoided)
     dimFlag: shipping.length > 0 ? shipping.every((m) => m.dimApplied) : dimWeight > actualWeight,

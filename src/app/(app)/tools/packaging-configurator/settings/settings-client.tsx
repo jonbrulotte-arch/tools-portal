@@ -306,6 +306,11 @@ export function SettingsClient({
           <div>
             <p className="text-sm font-medium text-gray-900">How products ship today (optional)</p>
             <p className="mb-2 text-xs text-gray-500">Their packaged size and weight, compared with our recommendation on the Report tab. All four are needed for a product to be compared.</p>
+            {PACKED_LABELS.some((f) => s.salsify.fields[f.key] && Object.values(s.push.properties).some((p) => p.trim().toLowerCase() === s.salsify.fields[f.key].trim().toLowerCase())) && (
+              <Alert variant="warning" className="mb-2">
+                These are the properties the push writes (below), so the Report would compare our calculation with itself. Use the fields that record how products really ship.
+              </Alert>
+            )}
             <div className="grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {PACKED_LABELS.map((f) => (
                 <div key={f.key}>

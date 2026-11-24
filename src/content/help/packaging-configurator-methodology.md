@@ -56,7 +56,7 @@ This **shipping size** is what the push writes to Salsify and the Bulk export sh
 - **Actual weight** = the products' weight + the packaging's own weight.
 - **DIM weight** = the package's volume ÷ the DIM divisor.
 - **Rounding:** 1 lb and over rounds **up** to a whole pound; under 1 lb keeps three decimals. Example: 3.45 → 4 lb; 0.2524 → 0.252 lb.
-- **Billed weight** on the card = the larger of actual and DIM weight, rounded, at the global divisor.
+- **Billed weight** (on the cards, the Report and Bulk) = the **lowest billed weight among the shipping methods** that take the package (section 6: each applies its own divisor and DIM threshold). Without any shipping method, it's the larger of actual and DIM weight at the global divisor. Example: an 11.5 × 8.5 × 1.6 in. mailer holding 0.29 lb is 2 lb by DIM at 139, but USPS (DIM only over 1,728 in³) bills it at 0.29 lb, so its billed weight is 0.29 lb.
 
 ## 6. Shipping methods
 
@@ -110,6 +110,7 @@ For each product with all four **packaged** values in Salsify (how it ships toda
 
 | Date | Change | Why |
 | --- | --- | --- |
+| Nov 24, 2026 | **Billed weight** is the lowest among the shipping methods (their own divisors and DIM thresholds), not the global DIM weight; the Report shows actual and billed weight side by side. | Small, light packages showed DIM weights no method would bill. |
 | Nov 24, 2026 | The push writes the **actual** shipping weight (product + packaging) instead of the billed weight. | The billed weight is the DIM weight rounded up (a 0.28 lb item in a mailer went to Salsify as 2 lb). |
 | Nov 24, 2026 | The Packaging review became part of the Report. | One place for the analysis. |
 | Nov 24, 2026 | "Current packaging beats our options" became **Expired packaging option** (except products that ship in their own packaging). | Our options are the packaging we ship in; a cheaper package in Salsify is a retired one, not a better one. |

@@ -30,6 +30,8 @@ export type GapRow = {
   fit: FitQuality | null;
   utilization: number | null;
   billedWeight: number | null;
+  /** Products + packaging (the recommendation's real weight). */
+  actualWeight: number;
   shippedDims: Dims | null;
   cheapest: { methodName: string; billedWeight: number; rate: number } | null;
   dimMethods: { methodName: string; dimWeight: number; billedWeight: number }[];
@@ -150,7 +152,8 @@ function GapTable({ gap, kind, review }: { gap: Gap; kind: GapKind; review: bool
                     <Td className="text-right text-sm tabular-nums">
                       {r.current ? (
                         <>
-                          <p>{r.current.billedWeight} lb billed</p>
+                          <p>{r.current.weight} lb actual</p>
+                          <p className="text-xs text-gray-500">{r.current.billedWeight} lb billed</p>
                           <p className="text-xs text-gray-500">{price(r.current.cheapest)}</p>
                         </>
                       ) : (
@@ -170,7 +173,8 @@ function GapTable({ gap, kind, review }: { gap: Gap; kind: GapKind; review: bool
                     <Td className="text-right text-sm tabular-nums">
                       {r.billedWeight != null ? (
                         <>
-                          <p>{r.billedWeight} lb billed</p>
+                          <p>{r.actualWeight} lb actual</p>
+                          <p className="text-xs text-gray-500">{r.billedWeight} lb billed</p>
                           <p className="text-xs text-gray-500">{price(r.cheapest)}</p>
                         </>
                       ) : (
@@ -238,7 +242,7 @@ function GapTable({ gap, kind, review }: { gap: Gap; kind: GapKind; review: bool
   );
 }
 
-export function ReportClient({ report, packedFields, status, canRun }: { report: Report | null; packedFields: string[]; status: PackagingJobStatus; canRun: boolean }) {
+export function ReportClient({ report, packedFields, selfCompare, status, canRun }: { report: Report | null; packedFields: string[]; selfCompare: string[]; status: PackagingJobStatus; canRun: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<GapKind>(report?.review ? "better" : "noFit");
   const listRef = useRef<HTMLDivElement>(null);
@@ -348,6 +352,11 @@ export function ReportClient({ report, packedFields, status, canRun }: { report:
             </Alert>
           )}
 
+          {selfCompare.length > 0 && (
+            <Alert variant="warning">
+              The packaged size and weight are read from {selfCompare.map((x) => `"${x}"`).join(", ")}, which the push to Salsify writes. So the comparison checks our own calculation against itself, and products show as configured correctly. In Settings → Salsify, point &quot;How products ship today&quot; at the fields that record how products really ship (for example &quot;Shipping Length (Inches)&quot;).
+            </Alert>
+          )}
           {!report.review && <Alert variant="info">This report was made before products&apos; packaged sizes were compared. {canRun ? "Press Run now" : "It updates after the next sync"} to see which could be packaged better.</Alert>}
           <div ref={listRef} className="scroll-mt-4">
             <Card>

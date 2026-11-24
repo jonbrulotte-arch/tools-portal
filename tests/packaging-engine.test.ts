@@ -29,7 +29,8 @@ describe("packing one shipment", () => {
   it("fits a product in a box with clearance and scores it", () => {
     const r = packIn([{ product: prod({ partNumber: "A" }), quantity: 1 }], box, s, [ups, usps])!;
     // 315 in³ in a 480 in³ box
-    expect(r).toMatchObject({ volumeUtilization: 65.6, fitQuality: "good", productsWeight: 2, packagingWeight: 0.5, actualWeight: 2.5, dimWeight: 4, billedWeight: 4, overweight: false });
+    // billed: the lowest of the methods (USPS bills its actual 2.5 → 3 lb; UPS bills 4 lb by DIM)
+    expect(r).toMatchObject({ volumeUtilization: 65.6, fitQuality: "good", productsWeight: 2, packagingWeight: 0.5, actualWeight: 2.5, dimWeight: 4, billedWeight: 3, overweight: false });
     expect(r.dimFlag).toBe(false); // USPS bills it by actual weight
     expect(r.shippedDims).toEqual({ height: 6, width: 8, length: 10 });
     // too big once clearance is added
@@ -85,8 +86,8 @@ describe("whole shipments", () => {
     expect(a.items.map((i) => [i.product.partNumber, i.quantity])).toEqual([["A", 1], ["OWN", 2]]);
     expect(a).toMatchObject({ totalUnits: 3, totalActualWeight: 22, ltlRequired: false, ltlShipping: [] });
     expect(a.results.map((r) => r.packaging.id)).toEqual(["box"]);
-    // 1,728 in³ ÷ 139 = 12.4 → 13 lb per unit; LTL methods are never offered for parcels
-    expect(a.standalone[0]).toMatchObject({ unitDimWeight: 13, unitBilledWeight: 13, totalBilledWeight: 26, dimFlag: true });
+    // 1,728 in³ ÷ 139 = 12.4 → 13 lb by DIM on UPS, but USPS (threshold 1,728 in³) bills its actual 10 lb; LTL methods are never offered for parcels
+    expect(a.standalone[0]).toMatchObject({ unitDimWeight: 13, unitBilledWeight: 10, totalBilledWeight: 20, dimFlag: false });
     expect(a.standalone[0].shipping.map((m) => m.methodId)).toEqual(["ups", "usps"]);
     const merged = analyzeShipment([{ product: prod({ partNumber: "A" }), quantity: 1 }, { product: prod({ partNumber: "A" }), quantity: 2 }], [box], [], s);
     expect(merged.items).toHaveLength(1);
@@ -114,10 +115,10 @@ describe("catalog report", () => {
     const r = await analyzeCatalog(products, [box, mailer], [ups, usps, ltl], s);
     expect(r).toMatchObject({ products: 4, packaging: 2, methods: 2, covered: 3, noFit: 1, coverageRate: 75 });
     const byPart = Object.fromEntries(r.results.map((x) => [x.partNumber, x]));
-    expect(byPart.A).toMatchObject({ packagingName: "Box 10x8x6", options: 1, billedWeight: 4, dimExposed: true, cheapest: { methodName: "USPS Ground Advantage", billedWeight: 3, rate: 7 } });
+    expect(byPart.A).toMatchObject({ packagingName: "Box 10x8x6", options: 1, billedWeight: 3, dimExposed: true, cheapest: { methodName: "USPS Ground Advantage", billedWeight: 3, rate: 7 } });
     expect(byPart.T).toMatchObject({ packagingId: "mailer", options: 2, fitQuality: "loose" });
     expect(byPart.BIG).toMatchObject({ packagingId: null, billedWeight: null, shippedDims: null });
-    expect(byPart.OWN).toMatchObject({ packagingName: "Ships in own packaging", shippedDims: { height: 12, width: 12, length: 12 }, billedWeight: 13 });
+    expect(byPart.OWN).toMatchObject({ packagingName: "Ships in own packaging", shippedDims: { height: 12, width: 12, length: 12 }, billedWeight: 10 }); // USPS bills its actual weight under 1,728 in³
     expect(r.looseOnly).toBe(1);
     const boxStat = r.packagingStats.find((p) => p.id === "box")!;
     expect(boxStat).toMatchObject({ fits: 2, bestFits: 1, soleOption: 1 });
