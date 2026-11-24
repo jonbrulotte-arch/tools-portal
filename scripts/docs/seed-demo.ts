@@ -57,7 +57,7 @@ async function main() {
   const ediAdmin = await role("EDI Admin", "Runs the Automated Emails (EDI) module.", ["auto-emails"], [toolSettingsPermission("auto-emails")]);
   const ediViewer = await role("EDI Viewer", "Can see automated emails and the email log.", ["auto-emails"], []);
   const cs = await role("Customer Service", "Creates Shopify discount codes.", ["shopify-discounts"], []);
-  const logistics = await role("Logistics", "Shipping rate analysis and packaging.", ["shipping-rates", "packaging-configurator"], [toolSettingsPermission("shipping-rates"), toolSettingsPermission("packaging-configurator"), "tool.packaging-configurator.catalog", "tool.packaging-configurator.push-choice"]);
+  const logistics = await role("Logistics", "Shipping rate analysis and packaging.", ["shipping-rates", "packaging-configurator"], [toolSettingsPermission("shipping-rates"), toolSettingsPermission("packaging-configurator"), "tool.packaging-configurator.catalog", "tool.packaging-configurator.packaging", "tool.packaging-configurator.run", "tool.shipping-rates.run", "tool.packaging-configurator.push-choice"]);
   await role("Warehouse", "Picks packaging for orders.", ["packaging-configurator"], []);
   const admin = await user("admin@demo.example", "Alex Admin", sa.id);
   await user("edi.admin@demo.example", "Erin EDI", ediAdmin.id);

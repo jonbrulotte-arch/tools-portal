@@ -32,7 +32,7 @@ Quote one product from both warehouses to every zone.
 
 ![Products](images/products.jpg)
 
-- Choose a **Run**. A new run starts on the schedule set in Settings, or with **Run now** (managers).
+- Choose a **Run**. A new run starts on the schedule set in Settings, or with **Run now** (needs the *run reports & pull data* permission).
 - **Search** by part number or name; **Show** filters the list (for example products whose sizes came from UPC data).
 - **Blended costs CSV** saves one row per product with its blended shipping cost; **All quotes CSV** saves every quote in the run.
 
@@ -112,7 +112,7 @@ A cost report is the ship cost history (UPS invoice lines and USPS labels) that 
 
 ![Cost reports](images/cost-reports.jpg)
 
-- **Import from Mango**: pick a date range and import it directly. Managers can also schedule a weekly import in Settings.
+- **Import from Mango**: pick a date range and import it directly. Managers can also schedule a weekly import in Settings. Importing, uploading and deleting need the *run reports & pull data* permission.
 - **Upload a file**: upload the Excel (.xlsx) export instead.
 - Only our own prepaid shipments are used; third-party and collect shipments are left out. Names and street addresses are read only to place each package, and aren't stored. Each package's order references (PO, SO, marketplace, channel), destination state and, for UPS business deliveries, the destination company are kept for the [Carrier choice](#carrier-choice) report. The company is never kept for home deliveries or USPS labels, where it's usually the person's name.
 - UPS invoices reach Mango a few weeks after shipping, so the newest weeks contain mostly USPS.
@@ -123,6 +123,6 @@ A quote run pulls a rate for every warehouse, zone (2–8) and weight: USPS Grou
 
 ![Quotes](images/quotes.jpg)
 
-- **Run quotes now** starts a run (managers can schedule a weekly one in Settings).
+- **Run quotes now** starts a run, and **Retry failed** re-quotes a run's failures (both need the *run reports & pull data* permission; managers can schedule a weekly run in Settings).
 - **View** shows a run's rate table by warehouse and service. The download icon exports it to Excel.
 - Use the latest run for decisions; older runs are kept for comparison.

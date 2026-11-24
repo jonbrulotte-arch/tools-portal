@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowDownCircle, Boxes, CalendarX, Download, Loader2, PackageCheck, PackageX, Play, Scale } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, Boxes, CalendarX, Download, Loader2, PackageCheck, PackageX, Play, RefreshCw, Scale, Square } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -260,11 +260,11 @@ export function ReportClient({ report, packedFields, selfCompare, status, canRun
     return () => clearInterval(t);
   }, [running, router]);
 
-  async function runNow() {
+  async function runNow(job: "analysis" | "sync" = "analysis", action: "start" | "cancel" = "start") {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(`${API}/jobs`, { method: "POST", json: { job: "analysis", action: "start" } });
+      await apiFetch(`${API}/jobs`, { method: "POST", json: { job, action } });
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -291,8 +291,18 @@ export function ReportClient({ report, packedFields, selfCompare, status, canRun
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canRun &&
+              (status.sync?.status === "RUNNING" ? (
+                <Button variant="outline" onClick={() => runNow("sync", "cancel")} disabled={busy}>
+                  <Square className="h-4 w-4" /> Stop the sync
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => runNow("sync")} disabled={busy || running} title="Read every product from the Salsify list again; the report runs when it finishes">
+                  <RefreshCw className="h-4 w-4" /> Sync from Salsify
+                </Button>
+              ))}
             {canRun && (
-              <Button variant="outline" onClick={runNow} disabled={busy || running}>
+              <Button variant="outline" onClick={() => runNow()} disabled={busy || running}>
                 {busy || running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {running ? "Running…" : "Run now"}
               </Button>
             )}

@@ -1,4 +1,14 @@
-For managers of the Shipping Rates Generator: people with its **Manage tool settings** permission, and Super Admins. Everything here is on the **Settings** tab. API keys and passwords are encrypted when saved and never shown again; leave a secret box blank to keep the saved value.
+For managers of the Shipping Rates Generator: people with its **Manage tool settings** permission, and Super Admins. Everything here is on the **Settings** tab.
+
+## Who can do what
+
+| Permission | Lets someone |
+| --- | --- |
+| Access to the tool | See the Analysis, Product quote, Products, Carrier choice, Cost reports and Quotes tabs, look up a product's quote, and download exports. |
+| **Shipping Rates Generator: run reports & pull data** | Start, retry and stop **quote runs** (Quotes) and **Products runs** (Products → Run now); **import a cost report from Mango, upload one, or delete one** (Cost reports; only their own unless they also manage settings); **read inventory now** (Products). Scheduled runs and imports run regardless. |
+| **Shipping Rates Generator: manage tool settings** | The Settings and API Report tabs, schedules and connections, and **Push now** to Salsify. |
+
+Give these in **Admin → Roles**. When this was added, every role with access to the tool was given **run reports & pull data**, so nothing changed until you remove it. API keys and passwords are encrypted when saved and never shown again; leave a secret box blank to keep the saved value.
 
 ## Weekly schedule
 

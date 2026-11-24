@@ -31,10 +31,28 @@ const EXTRA_TOOL_PERMISSIONS: ToolPermissionInfo[] = [
     description: "See discounts created by every user (otherwise users see only their own).",
   },
   {
+    key: "tool.shipping-rates.run",
+    tool: "shipping-rates",
+    label: "Shipping Rates Generator: run reports & pull data",
+    description: "Start, retry and stop quote runs and Products runs, upload cost reports or import them from Mango (and delete them), and import stock from Mango.",
+  },
+  {
+    key: "tool.packaging-configurator.run",
+    tool: "packaging-configurator",
+    label: "Packaging Configurator: run the sync & report",
+    description: "Sync products from Salsify (or stop a sync) and re-run the packaging report, from the Report tab.",
+  },
+  {
+    key: "tool.packaging-configurator.packaging",
+    tool: "packaging-configurator",
+    label: "Packaging Configurator: manage packaging",
+    description: "On the Packaging tab, add, edit, import and delete packaging options.",
+  },
+  {
     key: "tool.packaging-configurator.catalog",
     tool: "packaging-configurator",
-    label: "Packaging Configurator: manage packaging & shipping methods",
-    description: "Add, edit, import and delete packaging options and shipping methods (with their rate cards).",
+    label: "Packaging Configurator: manage shipping methods & rate cards",
+    description: "On the Shipping methods tab, add, edit and delete shipping methods, and edit and import their rate cards.",
   },
   {
     key: "tool.packaging-configurator.push-choice",

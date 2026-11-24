@@ -127,12 +127,15 @@ export function SettingsClient({
   keyUsers,
   status,
   hasOwnKey,
+  canRun,
 }: {
   initial: PackagingSettings;
   shippingOrgId: string;
   keyUsers: { id: string; name: string; email: string }[];
   status: PackagingJobStatus;
   hasOwnKey: boolean;
+  /** Has "run the sync & report". */
+  canRun: boolean;
 }) {
   const router = useRouter();
   const [s, setS] = useState(initial);
@@ -378,7 +381,7 @@ export function SettingsClient({
         <CardContent className="space-y-4">
           <Schedule value={s.sync} onChange={(v) => setS((x) => ({ ...x, sync: v }))} label="Sync automatically" />
           <div className="flex flex-wrap items-center gap-2">
-            {sync?.status === "RUNNING" ? (
+            {!canRun ? null : sync?.status === "RUNNING" ? (
               <Button variant="outline" onClick={() => job("sync", "cancel")} disabled={!!busy}>
                 <Square className="h-4 w-4" /> Stop
               </Button>
@@ -387,9 +390,11 @@ export function SettingsClient({
                 {busy === "sync-start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Sync now
               </Button>
             )}
-            <Button variant="outline" onClick={() => job("analysis", "start")} disabled={!!busy || status.analysis?.status === "RUNNING"}>
-              {busy === "analysis-start" || status.analysis?.status === "RUNNING" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run the report now
-            </Button>
+            {canRun && (
+              <Button variant="outline" onClick={() => job("analysis", "start")} disabled={!!busy || status.analysis?.status === "RUNNING"}>
+                {busy === "analysis-start" || status.analysis?.status === "RUNNING" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run the report now
+              </Button>
+            )}
             <span className="text-sm text-gray-500">
               {n(status.products)} products stored{status.incomplete ? `, ${n(status.incomplete)} missing size or weight` : ""}.
             </span>

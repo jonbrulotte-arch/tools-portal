@@ -28,7 +28,7 @@ export function ModeBadge({ mode }: { mode: string }) {
   return mode === "live" ? <Badge variant="success">Live carrier rates</Badge> : <Badge variant="warning">Simulated rates (not real prices)</Badge>;
 }
 
-export function QuotesClient({ mode, schedule, gridSize, origins, runs, selectedId, quotes }: { mode: string; schedule: { next: string | null; timezone: string; zoneLabel: string; frequency: "daily" | "weekly" } | null; gridSize: number; origins: { code: string; name: string; zip: string }[]; runs: Run[]; selectedId: string | null; quotes: QuoteCell[] }) {
+export function QuotesClient({ mode, schedule, gridSize, origins, runs, selectedId, quotes, canRun }: { mode: string; schedule: { next: string | null; timezone: string; zoneLabel: string; frequency: "daily" | "weekly" } | null; gridSize: number; origins: { code: string; name: string; zip: string }[]; runs: Run[]; selectedId: string | null; canRun: boolean; quotes: QuoteCell[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,18 +174,22 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
                     {pace.etaMs != null && <> · about {duration(pace.etaMs)} left</>}
                   </span>
                 )}
-                <Button size="sm" variant="outline" onClick={() => cancel(active.id)}>
-                  <Square className="h-3.5 w-3.5" /> Cancel
-                </Button>
+                {canRun && (
+                  <Button size="sm" variant="outline" onClick={() => cancel(active.id)}>
+                    <Square className="h-3.5 w-3.5" /> Cancel
+                  </Button>
+                )}
               </div>
               <div className="h-2 rounded-full bg-gray-100 overflow-hidden max-w-xl">
                 <div className="h-full bg-blue-600 transition-all" style={{ width: `${active.total ? (100 * active.done) / active.total : 0}%` }} />
               </div>
             </div>
-          ) : (
+          ) : canRun ? (
             <Button onClick={start} disabled={busy}>
               <Play className="h-4 w-4" /> {busy ? "Starting…" : "Run quotes now"}
             </Button>
+          ) : (
+            <p className="text-sm text-gray-500">Running quotes needs the &quot;run reports &amp; pull data&quot; permission.</p>
           )}
           {error && <Alert>{error}</Alert>}
         </CardContent>
@@ -222,7 +226,7 @@ export function QuotesClient({ mode, schedule, gridSize, origins, runs, selected
               <Td className="whitespace-nowrap tabular-nums text-gray-700">{duration(elapsedMs(r, now))}</Td>
               <Td className="text-gray-500 text-xs">{r.startedBy}</Td>
               <Td className="text-right whitespace-nowrap">
-                {r.failed > 0 && !active && r.mode === mode && (
+                {canRun && r.failed > 0 && !active && r.mode === mode && (
                   <Button size="sm" variant="ghost" onClick={() => retry(r)} title="Re-quote only the failed quotes">
                     <RotateCcw className="h-3.5 w-3.5" /> Retry failed
                   </Button>

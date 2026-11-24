@@ -3,7 +3,7 @@ import { z } from "zod";
 import { guard } from "@/lib/rbac";
 import { errorMessage, jsonError, parseBody } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-import { PACKAGING_SETTINGS_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
+import { PACKAGING_RUN_PERMISSION, PACKAGING_SETTINGS_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
 import { cancelPush, cancelSync, jobStatus, startAnalysis, startPush, startSync } from "@/lib/packaging/jobs";
 
 const jobSchema = z.object({ job: z.enum(["sync", "analysis", "push"]), action: z.enum(["start", "cancel"]) });
@@ -15,12 +15,17 @@ export async function GET() {
   return NextResponse.json(await jobStatus());
 }
 
-/** Start or cancel a sync, analysis or push now. */
+/** Start or cancel a sync, analysis or push now. Sync and analysis need "run the sync & report"; the push (it writes to Salsify) needs the settings permission. */
 export async function POST(req: Request) {
-  const user = await guard({ tool: PACKAGING_TOOL, permission: PACKAGING_SETTINGS_PERMISSION });
+  const user = await guard({ tool: PACKAGING_TOOL });
   if (user instanceof NextResponse) return user;
   const body = await parseBody(req, jobSchema);
   if (body instanceof NextResponse) return body;
+  const needed = body.job === "push" ? PACKAGING_SETTINGS_PERMISSION : PACKAGING_RUN_PERMISSION;
+  if (!user.can(needed)) {
+    await logAudit({ action: "access.denied", category: "AUTH", actorId: user.id, actorEmail: user.email, success: false, metadata: { tool: PACKAGING_TOOL, permission: needed, job: body.job } });
+    return jsonError("You do not have permission to do that", 403);
+  }
   const actor = { id: user.id, email: user.email };
   try {
     if (body.action === "cancel") {

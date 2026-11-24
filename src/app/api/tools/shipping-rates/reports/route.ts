@@ -4,13 +4,13 @@ import { guard } from "@/lib/rbac";
 import { jsonError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { processReport } from "@/lib/shipping/report";
-import { SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 
 const MAX_BYTES = 80 * 1024 * 1024;
 
 // Upload a Ship Cost History .xlsx; it's processed in the background into totals (no personal data kept).
 export async function POST(req: Request) {
-  const actor = await guard({ tool: SHIPPING_TOOL });
+  const actor = await guard({ tool: SHIPPING_TOOL, permission: SHIPPING_RUN_PERMISSION });
   if (actor instanceof NextResponse) return actor;
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");

@@ -3,14 +3,14 @@ import { guard } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { errorMessage, jsonError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-import { PACKAGING_CATALOG_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
+import { PACKAGING_PACKAGING_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
 import { refreshAnalysisSoon } from "@/lib/packaging/jobs";
 import { parsePackaging } from "@/lib/packaging/io";
 import { uploadedFile } from "@/lib/packaging/http";
 
 // Adds or updates packaging by name from a spreadsheet (the template's columns).
 export async function POST(req: Request) {
-  const user = await guard({ tool: PACKAGING_TOOL, permission: PACKAGING_CATALOG_PERMISSION });
+  const user = await guard({ tool: PACKAGING_TOOL, permission: PACKAGING_PACKAGING_PERMISSION });
   if (user instanceof NextResponse) return user;
   const file = await uploadedFile(req);
   if (file instanceof NextResponse) return file;

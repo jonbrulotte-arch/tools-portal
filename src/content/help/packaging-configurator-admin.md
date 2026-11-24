@@ -5,11 +5,13 @@ Setting up and running the Packaging Configurator: packaging, shipping methods a
 | Permission | Lets someone |
 | --- | --- |
 | Access to the tool | Use the Configurator and Bulk, see Products, Packaging, Shipping methods and the Report, and download exports. |
-| **Packaging Configurator: manage packaging & shipping methods** | Add, edit, import and delete packaging and shipping methods, and edit rate cards. |
+| **Packaging Configurator: run the sync & report** | On the Report tab (and in Settings), **Sync from Salsify**, stop a sync, and **Run now** to re-run the report. Scheduled syncs run regardless. |
+| **Packaging Configurator: manage packaging** | On the Packaging tab, add, edit, import and delete packaging. |
+| **Packaging Configurator: manage shipping methods & rate cards** | On the Shipping methods tab, add, edit and delete methods, and edit and import rate cards. |
 | **Packaging Configurator: push a chosen packaging to Salsify** | In the Configurator, choose one packaging option for a product and push its shipping size and weight to Salsify, or return a product to automatic. |
 | **Packaging Configurator: manage tool settings** | The Settings tab: fit rules, Salsify, and running a sync, the report or a push. |
 
-Give these in **Admin → Roles**. Anyone who starts a sync or push uses their own Salsify key (**My Profile → Salsify API key**) when they have one.
+Give these in **Admin → Roles**. When the permissions were split, roles that could manage packaging & shipping methods got both new ones, and roles that manage settings got **run the sync & report**, so nothing changed until you remove them. Anyone who starts a sync or push uses their own Salsify key (**My Profile → Salsify API key**) when they have one.
 
 ## Packaging
 
@@ -73,7 +75,7 @@ Saving a change re-runs the report.
 
 ### Sync products from Salsify
 
-The sync reads the whole list, adds new products, updates changed ones, and **removes products no longer on the list**, but only when it read the list to the end; a sync that fails part-way removes nothing. The report runs as soon as it finishes. Set a schedule (daily at 3 AM by default) or press **Sync now**. **Stop** ends it after the current page of products. **Run the report now** re-runs the report on its own.
+The sync reads the whole list, adds new products, updates changed ones, and **removes products no longer on the list**, but only when it read the list to the end; a sync that fails part-way removes nothing. The report runs as soon as it finishes. Set a schedule (daily at 3 AM by default) or press **Sync now**. **Stop** ends it after the current page of products. **Run the report now** re-runs the report on its own. Pressing these needs **run the sync & report** as well (people with only that permission have the same buttons on the Report tab); **Push all now** needs only the settings permission, because it writes to Salsify.
 
 ![The sync](images/sync.jpg)
 

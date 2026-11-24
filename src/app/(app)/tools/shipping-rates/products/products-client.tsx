@@ -58,6 +58,8 @@ export function ProductsClient(props: {
   listId: string;
   canRun: boolean;
   canManageSettings: boolean;
+  /** Has "run reports & pull data" (start/stop Products runs, read inventory). */
+  mayRun: boolean;
   schedule: { frequency: string; next: string | null; timezone: string; zoneLabel: string } | null;
   runs: Run[];
   selectedId: string | null;
@@ -195,19 +197,21 @@ export function ProductsClient(props: {
                     </span>
                   )}
                 </span>
-                <Button size="sm" variant="outline" onClick={() => cancel(active.id)}>
-                  <Square className="h-3.5 w-3.5" /> Cancel
-                </Button>
+                {props.mayRun && (
+                  <Button size="sm" variant="outline" onClick={() => cancel(active.id)}>
+                    <Square className="h-3.5 w-3.5" /> Cancel
+                  </Button>
+                )}
               </div>
               <div className="h-2 w-full max-w-md rounded-full bg-gray-100 overflow-hidden">
                 <div className="h-full bg-blue-600 transition-all" style={{ width: `${active.total ? (100 * active.done) / active.total : 0}%` }} />
               </div>
             </div>
-          ) : (
+          ) : props.mayRun ? (
             <Button onClick={runNow} disabled={busy || !props.canRun}>
               <Play className="h-4 w-4" /> {busy ? "Starting…" : "Run now"}
             </Button>
-          )}
+          ) : null}
           <p className="text-xs text-gray-500">
             {props.schedule ? (
               <>
@@ -398,7 +402,7 @@ export function ProductsClient(props: {
         </Card>
       )}
 
-      <InventoryCard status={props.inventory} canRun={props.canManageSettings} onRun={runInventory} />
+      <InventoryCard status={props.inventory} canRun={props.mayRun} onRun={runInventory} />
       <PushCard status={props.push} canRun={props.canManageSettings} onRun={pushNow} />
       {props.reality && <RealityCheckCard r={props.reality} />}
 

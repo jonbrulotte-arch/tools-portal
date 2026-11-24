@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireTool } from "@/lib/rbac";
 import { getSetting } from "@/lib/settings";
-import { PACKAGING_SETTINGS_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
+import { PACKAGING_RUN_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
 import { jobStatus, latestReport } from "@/lib/packaging/jobs";
 import { normalizeVerdict, type ReviewVerdict } from "@/lib/packaging/review";
 import type { ProductResult } from "@/lib/packaging/report";
@@ -83,7 +83,7 @@ export default async function ReportPage() {
       packedFields={[f.packedLength, f.packedWidth, f.packedHeight, f.packedWeight].filter(Boolean)}
       selfCompare={selfCompare}
       status={status}
-      canRun={user.can(PACKAGING_SETTINGS_PERMISSION)}
+      canRun={user.can(PACKAGING_RUN_PERMISSION)}
     />
   );
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireTool } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import type { ReportSummary } from "@/lib/shipping/report";
-import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { getSetting } from "@/lib/settings";
 import { rollingRange } from "@/lib/shipping/mango-import";
 import { nextRun, timezoneLabel } from "@/lib/timezone";
@@ -18,6 +18,7 @@ export default async function ReportsPage() {
     <ReportsClient
       currentUserId={user.id}
       canManage={user.can(SHIPPING_SETTINGS_PERMISSION)}
+      canRun={user.can(SHIPPING_RUN_PERMISSION)}
       mango={{
         defaultRange: rollingRange(m.days, new Date(), m.timezone),
         days: m.days,

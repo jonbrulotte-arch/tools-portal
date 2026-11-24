@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableWrap, Th, Td, Tr, EmptyRow, RowAction } from "@/components/ui/table";
 import { apiFetch } from "@/lib/client-fetch";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import type { ReportSummary } from "@/lib/shipping/report";
 
 type Report = {
@@ -45,7 +45,7 @@ type MangoInfo = {
   auto: { frequency: "daily" | "weekly"; next: string | null; timezone: string; zoneLabel: string } | null;
 };
 
-export function ReportsClient({ reports, currentUserId, canManage, mango }: { reports: Report[]; currentUserId: string; canManage: boolean; mango: MangoInfo }) {
+export function ReportsClient({ reports, currentUserId, canManage, canRun, mango }: { reports: Report[]; currentUserId: string; canManage: boolean; canRun: boolean; mango: MangoInfo }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -113,7 +113,8 @@ export function ReportsClient({ reports, currentUserId, canManage, mango }: { re
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
+          {!canRun && <Alert variant="info">Importing or uploading a cost report needs the &quot;run reports &amp; pull data&quot; permission.</Alert>}
+          <div className={cn("flex flex-wrap items-end gap-3", !canRun && "hidden")}>
             <div>
               <Label htmlFor="mango-from">From</Label>
               <Input id="mango-from" type="date" value={range.from} max={range.to} onChange={(e) => setRange({ ...range, from: e.target.value })} className="w-44" />
@@ -196,7 +197,7 @@ export function ReportsClient({ reports, currentUserId, canManage, mango }: { re
                     </Link>
                   </>
                 )}
-                {(canManage || r.uploadedById === currentUserId) && r.status !== "RUNNING" && r.status !== "PENDING" && (
+                {canRun && (canManage || r.uploadedById === currentUserId) && r.status !== "RUNNING" && r.status !== "PENDING" && (
                   <RowAction danger title="Delete report" onClick={() => remove(r)}>
                     <Trash2 className="h-4 w-4" />
                   </RowAction>

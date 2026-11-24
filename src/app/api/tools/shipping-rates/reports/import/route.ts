@@ -3,11 +3,11 @@ import { guard } from "@/lib/rbac";
 import { errorMessage, jsonError, parseBody } from "@/lib/api";
 import { importFromMango } from "@/lib/shipping/mango-import";
 import { mangoImportSchema } from "@/lib/shipping/mango-schema";
-import { SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 
 // Pulls the Ship Cost History export for a date range from Mango and processes it in the background.
 export async function POST(req: Request) {
-  const actor = await guard({ tool: SHIPPING_TOOL });
+  const actor = await guard({ tool: SHIPPING_TOOL, permission: SHIPPING_RUN_PERMISSION });
   if (actor instanceof NextResponse) return actor;
   const body = await parseBody(req, mangoImportSchema);
   if (body instanceof NextResponse) return body;

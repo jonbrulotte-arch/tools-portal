@@ -3,11 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/rbac";
 import { jsonError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-import { SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 
 // Stops a Products run after the product it's on; products already quoted are kept.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const actor = await guard({ tool: SHIPPING_TOOL });
+  const actor = await guard({ tool: SHIPPING_TOOL, permission: SHIPPING_RUN_PERMISSION });
   if (actor instanceof NextResponse) return actor;
   const { id } = await params;
   const r = await prisma.productRateRun.updateMany({ where: { id, status: { in: ["PENDING", "RUNNING"] } }, data: { status: "CANCELLED" } });

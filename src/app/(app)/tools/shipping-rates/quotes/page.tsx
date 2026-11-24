@@ -4,14 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/settings";
 import { buildQuoteGrid, latestZipSuggestions } from "@/lib/shipping/runner";
 import { loadQuotes } from "@/lib/shipping/analysis";
-import { SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { nextRun, SCHEDULE_TIMEZONES } from "@/lib/shipping/schedule";
 import { QuotesClient } from "./quotes-client";
 
 export const metadata: Metadata = { title: "Shipping quotes" };
 
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
-  await requireTool(SHIPPING_TOOL);
+  const user = await requireTool(SHIPPING_TOOL);
   const sp = await searchParams;
   const [settings, runs] = await Promise.all([getSetting("shippingRates"), prisma.shippingQuoteRun.findMany({ orderBy: { createdAt: "desc" }, take: 20 })]);
   const selected = runs.find((r) => r.id === sp.run) ?? runs.find((r) => r.status === "READY") ?? runs[0];
@@ -34,6 +34,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
       runs={runs.map((r) => ({ id: r.id, mode: r.mode, status: r.status, total: r.total, done: r.done, failed: r.failed, error: r.error, startedBy: r.startedBy, createdAt: r.createdAt.toISOString(), startedAt: (r.startedAt ?? r.createdAt).toISOString(), startDone: r.startDone, finishedAt: r.finishedAt?.toISOString() ?? null }))}
       selectedId={selected?.id ?? null}
       quotes={quotes}
+      canRun={user.can(SHIPPING_RUN_PERMISSION)}
     />
   );
 }

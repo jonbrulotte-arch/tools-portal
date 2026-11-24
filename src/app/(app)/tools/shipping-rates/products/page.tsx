@@ -4,7 +4,7 @@ import { getSetting } from "@/lib/settings";
 import { credentialStatus } from "@/lib/user-credentials";
 import { nextRun, timezoneLabel } from "@/lib/timezone";
 import { busiestZones, loadProductPage, loadProductRuns, type ProductFilter } from "@/lib/shipping/product-rates-view";
-import { SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
+import { SHIPPING_RUN_PERMISSION, SHIPPING_SETTINGS_PERMISSION, SHIPPING_TOOL } from "@/lib/shipping/access";
 import { inventoryStatus } from "@/lib/shipping/mango-inventory";
 import { salsifyPushStatus } from "@/lib/shipping/salsify-push";
 import { loadRealityCheck } from "@/lib/shipping/blended-view";
@@ -30,6 +30,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       listId={p.listId}
       canRun={!!p.listId && (!!creds.salsify || !!p.keyUserId)}
       canManageSettings={user.can(SHIPPING_SETTINGS_PERMISSION)}
+      mayRun={user.can(SHIPPING_RUN_PERMISSION)}
       schedule={p.enabled ? { frequency: p.frequency, next: nextRun(p, new Date())?.toISOString() ?? null, timezone: p.timezone, zoneLabel: timezoneLabel(p.timezone) } : null}
       runs={runs}
       selectedId={selected?.id ?? null}
