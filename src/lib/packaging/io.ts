@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { PACKAGING_TYPE_LABELS, FIT_LABELS, type PackagingType, type ShipmentAnalysis } from "@/lib/packaging/engine";
 import type { StoredReport } from "@/lib/packaging/jobs";
-import { VERDICT_LABELS } from "@/lib/packaging/review";
+import { normalizeVerdict, VERDICT_LABELS } from "@/lib/packaging/review";
 
 // Spreadsheet templates, imports and exports for the Packaging Configurator (same column names as the
 // stand-alone app, so its files still import).
@@ -284,7 +284,7 @@ export function reportSheets(r: StoredReport, computedAt: string): Sheet[] {
         ...(r.review
           ? ([
               ["Products with a packaged size in Salsify", r.review.withPacked],
-              ...Object.entries(r.review.counts).map(([k, v]) => [`Review: ${VERDICT_LABELS[k as keyof typeof VERDICT_LABELS]}`, v]),
+              ...Object.entries(r.review.counts).map(([k, v]) => [`Review: ${VERDICT_LABELS[normalizeVerdict(k)]}`, v]),
               ["Review: total saving if each shipped once ($)", r.review.savingRate],
               ["Review: total saving (lb billed)", r.review.savingLb],
             ] as Cell[][])
@@ -326,7 +326,7 @@ export function reportSheets(r: StoredReport, computedAt: string): Sheet[] {
           return [
             x.partNumber,
             x.name,
-            VERDICT_LABELS[v.verdict],
+            VERDICT_LABELS[normalizeVerdict(v.verdict)],
             v.current?.dims.length,
             v.current?.dims.width,
             v.current?.dims.height,

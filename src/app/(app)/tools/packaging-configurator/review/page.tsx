@@ -3,6 +3,7 @@ import { requireTool } from "@/lib/rbac";
 import { getSetting } from "@/lib/settings";
 import { PACKAGING_SETTINGS_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
 import { latestReport } from "@/lib/packaging/jobs";
+import { normalizeVerdict } from "@/lib/packaging/review";
 import { ReviewClient, type ReviewRow } from "./review-client";
 
 export const metadata: Metadata = { title: "Packaging review" };
@@ -16,7 +17,7 @@ export default async function ReviewPage() {
     .map((x) => ({
       partNumber: x.partNumber,
       name: x.name,
-      verdict: x.review!.verdict,
+      verdict: normalizeVerdict(x.review!.verdict),
       current: x.review!.current,
       recommended: x.packagingName ? { name: x.packagingName, dims: x.shippedDims, billedWeight: x.billedWeight, cheapest: x.cheapest } : null,
       savingRate: x.review!.savingRate,
@@ -26,7 +27,7 @@ export default async function ReviewPage() {
   return (
     <ReviewClient
       rows={rows}
-      summary={r?.review ?? null}
+      summary={r?.review ? { ...r.review, counts: { ...r.review.counts, expired: r.review.counts.expired ?? (r.review.counts as Record<string, number>).currentBetter ?? 0 } } : null}
       products={r?.products ?? 0}
       at={latest ? (latest.run.finishedAt ?? latest.run.createdAt).toISOString() : null}
       fields={[f.packedLength, f.packedWidth, f.packedHeight, f.packedWeight].filter(Boolean)}

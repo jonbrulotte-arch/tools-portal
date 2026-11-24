@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchingPackaging, pricePackage, reviewProduct } from "@/lib/packaging/review";
+import { matchingPackaging, normalizeVerdict, pricePackage, reviewProduct } from "@/lib/packaging/review";
 import { analyzeCatalog } from "@/lib/packaging/report";
 import type { Packaging, Product, ShippingMethod } from "@/lib/packaging/engine";
 
@@ -27,8 +27,11 @@ describe("packaging review", () => {
     expect(better).toMatchObject({ verdict: "better", savingRate: 18, savingLb: 18, current: { matches: "Box 18x14x12", billedWeight: 22 } });
     // already in the recommended box
     expect(reviewProduct(prod({ packed: { length: 10, width: 8, height: 6, weight: 2.5 } }), rec, [small, big], s, [ups])).toMatchObject({ verdict: "ok", savingRate: 0 });
-    // a tighter custom carton than anything we have
-    expect(reviewProduct(prod({ packed: { length: 9.5, width: 7.5, height: 5.5, weight: 2.3 } }), { ...rec, shippedDims: { height: 12, width: 14, length: 18 } }, [big], s, [ups])).toMatchObject({ verdict: "currentBetter" });
+    // smaller than anything we ship in: an expired packaging option still in Salsify
+    expect(reviewProduct(prod({ packed: { length: 9.5, width: 7.5, height: 5.5, weight: 2.3 } }), { ...rec, shippedDims: { height: 12, width: 14, length: 18 } }, [big], s, [ups])).toMatchObject({ verdict: "expired" });
+    // ...unless it ships in its own carton
+    expect(reviewProduct(prod({ shipsOwn: true, packed: { length: 9.5, width: 7.5, height: 5.5, weight: 2.3 } }), { ...rec, shippedDims: { height: 12, width: 14, length: 18 } }, [big], s, [ups])).toMatchObject({ verdict: "ok" });
+    expect(normalizeVerdict("currentBetter")).toBe("expired");
     // packaged size smaller than the product: bad data
     expect(reviewProduct(prod({ packed: { length: 6, width: 4, height: 2, weight: 2 } }), rec, [small], s, [ups]).verdict).toBe("undersized");
     // foldable: a package that fits it folded isn't undersized
@@ -49,7 +52,7 @@ describe("packaging review", () => {
       prod({ partNumber: "C" }),
     ];
     const r = await analyzeCatalog(products, [small, big], [ups], s);
-    expect(r.review).toEqual({ withPacked: 2, counts: { ok: 1, better: 1, currentBetter: 0, undersized: 0, noOption: 0, noPacked: 1 }, savingRate: 18, savingLb: 18 });
+    expect(r.review).toEqual({ withPacked: 2, counts: { ok: 1, better: 1, expired: 0, undersized: 0, noOption: 0, noPacked: 1 }, savingRate: 18, savingLb: 18 });
     expect(r.results[0].review?.verdict).toBe("better");
   });
 });

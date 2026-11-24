@@ -165,7 +165,7 @@ export async function analyzeCatalog(products: Product[], packaging: Packaging[]
   }
 
   // packaging review: today's package (from Salsify) against the recommendation, product by product
-  const review: ReviewSummary = { withPacked: 0, counts: { ok: 0, better: 0, currentBetter: 0, undersized: 0, noOption: 0, noPacked: 0 }, savingRate: 0, savingLb: 0 };
+  const review: ReviewSummary = { withPacked: 0, counts: { ok: 0, better: 0, expired: 0, undersized: 0, noOption: 0, noPacked: 0 }, savingRate: 0, savingLb: 0 };
   results.forEach((r, i) => {
     const rec = r.packagingName && r.shippedDims ? { name: r.packagingName, shippedDims: r.shippedDims, actualWeight: r.actualWeight } : null;
     r.review = reviewProduct(products[i], rec, packaging, s, methods);

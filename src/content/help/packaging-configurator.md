@@ -94,7 +94,7 @@ Each product gets one verdict; the tiles count them and pick the list below:
 | --- | --- |
 | **Could be packaged better** | Our recommendation bills less than today's package. Sorted by the saving per shipment. |
 | **Configured correctly** | Today's package bills the same as the recommendation (usually it *is* that packaging). |
-| **Current packaging beats our options** | Today's package bills less than anything we have set up: worth adding it as a packaging option. |
+| **Expired packaging option** | Today's package bills less than anything we ship in, so it can't be one of our current options: Salsify still has a retired packaging. Repack it in our recommendation and update Salsify (**Pack it**, then push). Products that ship in their own packaging are never put here. |
 | **Packaged size smaller than the product** | One of the two sizes in Salsify is wrong. |
 | **No packaging of ours fits** | Nothing to compare with. |
 | **No packaged size in Salsify** | Fill in the packaged size and weight to include it. |

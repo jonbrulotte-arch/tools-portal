@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowDownCircle, CheckCircle2, Download, HelpCircle, Lightbulb, PackageX, Ruler } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, CalendarX, CheckCircle2, Download, HelpCircle, PackageX, Ruler } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -23,12 +23,12 @@ export type ReviewRow = {
   savingLb: number | null;
 };
 
-const ORDER: ReviewVerdict[] = ["better", "ok", "currentBetter", "undersized", "noOption", "noPacked"];
-const ICONS: Record<ReviewVerdict, typeof CheckCircle2> = { better: ArrowDownCircle, ok: CheckCircle2, currentBetter: Lightbulb, undersized: Ruler, noOption: PackageX, noPacked: HelpCircle };
+const ORDER: ReviewVerdict[] = ["better", "ok", "expired", "undersized", "noOption", "noPacked"];
+const ICONS: Record<ReviewVerdict, typeof CheckCircle2> = { better: ArrowDownCircle, ok: CheckCircle2, expired: CalendarX, undersized: Ruler, noOption: PackageX, noPacked: HelpCircle };
 const TONES: Record<ReviewVerdict, string> = {
   better: "bg-amber-50 text-amber-600",
   ok: "bg-green-50 text-green-600",
-  currentBetter: "bg-blue-50 text-blue-600",
+  expired: "bg-red-50 text-red-600",
   undersized: "bg-red-50 text-red-600",
   noOption: "bg-red-50 text-red-600",
   noPacked: "bg-gray-100 text-gray-500",
@@ -36,7 +36,7 @@ const TONES: Record<ReviewVerdict, string> = {
 const HINTS: Record<ReviewVerdict, string> = {
   better: "Our recommended packaging bills less than how the product ships today. Sorted by the saving per shipment.",
   ok: "Today's package bills the same as our recommendation (usually it is that packaging).",
-  currentBetter: "Today's package bills less than anything we have set up. Worth adding it as a packaging option.",
+  expired: "Today's package bills less than anything we ship in, so it isn't one of our current packaging options: Salsify still has a retired (expired) packaging. Repack it in our recommendation and update Salsify (Pack it, then push). Products that ship in their own packaging never land here.",
   undersized: "Salsify's packaged size is smaller than the product itself, so one of them is wrong. Check both in Salsify.",
   noOption: "The product has a packaged size, but none of our packaging fits it.",
   noPacked: "Salsify has no packaged size and weight for these, so they can't be compared.",

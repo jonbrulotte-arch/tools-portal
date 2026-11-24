@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/settings";
 import { PACKAGING_SETTINGS_PERMISSION, PACKAGING_TOOL } from "@/lib/packaging/access";
 import { latestReport } from "@/lib/packaging/jobs";
+import { normalizeVerdict } from "@/lib/packaging/review";
 import { ProductsClient, type ProductRow } from "./products-client";
 
 export const metadata: Metadata = { title: "Packaging products" };
@@ -50,7 +51,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       error: p.error,
       chosen: chosen.get(p.partNumber) ?? null,
       packed: p.packedLength != null ? { length: p.packedLength, width: p.packedWidth!, height: p.packedHeight!, weight: p.packedWeight! } : null,
-      verdict: r?.review?.verdict ?? null,
+      verdict: r?.review ? normalizeVerdict(r.review.verdict) : null,
       best: r ? { name: r.packagingName, fit: r.fitQuality, billedWeight: r.billedWeight, shippedDims: r.shippedDims, options: r.options, dimExposed: r.dimExposed } : null,
     };
   });

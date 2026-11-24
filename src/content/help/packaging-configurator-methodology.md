@@ -102,9 +102,15 @@ For each product with all four **packaged** values in Salsify (how it ships toda
    - *No packaging of ours fits*: there's no recommendation.
    - *Configured correctly*: today's package matches the recommended packaging (every side within 0.5 in., any orientation; a mailer's sealed size), or the saving is under half a cent (or a hundredth of a pound).
    - *Could be packaged better*: the saving is positive.
-   - *Current packaging beats our options*: the saving is negative.
+   - *Expired packaging option*: the saving is negative. Our packaging options are what we ship in, so a package that bills less than all of them isn't one we use any more: Salsify still has a retired packaging. A product that **ships in its own packaging** is *configured correctly* here instead, since its own carton is its packaging.
 
 "Looks like" is the packaging option whose size today's package matches within 0.5 in. on every side. Totals on the review add up the savings of the *could be packaged better* products, one shipment each.
+
+### Method changes
+
+| Date | Change | Why |
+| --- | --- | --- |
+| Nov 24, 2026 | "Current packaging beats our options" became **Expired packaging option** (except products that ship in their own packaging). | Our options are the packaging we ship in; a cheaper package in Salsify is a retired one, not a better one. |
 
 ## Changes from the stand-alone app
 

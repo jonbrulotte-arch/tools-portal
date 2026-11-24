@@ -149,7 +149,7 @@ export function ProductsClient({
                         </p>
                         <p className="text-xs text-gray-500">{p.packed.weight} lb</p>
                         {p.verdict && p.verdict !== "noPacked" && (
-                          <p className={cn("text-xs", p.verdict === "ok" ? "text-green-700" : p.verdict === "better" ? "text-amber-700" : p.verdict === "currentBetter" ? "text-blue-700" : "text-red-700")}>{VERDICT_LABELS[p.verdict]}</p>
+                          <p className={cn("text-xs", p.verdict === "ok" ? "text-green-700" : p.verdict === "better" ? "text-amber-700" : "text-red-700")}>{VERDICT_LABELS[p.verdict]}</p>
                         )}
                       </>
                     ) : (

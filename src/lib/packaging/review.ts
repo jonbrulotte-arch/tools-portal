@@ -8,8 +8,11 @@ export type ReviewVerdict =
   | "ok"
   /** The recommendation bills less: the product could be packaged better. */
   | "better"
-  /** Today's package bills less than anything we have set up: a packaging option worth adding. */
-  | "currentBetter"
+  /**
+   * Today's package bills less than anything we have set up. Our options are the packaging we ship in, so
+   * it can't be one of them: a retired (expired) packaging option still recorded in Salsify.
+   */
+  | "expired"
   /** The packaged size is smaller than the product: the Salsify data needs checking. */
   | "undersized"
   /** None of our packaging fits the product, so there's nothing to compare with. */
@@ -20,7 +23,7 @@ export type ReviewVerdict =
 export const VERDICT_LABELS: Record<ReviewVerdict, string> = {
   ok: "Configured correctly",
   better: "Could be packaged better",
-  currentBetter: "Current packaging beats our options",
+  expired: "Expired packaging option",
   undersized: "Packaged size smaller than the product",
   noOption: "No packaging of ours fits",
   noPacked: "No packaged size in Salsify",
@@ -87,6 +90,10 @@ export function reviewProduct(
   const savingLb = r2(current.billedWeight - rec.billedWeight);
   const savingRate = current.cheapest && rec.cheapest ? r2(current.cheapest.rate - rec.cheapest.rate) : null;
   const diff = savingRate ?? savingLb;
-  const verdict: ReviewVerdict = current.matches === recommended.name || Math.abs(diff) < 0.005 ? "ok" : diff > 0 ? "better" : "currentBetter";
+  // a product that ships in its own carton can legitimately bill less than our estimate of that carton
+  const verdict: ReviewVerdict = current.matches === recommended.name || Math.abs(diff) < 0.005 || (diff < 0 && p.shipsOwn) ? "ok" : diff > 0 ? "better" : "expired";
   return { verdict, current, savingRate, savingLb };
 }
+
+/** Reports saved before the rename call "expired" "currentBetter". */
+export const normalizeVerdict = (v: string): ReviewVerdict => (v === "currentBetter" ? "expired" : (v as ReviewVerdict));
