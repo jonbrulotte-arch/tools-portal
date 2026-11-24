@@ -21,7 +21,7 @@ Sides are compared largest to largest, so a product can turn any way.
 
 - **Boxes:** each product side plus the clearance must fit the matching inside side. Example: a 9 × 7 × 5 in. product needs 9.5 × 7.5 × 5.5 in. inside.
 - **Max height:** for mailers and flat-pack boxes, the max height (how thick the contents can be) stands in for the box's height.
-- **Bubble and poly mailers** (with a max height): a mailer wraps around what's in it, so each flat side loses the contents' thickness. The product's two largest sides **plus its thickness** plus clearance must fit the mailer's flat size, and its thickness plus clearance must be within the max height. With several items, the thickness is the whole stack. Example: a 9.5 × 8 × 3 in. product needs at least 13 × 11.5 in. flat (9.5 + 3 + 0.5 and 8 + 3 + 0.5), so a 13 × 10 in. mailer doesn't fit.
+- **Bubble and poly mailers** (with a max height): a mailer wraps around what's in it, so each flat side loses the contents' thickness (see *How mailers work* below). The product's two largest sides **plus its thickness** plus clearance must fit the mailer's flat size, and its thickness plus clearance must be within the max height. With several items, the thickness is the whole stack. Example: a 9.5 × 8 × 3 in. product needs at least 13 × 11.5 in. flat (9.5 + 3 + 0.5 and 8 + 3 + 0.5), so a 13 × 10 in. mailer doesn't fit.
 - **Several units or products:**
   - With a **max height**, items lie flat and stack: the thinnest sides add up, and the stack plus clearance must be within the max height.
   - Otherwise, by **volume**: all the items' volume must be within the box's inside volume × the pack efficiency. Example: a 480 in³ box at 70% takes 336 in³ of products.
@@ -50,6 +50,31 @@ Sides are compared largest to largest, so a product can turn any way.
   Example: a 9 × 6 in. bubble mailer (0.25 in. material) with a 0.5 in. product seals at 8.5 × 5.5 × 0.75 in.
 
 This **shipping size** is what the push writes to Salsify and the Bulk export shows.
+
+## How mailers work
+
+A bubble or poly mailer isn't a box with fixed sides. It's a flat envelope that **wraps around what's in it**, so the thicker the contents, the more of the envelope goes up and over them and the less is left for length and width:
+
+- **Sealed thickness** = the contents' (stacked) thickness + the mailer material.
+- **Sealed length and width** = the mailer's flat size **minus** the contents' thickness.
+- **Largest footprint it holds** = the sealed length and width minus the clearance. A product only fits if its two largest sides, plus its thickness, plus the clearance, fit the flat size.
+- **Thickest contents it takes** = the mailer's **max height** minus the clearance.
+
+Example: a **13 × 10 in. poly mailer** (0.1 in. material, max height 3.5 in.), with the default 0.5 in. clearance and DIM divisor 139:
+
+| Contents thick | Sealed size (L × W × H) | Largest footprint it holds | Sealed volume | DIM weight |
+| --- | --- | --- | --- | --- |
+| 0.5 in. | 12.5 × 9.5 × 0.6 in. | 12 × 9 in. | 71 in³ | 0.513 lb |
+| 1 in. | 12 × 9 × 1.1 in. | 11.5 × 8.5 in. | 119 in³ | 0.855 lb |
+| 2 in. | 11 × 8 × 2.1 in. | 10.5 × 7.5 in. | 185 in³ | 2 lb |
+| 3 in. | 10 × 7 × 3.1 in. | 9.5 × 6.5 in. | 217 in³ | 2 lb |
+
+What this means in practice:
+- **A mailer holds less than its flat size suggests.** At 3 in. thick, this 13 × 10 mailer takes a 9.5 × 6.5 in. footprint, not 13 × 10. A 9.5 × 8 × 3 in. product doesn't fit it, though its footprint fits the flat mailer easily.
+- **Volume grows more slowly than thickness.** Going from 1 to 3 in. thick triples the thickness, but the sealed volume (and the DIM weight) less than doubles, because the length and width shrink.
+- **Several items stack:** their thinnest sides add up to the contents' thickness, so each extra item shrinks the footprint for all of them.
+- **Max height** (set on the Packaging tab) is how thick the contents can be. Above it the mailer won't close, whatever the footprint.
+- **Volume used** for a mailer is measured against its sealed size, so a well-filled mailer reads close to 100%, and never over it.
 
 ## 5. Weights
 

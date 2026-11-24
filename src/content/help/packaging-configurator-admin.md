@@ -17,6 +17,7 @@ Give these in **Admin → Roles**. Anyone who starts a sync or push uses their o
 - **Type:** Box, Bubble mailer, Poly mailer or Other.
 - **Length, Width, Height:** inside measurements in inches. For a mailer, *Height* is the **material thickness** (about 0.25 in. for bubble, 0.1 in. for poly).
 - **Max height:** how thick the contents can be. **Required for mailers.** For a box it's optional: set it for flat-pack boxes, so products stack flat and the package is measured at their real thickness.
+- **Mailers shrink as they fill:** enter a mailer's **flat** size. The thicker the contents, the less length and width are left (a 13 × 10 in. mailer around 3 in. of product holds a 9.5 × 6.5 in. footprint). See [How mailers work](/help/packaging-configurator-methodology#how-mailers-work).
 - **Max weight** and **Packaging weight** (its own weight, added to the actual weight).
 - **Active:** turn an option off to stop offering it without deleting it.
 

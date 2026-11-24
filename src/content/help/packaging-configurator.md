@@ -27,7 +27,7 @@ To paste a long list, use **Import from Excel** with a sheet that has *Part Numb
 - **Packaging options**, best first. Each card shows:
   - **Best fit** (green) on the top card, the packaging's type and a **fit badge**: *Exact fit* (90% or more of the space used), *Good fit* (60–90%), *Loose fit* (35–60%) or *Oversized* (under 35%).
   - **Volume used:** how full it is.
-  - **Ships at:** for mailers, the sealed size (a mailer shrinks around what's in it).
+  - **Ships at:** for mailers, the sealed size. A mailer wraps around what's in it, so the thicker the contents, the smaller its length and width. See [How mailers work](/help/packaging-configurator-methodology#how-mailers-work).
   - **Products, Packaging, Actual weight, DIM weight, Billed weight.** DIM weight is amber when it's more than the actual weight.
   - **Shipping methods:** each method that takes this billed weight, with the weight it bills, a **DIM** tag when it bills by dimensional weight, and its price from the rate card. The cheapest is marked **Cheapest**.
   - Warnings for a loose fit, for DIM on every method, and for going **over the packaging's weight limit**. Options over their limit are always listed last.

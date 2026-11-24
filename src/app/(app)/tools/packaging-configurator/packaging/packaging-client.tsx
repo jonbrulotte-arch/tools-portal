@@ -121,6 +121,14 @@ function PackagingDialog({ row, onClose, onSaved }: { row: Row | null; onClose: 
               <Label htmlFor="pk-tw">Packaging weight (lb), optional</Label>
               <Input id="pk-tw" type="number" step="any" min={0} value={f.tareWeight} onChange={(e) => set({ tareWeight: e.target.value })} />
             </div>
+            {mailer && (
+              <p className="sm:col-span-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                Enter the mailer&apos;s <strong>flat</strong> size. It wraps around what&apos;s in it, so the thicker the contents, the smaller the length and width it holds (a 13 × 10 in. mailer around 3 in. of product holds about 9.5 × 6.5 in.).{" "}
+                <a href="/help/packaging-configurator-methodology#how-mailers-work" target="_blank" rel="noreferrer" className="font-medium underline">
+                  How mailers work
+                </a>
+              </p>
+            )}
             <div className="sm:col-span-2">
               <Label htmlFor="pk-notes">Notes</Label>
               <Textarea id="pk-notes" rows={2} value={f.notes} onChange={(e) => set({ notes: e.target.value })} />
