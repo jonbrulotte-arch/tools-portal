@@ -43,7 +43,7 @@ The top three options are shown; **Show all** lists the rest.
 If you have the permission, you can choose the packaging a product ships in and write it to Salsify:
 1. Look up **one part number with quantity 1** (a single unit, as Salsify describes it).
 2. Under the packaging options, pick **Choose for Salsify** on the one you want. You can choose one at a time.
-3. Press **Push to Salsify** on that card. Its shipping size (as sealed) and billed weight are written to the product's four Salsify properties, and read back so you can see what Salsify now has.
+3. Press **Push to Salsify** on that card. Its shipping size (as sealed) and actual shipping weight (product plus packaging) are written to the product's four Salsify properties, and read back so you can see what Salsify now has.
 
 A product pushed this way **keeps its chosen packaging**: the scheduled push leaves it alone even if another option is the best fit. A blue note above the options shows the choice, who made it and when. **Return to automatic** clears it; the next push then writes the best fit again.
 

@@ -78,7 +78,7 @@ The sync reads the whole list, adds new products, updates changed ones, and **re
 
 ### Push to Salsify
 
-The push writes each product's **calculated shipping length, width, height and weight** (its best packaging's sealed size and billed weight, from the newest report) to four Salsify properties. Products with no fitting packaging are skipped, and **only changed values are written**, so a weekly push touches just what moved.
+The push writes each product's **calculated shipping length, width, height and weight** (its best packaging's sealed size, and its actual shipping weight: the product plus the packaging's own weight, from the newest report) to four Salsify properties. Products with no fitting packaging are skipped, and **only changed values are written**, so a weekly push touches just what moved.
 
 1. Enter the four **properties** (number or text properties).
 2. **Try one product:** **Show values** shows what would be written; **Write this one** writes it and reads it back from Salsify.

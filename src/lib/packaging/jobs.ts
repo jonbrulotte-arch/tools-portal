@@ -236,10 +236,11 @@ export async function latestReport() {
 export type PushValues = { length: string; width: string; height: string; weight: string };
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
-/** What's written for a product: its best packaging's sealed size and billed weight. Null when nothing fits. */
+/** What's written for a product: its best packaging's sealed size and actual weight (product + packaging). Null when nothing fits. */
 export function pushValuesFor(r: ProductResult): PushValues | null {
-  if (!r.shippedDims || r.billedWeight == null) return null;
-  return { length: fmt(r.shippedDims.length), width: fmt(r.shippedDims.width), height: fmt(r.shippedDims.height), weight: fmt(r.billedWeight) };
+  if (!r.shippedDims) return null;
+  // the actual shipping weight (products + packaging), not the billed (DIM, rounded-up) weight
+  return { length: fmt(r.shippedDims.length), width: fmt(r.shippedDims.width), height: fmt(r.shippedDims.height), weight: fmt(r.actualWeight) };
 }
 export const pushBody = (s: PackagingSettings, v: PushValues) => Object.fromEntries((["length", "width", "height", "weight"] as const).map((k) => [s.push.properties[k], v[k]]));
 /** Field by field: stored JSON comes back with its keys in a different order. */

@@ -87,7 +87,7 @@ The report runs each product **alone (one unit)** through sections 2–6:
 
 ## 9. Pushing to Salsify
 
-For each product with a best option, the push writes four values: its **shipping size** (section 4) as length, width and height, rounded to 0.01 in., and its **billed weight** (section 5). Products that ship in their own packaging send their own size and billed weight. Products with no fitting packaging are skipped. A product is written only when one of its four values changed since it was last written.
+For each product with a best option, the push writes four values: its **shipping size** (section 4) as length, width and height, rounded to 0.01 in., and its **actual weight** (section 5: the products plus the packaging's own weight, rounded to 0.01 lb), not the billed (DIM) weight. Products that ship in their own packaging send their own size and weight. Products with no fitting packaging are skipped. A product is written only when one of its four values changed since it was last written.
 
 **Chosen by hand:** someone with the permission can pick any option that fits a product (one unit) in the Configurator and push it. The same four values are worked out for that option, again on the server, and written at once. The product is then marked as chosen by hand, and the scheduled push skips it until it's returned to automatic.
 
@@ -110,6 +110,7 @@ For each product with all four **packaged** values in Salsify (how it ships toda
 
 | Date | Change | Why |
 | --- | --- | --- |
+| Nov 24, 2026 | The push writes the **actual** shipping weight (product + packaging) instead of the billed weight. | The billed weight is the DIM weight rounded up (a 0.28 lb item in a mailer went to Salsify as 2 lb). |
 | Nov 24, 2026 | The Packaging review became part of the Report. | One place for the analysis. |
 | Nov 24, 2026 | "Current packaging beats our options" became **Expired packaging option** (except products that ship in their own packaging). | Our options are the packaging we ship in; a cheaper package in Salsify is a retired one, not a better one. |
 

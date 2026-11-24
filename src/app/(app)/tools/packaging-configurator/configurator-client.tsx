@@ -150,7 +150,7 @@ export function ConfiguratorClient({
               <Button onClick={pushChosen} disabled={pushing || !!push.blocker}>
                 {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />} Push to Salsify
               </Button>
-              <span className="text-sm text-gray-500">{push.blocker ?? `Writes this packaging's shipping size and billed weight to ${single.partNumber}, and keeps it there.`}</span>
+              <span className="text-sm text-gray-500">{push.blocker ?? `Writes this packaging's shipping size and actual weight (product plus packaging) to ${single.partNumber}, and keeps it there.`}</span>
             </div>
           ),
         }

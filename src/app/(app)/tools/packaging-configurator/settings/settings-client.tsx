@@ -408,7 +408,7 @@ export function SettingsClient({
             <CloudUpload className="h-5 w-5 text-gray-500" /> Push to Salsify
           </CardTitle>
           <CardDescription>
-            Writes each product&apos;s calculated shipping size (its best packaging as sealed, in inches) and billed weight (lb) from the newest report to four Salsify properties. Products with no fitting packaging are skipped, and only changed values are written.
+            Writes each product&apos;s calculated shipping size (its best packaging as sealed, in inches) and actual shipping weight (product plus packaging, lb) from the newest report to four Salsify properties. Products with no fitting packaging are skipped, and only changed values are written.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -71,15 +71,16 @@ describe("Salsify fields and the push", () => {
     expect(missing).toMatchObject({ name: "P2", width: null, error: 'Salsify has no width, height, weight (fields "UPC Width (Inches)", "UPC Height (Inches)", "UPC Weight (Pounds)")' });
   });
 
-  it("writes the best packaging's sealed size and billed weight to the four properties", () => {
-    const r = { shippedDims: { height: 0.75, width: 5.5, length: 8.5 }, billedWeight: 0.4 } as ProductResult;
+  it("writes the best packaging's sealed size and actual weight (not the billed weight) to the four properties", () => {
+    // a 0.28 lb item in a mailer: billed 2 lb by DIM, but it weighs 0.33 lb with the mailer
+    const r = { shippedDims: { height: 0.75, width: 5.5, length: 8.5 }, actualWeight: 0.33, billedWeight: 2 } as ProductResult;
     const v = pushValuesFor(r)!;
-    expect(v).toEqual({ length: "8.5", width: "5.5", height: "0.75", weight: "0.4" });
+    expect(v).toEqual({ length: "8.5", width: "5.5", height: "0.75", weight: "0.33" });
     expect(pushBody(SETTING_DEFAULTS.packagingConfigurator, v)).toEqual({
       "Calculated Shipping Length (Inches)": "8.5",
       "Calculated Shipping Width (Inches)": "5.5",
       "Calculated Shipping Height (Inches)": "0.75",
-      "Calculated Shipping Weight (Pounds)": "0.4",
+      "Calculated Shipping Weight (Pounds)": "0.33",
     });
     expect(pushValuesFor({ shippedDims: null, billedWeight: null } as ProductResult)).toBeNull();
   });

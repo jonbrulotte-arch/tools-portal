@@ -27,8 +27,8 @@ export async function choiceBlocker() {
 }
 
 /**
- * Works the product out again (one unit) on the server, takes the chosen option's sealed size and billed
- * weight, writes them to Salsify and reads them back.
+ * Works the product out again (one unit) on the server, takes the chosen option's sealed size and actual
+ * weight (product + packaging), writes them to Salsify and reads them back.
  */
 export async function pushChoice(actor: Actor, code: string, packagingId: string) {
   const blocker = await choiceBlocker();
@@ -39,7 +39,7 @@ export async function pushChoice(actor: Actor, code: string, packagingId: string
   if (product.shipsOwn) throw new Error(`${product.partNumber} ships in its own packaging, so there's no packaging to choose.`);
   const option = a.results.find((r) => r.packaging.id === packagingId);
   if (!option) throw new Error("That packaging doesn't fit this product any more (it may have changed or been turned off). Find packaging again.");
-  const values: PushValues = { length: fmt(option.shippedDims.length), width: fmt(option.shippedDims.width), height: fmt(option.shippedDims.height), weight: fmt(option.billedWeight) };
+  const values: PushValues = { length: fmt(option.shippedDims.length), width: fmt(option.shippedDims.width), height: fmt(option.shippedDims.height), weight: fmt(option.actualWeight) };
   const s = await getSetting("packagingConfigurator");
   const properties = pushBody(s, values);
   const { key, owner } = await resolvePackagingKey(s, actor);
