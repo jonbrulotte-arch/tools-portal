@@ -103,9 +103,9 @@ UPS price = UPS quote × (1 + surcharge ratio)
 surcharge ratio = other ÷ (freight + residential + handling by weight + fuel)
 
 - It's worked out **per warehouse and weight band** (the reality check's bands), because the charges differ: delivery-area charges weigh most on light packages, size-based handling on big boxes. A band with fewer than 20 UPS packages uses the warehouse's overall ratio, and so does a product with no weight.
-- Residential isn't added: the residential quotes already include it. Nor is additional handling on packages over 50 lb: a quote at that weight already includes it.
+- Residential isn't added: the residential quotes already include it. Nor is additional handling on packages over 50 lb: a quote at that weight already includes it, so it counts as *handling by weight* (below the line). This matters for the warehouse's overall ratio, which bands with too few packages use; the 50–150 lb band itself gets no surcharge (next point).
 - **No surcharge on the 50–150 lb band.** Products billed over 50 lb are priced at the quote alone. See *Why the 50–150 lb band gets no surcharge* below.
-- **UPS quotes already include the fuel surcharge** (on by default). UPS's rating API returns totals with fuel, and the 50–150 lb band, which is nearly all UPS, matching what we paid confirms it. If it's turned off, fuel moves to the top line: ratio = (other + fuel) ÷ (freight + residential).
+- **UPS quotes already include the fuel surcharge** (on by default). UPS's rating API returns totals with fuel, and the 50–150 lb band, which is nearly all UPS, matching what we paid confirms it. If it's turned off, fuel moves to the top line: ratio = (other + fuel) ÷ (freight + residential + handling by weight).
 - The ratio is capped at 60%, so a report with odd adjustments can't run away with the cost.
 
 **2. Carrier choice.**
