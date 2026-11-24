@@ -717,7 +717,7 @@ export function ShippingSettingsClient({ initial, autoZips, keyUsers, durations 
         <CardHeader>
           <CardTitle>Push blended cost to Salsify</CardTitle>
           <CardDescription>
-            Writes each product&apos;s blended shipping cost to a Salsify property on a schedule. The property holds three values, in this order: the cost (amount only, e.g. 17.12), a note (&quot;OK: …&quot; or the issue with the price), and the date it was pushed. Only products whose cost or note changed are written. Simulated prices are never pushed. Uses the Salsify key chosen under Products, which needs edit rights in Salsify.
+            Writes each product&apos;s blended shipping cost to a Salsify property on a schedule. The property holds four values, in this order: the cost (amount only, e.g. 17.12), a note (&quot;OK: …&quot; or the issue with the price), the cheapest carrier (USPS or UPS), and the date it was pushed. Only products whose cost, note or cheapest carrier changed are written. Simulated prices are never pushed. Uses the Salsify key chosen under Products, which needs edit rights in Salsify.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

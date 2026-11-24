@@ -56,8 +56,16 @@ export function packageCharges(lines: Record<LineKind, number>, billedLb: number
   };
 }
 
-type UpsPkg = { cost: number; charges: Record<LineKind, number>; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
-type UspsPkg = { tracking: string; cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
+/** A package's order references from the cost report (optional columns; no names or street addresses). */
+export type OrderRefs = { po: string | null; so: string | null; marketplace: string | null; channel: string | null; reference: string | null; shipRef: string | null; destCompany: string | null };
+const REF_COLUMNS: Record<keyof OrderRefs, string> = { po: "customer_po", so: "so_number", marketplace: "marketplace", channel: "ups_pkgref5", reference: "reference1", shipRef: "ups_shiprefnum1", destCompany: "destinationcompanyname" };
+const noRefs = (): OrderRefs => ({ po: null, so: null, marketplace: null, channel: null, reference: null, shipRef: null, destCompany: null });
+
+/** A package counted in a report's totals, for the Carrier choice report. */
+export type PackageRow = OrderRefs & { tracking: string; carrier: "UPS" | "USPS"; service: string; origin: string; zone: number; actualWeight: number | null; billedWeight: number; cost: number; shippedAt: Date | null; destState: string | null };
+
+type UpsPkg = { refs: OrderRefs; actual?: number; cost: number; charges: Record<LineKind, number>; weight?: number; zone?: number; service?: "GROUND_COM" | "GROUND_RES"; billedToOthers?: boolean; account: string; originZip: string; city: string; state: string; date?: Date };
+type UspsPkg = { refs: OrderRefs; tracking: string; cost: number; weight: number; originZip: string; city: string; state: string; date?: Date };
 
 export type ReportSummary = {
   rows: number;
@@ -102,7 +110,7 @@ export async function processReport(reportId: string, file: Buffer) {
   const settings = await getSetting("shippingRates");
   await prisma.shippingReport.update({ where: { id: reportId }, data: { status: "RUNNING" } });
   try {
-    const { summary, aggregates, dateFrom, dateTo, shipmentOrigins } = await parseReport(file, settings, async (rows) => {
+    const { summary, aggregates, dateFrom, dateTo, shipmentOrigins, packages } = await parseReport(file, settings, async (rows) => {
       await prisma.shippingReport.update({ where: { id: reportId }, data: { progress: rows } });
     });
     await prisma.$transaction([
@@ -113,12 +121,19 @@ export async function processReport(reportId: string, file: Buffer) {
         data: { status: "READY", rowCount: summary.rows, progress: summary.rows, summary: summary as unknown as Prisma.InputJsonValue, dateFrom, dateTo, finishedAt: new Date() },
       }),
     ]);
+    await savePackages(reportId, packages);
     await saveShipmentOrigins(shipmentOrigins).catch((err) => console.error("[shipping] couldn't save shipment origins", err));
     return summary;
   } catch (err) {
     await prisma.shippingReport.update({ where: { id: reportId }, data: { status: "FAILED", error: err instanceof Error ? err.message : String(err), finishedAt: new Date() } });
     throw err;
   }
+}
+
+/** Replaces a report's package rows (for the Carrier choice report). */
+async function savePackages(reportId: string, packages: PackageRow[]) {
+  await prisma.shippingPackage.deleteMany({ where: { reportId } });
+  for (let i = 0; i < packages.length; i += 5000) await prisma.shippingPackage.createMany({ data: packages.slice(i, i + 5000).map((p) => ({ ...p, reportId })) });
 }
 
 const ORIGIN_RETENTION_DAYS = 120;
@@ -156,6 +171,12 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         continue;
       }
       const get = (k: string) => values[col![k]];
+      /** Fills the order references still empty from this line (the first line with a value wins). */
+      const fillRefs = (refs: OrderRefs) => {
+        for (const [k, c] of Object.entries(REF_COLUMNS) as [keyof OrderRefs, string][]) if (!refs[k] && c in col!) refs[k] = text(get(c)).slice(0, 120) || null;
+        // the company column holds the recipient's own name on many labels: never keep a person's name
+        if (refs.destCompany && "destinationname" in col! && refs.destCompany.toLowerCase() === text(get("destinationname")).toLowerCase()) refs.destCompany = null;
+      };
       rows++;
       if (onProgress && rows % 5000 === 0) await onProgress(rows);
       const source = text(get("shipsource")).toUpperCase();
@@ -167,7 +188,7 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         }
         let p = ups.get(tracking);
         if (!p) {
-          p = { cost: 0, charges: { freight: 0, fuel: 0, residential: 0, weightHandling: 0, handling: 0, other: 0 }, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
+          p = { refs: noRefs(), cost: 0, charges: { freight: 0, fuel: 0, residential: 0, weightHandling: 0, handling: 0, other: 0 }, account: tracking.startsWith("1Z") ? tracking.slice(2, 8).toUpperCase() : "", originZip: text(get("originzip")).slice(0, 5), city: "", state: "" };
           ups.set(tracking, p);
         }
         const amount = num(get("transactionamount"));
@@ -176,8 +197,10 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
         const cls = text(get("ups_chargeclasscode")).toUpperCase();
         const desc = text(get("ups_chargedescription"));
         p.charges[upsChargeKind(cls, desc)] += amount;
+        fillRefs(p.refs);
         if (cls === "FRT" && UPS_GROUND.test(desc) && p.weight === undefined) {
           p.weight = num(get("billedweight"));
+          p.actual = num(get("weight")) || undefined;
           p.zone = parseInt(text(get("zone")), 10);
           p.service = /residential/i.test(desc) ? "GROUND_RES" : "GROUND_COM";
           p.billedToOthers = /third party|collect/i.test(desc);
@@ -186,7 +209,10 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
           p.date = date(get("transactiondate"));
         }
       } else if (source === "USPS") {
+        const refs = noRefs();
+        fillRefs(refs);
         usps.push({
+          refs,
           tracking,
           cost: num(get("transactionamount")),
           weight: num(get("weight")),
@@ -228,8 +254,9 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
   const topCities = new Map<string, number>(); // "origin|zone|CITY|ST" -> prepaid UPS packages
   const cityKey = (origin: string, city: string, state: string) => `${origin}|${city.trim().toUpperCase()}|${state.trim().toUpperCase()}`;
   let upsUsed = 0, upsCost = 0, uspsUsed = 0, uspsCost = 0;
+  const packages: PackageRow[] = [];
   const upsCharges: Record<string, UpsCharges> = {};
-  for (const p of ups.values()) {
+  for (const [tracking, p] of ups) {
     upsCost += p.cost;
     if (!p.service || p.weight === undefined) {
       skip("UPS package not shipped with UPS Ground (collect, air, hundredweight or adjustment only)");
@@ -263,6 +290,8 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     }
     add("UPS", p.service, origin, p.zone, "actual", upsTier(p.weight), p.cost, p.date);
     upsUsed++;
+    // home deliveries: the "company" is the person's name, so it's only kept for business (commercial) addresses
+    packages.push({ ...p.refs, destCompany: p.service === "GROUND_COM" ? p.refs.destCompany : null, tracking, carrier: "UPS", service: p.service, origin, zone: p.zone, actualWeight: p.actual ?? null, billedWeight: upsTier(p.weight), cost: Math.round(p.cost * 100) / 100, shippedAt: p.date ?? null, destState: p.state || null });
     const c = (upsCharges[origin] ??= { ...noCharges(), bands: WEIGHT_BANDS.map(noCharges) });
     const band = c.bands![bandIndex(upsTier(p.weight))];
     const charges = packageCharges(p.charges, p.weight);
@@ -327,6 +356,8 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     }
     add("USPS", "GROUND_ADVANTAGE", origin, zone, source, uspsTier(p.weight), p.cost, p.date);
     uspsUsed++;
+    // USPS labels don't say home or business, and their company column is usually the person: never kept
+    packages.push({ ...p.refs, destCompany: null, tracking: p.tracking.replace(/\s/g, ""), carrier: "USPS", service: "GROUND_ADVANTAGE", origin, zone, actualWeight: p.weight, billedWeight: uspsTier(p.weight), cost: Math.round(p.cost * 100) / 100, shippedAt: p.date ?? null, destState: p.state || null });
   }
 
   const aggregates = [...agg.values()].map((a) => ({
@@ -365,5 +396,5 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     const origin = originByZip.get(p.originZip);
     if (p.tracking && origin && p.cost > 0) shipmentOrigins.push({ tracking: p.tracking.replace(/\s/g, ""), origin, carrier: "USPS", shippedAt: p.date ?? null });
   }
-  return { summary, aggregates, dateFrom, dateTo, shipmentOrigins };
+  return { summary, aggregates, dateFrom, dateTo, shipmentOrigins, packages };
 }

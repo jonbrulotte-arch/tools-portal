@@ -11,7 +11,7 @@ import { blendContext, blendFor, ratesForItems, summaryOf } from "@/lib/shipping
 import { isChanged, pushValue, pushValues, type PushValue } from "@/lib/shipping/blended-push";
 
 // Pushes each product's blended cost to a Salsify property, on a schedule or on demand. The property
-// holds three values: [cost, note, date pushed]. Only products whose cost or note changed are written.
+// holds four values: [cost, note, cheapest carrier, date pushed]. Only products whose cost, note or carrier changed are written.
 // Never pushes simulated prices.
 
 export const PUSH_ACTOR = { id: null, email: "Salsify push schedule" } as const;
@@ -70,7 +70,7 @@ async function checkProperty(s: ShippingRatesSettings, key: string) {
   const prop = await getSalsifyProperty(key, s.salsify.orgId, s.salsifyPush.property);
   if (!prop) return { prop: null, error: `Salsify has no property "${s.salsifyPush.property}". Use the property's ID exactly as Salsify shows it.`, warnings: [] as string[] };
   const error = prop.dataType && !/string|text|rich/i.test(prop.dataType) ? `"${prop.id}" is a ${prop.dataType} property, but the note and date are text: use a text property that allows multiple values.` : null;
-  const warnings = prop.multiValued === false ? ["it holds a single value, but three are written (cost, note, date): allow multiple values on it"] : [];
+  const warnings = prop.multiValued === false ? ["it holds a single value, but four are written (cost, note, cheapest carrier, date): allow multiple values on it"] : [];
   return { prop, error, warnings };
 }
 
@@ -127,7 +127,7 @@ async function executePush(runId: string, s: ShippingRatesSettings, key: string,
         ratesForItems(batch.filter((i) => i.status === "OK").map((i) => i.id)),
         prisma.salsifyPush.findMany({ where: { partNumber: { in: batch.map((i) => i.partNumber) } } }),
       ]);
-      const last = new Map(prev.map((p) => [p.partNumber, p.cost != null && p.note != null && p.pushedAt ? { cost: p.cost, note: p.note } : null]));
+      const last = new Map(prev.map((p) => [p.partNumber, p.cost != null && p.note != null && p.pushedAt ? { cost: p.cost, note: p.note, carrier: p.carrier } : null]));
       const toWrite: { partNumber: string; value: PushValue }[] = [];
       for (const i of batch) {
         const value = i.status === "OK" ? pushValue(summaryOf(blendFor(ctx, i.partNumber, rates.get(i.id) ?? [], billedWeights(i))), s.origins) : null;

@@ -128,15 +128,16 @@ Each product's **blended shipping cost** is written to a Salsify property on a s
 
 ### What's written
 
-One Salsify property gets three values per product, always in this order:
+One Salsify property gets four values per product, always in this order:
 
 | # | Value | Example |
 | --- | --- | --- |
 | 1 | The blended cost, amount only | `17.12` |
 | 2 | A note: `OK: …` with how the warehouse split was decided, or every issue with the price | `OK: from 13 UPS shipments last month: all Groveport, OH` |
-| 3 | The date it was pushed (Pacific) | `2026-11-23` |
+| 3 | The cheapest carrier for the product: `USPS` or `UPS` (`Unknown` if no zone has both prices) | `USPS` |
+| 4 | The date it was pushed (Pacific) | `2026-11-23` |
 
-The note is never empty, so the cost is always the 1st value and the date the 3rd. Possible issues, joined with "; ":
+The note and carrier are never empty, so the cost is always the 1st value and the date the 4th. Products pushed before the carrier was added are written again on the next push. Possible issues, joined with "; ":
 
 | Note | Meaning |
 | --- | --- |
@@ -153,7 +154,7 @@ The note is never empty, so the cost is always the 1st value and the date the 3r
 2. **Check whose key is used.** Writes use the Salsify key chosen under **Settings → Products (Salsify list) → Scheduled runs use the Salsify key of**. A manual push or test uses your own key if you have one. That person needs **edit rights** on products in Salsify.
 3. **In Settings → Push blended cost to Salsify**, enter the property's ID exactly as Salsify shows it, and a part number from the Products list. Then click **Save & test**. It checks:
    - the property exists, is text and allows multiple values;
-   - the three values that part would get.
+   - the four values that part would get.
 
    Under the buttons it then says **Ready to write**, or **Can't write yet:** with the reason.
 4. **Click Write this one product.** It writes that part for real, reads it back from Salsify and confirms the values match. Look at the product in Salsify to see them. You can click it without testing first; if something isn't right, it says exactly what.

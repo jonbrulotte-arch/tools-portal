@@ -2,10 +2,10 @@ import { z } from "zod";
 import type { BlendSummary } from "@/lib/shipping/blended-view";
 
 // What goes into Salsify for one product: one multi-value property holding, in this order,
-//   [ blended cost (amount only), a note (OK or the issue with the price), the date it was pushed ].
-// The note is never empty, so the three positions never shift.
+//   [ blended cost (amount only), a note (OK or the issue with the price), the cheapest carrier, the date it was pushed ].
+// The note and carrier are never empty, so the four positions never shift.
 
-export type PushValue = { cost: string; note: string };
+export type PushValue = { cost: string; note: string; carrier: string };
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -28,13 +28,13 @@ export function pushNote(b: Pick<BlendSummary, "incomplete" | "coverage" | "basi
 /** The value to store for a product, or null when there's no cost to give. */
 export function pushValue(b: BlendSummary | null, origins: { code: string; name: string }[]): PushValue | null {
   if (!b || b.cost == null) return null;
-  return { cost: b.cost.toFixed(2), note: pushNote(b, origins) };
+  return { cost: b.cost.toFixed(2), note: pushNote(b, origins), carrier: b.cheapest?.carrier ?? "Unknown" };
 }
 
-/** The three Salsify values, in order. `day` is YYYY-MM-DD (Pacific). */
-export const pushValues = (v: PushValue, day: string) => [v.cost, v.note, day];
+/** The four Salsify values, in order. `day` is YYYY-MM-DD (Pacific). */
+export const pushValues = (v: PushValue, day: string) => [v.cost, v.note, v.carrier, day];
 
-/** Only write when the cost (to the cent) or the note changed; the date alone never triggers a write. */
-export const isChanged = (prev: { cost: string; note: string } | null | undefined, next: PushValue) => !prev || prev.cost !== next.cost || prev.note !== next.note;
+/** Only write when the cost (to the cent), the note or the cheapest carrier changed; the date alone never triggers a write. */
+export const isChanged = (prev: { cost: string; note: string; carrier: string | null } | null | undefined, next: PushValue) => !prev || prev.cost !== next.cost || prev.note !== next.note || prev.carrier !== next.carrier;
 
 export const salsifyPushTestSchema = z.object({ partNumber: z.string().trim().min(1, "Enter a part number").max(100), write: z.boolean().optional() });

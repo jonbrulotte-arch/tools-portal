@@ -5,14 +5,15 @@ import type { BlendSummary } from "@/lib/shipping/blended-view";
 const origins = [{ code: "LV", name: "Las Vegas, NV" }, { code: "GV", name: "Groveport, OH" }];
 const blend = (o: Partial<BlendSummary> = {}): BlendSummary => ({
   cost: 17.123, best: 10, worst: 25, coverage: 1, incomplete: false, basis: "shipments", label: "From 13 UPS shipments last month: all Groveport, OH", understates: false,
-  shares: { GV: 1 }, carrier: { method: "actual-mix", source: "warehouse", uspsShare: { GV: 0.4 }, upsUplift: { GV: 0.1 } }, stock: {}, shipments: { GV: 13 }, otherShipments: 0, inventoryAsOf: null, inventoryError: null, ...o,
+  shares: { GV: 1 }, carrier: { method: "actual-mix", source: "warehouse", uspsShare: { GV: 0.4 }, upsUplift: { GV: 0.1 } }, cheapest: { carrier: "UPS", usps: 18.4, ups: 16.9 }, stock: {}, shipments: { GV: 13 }, otherShipments: 0, inventoryAsOf: null, inventoryError: null, ...o,
 });
 
 describe("Salsify push value", () => {
-  it("OK note from the basis, cost to the cent, date last", () => {
+  it("OK note from the basis, cost to the cent, cheapest carrier, date last", () => {
     const v = pushValue(blend(), origins)!;
-    expect(v).toEqual({ cost: "17.12", note: "OK: from 13 UPS shipments last month: all Groveport, OH" });
-    expect(pushValues(v, "2026-11-23")).toEqual(["17.12", "OK: from 13 UPS shipments last month: all Groveport, OH", "2026-11-23"]);
+    expect(v).toEqual({ cost: "17.12", note: "OK: from 13 UPS shipments last month: all Groveport, OH", carrier: "UPS" });
+    expect(pushValues(v, "2026-11-23")).toEqual(["17.12", "OK: from 13 UPS shipments last month: all Groveport, OH", "UPS", "2026-11-23"]);
+    expect(pushValue(blend({ cheapest: null }), origins)?.carrier).toBe("Unknown");
   });
 
   it("describes every issue, never empty", () => {
@@ -33,12 +34,15 @@ describe("Salsify push value", () => {
     expect(pushValue(null, origins)).toBeNull();
   });
 
-  it("only counts a change of cost or note", () => {
-    const v = { cost: "17.12", note: "OK: x" };
+  it("only counts a change of cost, note or carrier", () => {
+    const v = { cost: "17.12", note: "OK: x", carrier: "USPS" };
     expect(isChanged(null, v)).toBe(true);
-    expect(isChanged({ cost: "17.12", note: "OK: x" }, v)).toBe(false);
-    expect(isChanged({ cost: "17.13", note: "OK: x" }, v)).toBe(true);
-    expect(isChanged({ cost: "17.12", note: "Few shipments (2)" }, v)).toBe(true);
+    expect(isChanged({ cost: "17.12", note: "OK: x", carrier: "USPS" }, v)).toBe(false);
+    expect(isChanged({ cost: "17.13", note: "OK: x", carrier: "USPS" }, v)).toBe(true);
+    expect(isChanged({ cost: "17.12", note: "Few shipments (2)", carrier: "USPS" }, v)).toBe(true);
+    // pushed before the carrier was added: written again once
+    expect(isChanged({ cost: "17.12", note: "OK: x", carrier: null }, v)).toBe(true);
+    expect(isChanged({ cost: "17.12", note: "OK: x", carrier: "UPS" }, v)).toBe(true);
   });
 });
 

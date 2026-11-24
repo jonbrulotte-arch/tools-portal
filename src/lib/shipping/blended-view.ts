@@ -19,6 +19,8 @@ export type BlendSummary = {
   shares: Record<string, number>;
   /** Carrier method used and each warehouse's USPS share / UPS surcharge ratio. */
   carrier: BlendedCost["carrier"];
+  /** The cheaper carrier on average for this product (with each carrier's average). */
+  cheapest: BlendedCost["cheapest"];
   stock: Record<string, { onHand: number; allocated: number }>;
   shipments: Record<string, number>;
   otherShipments: number;
@@ -54,6 +56,7 @@ export function blendFor(ctx: BlendContext, partNumber: string | null, rates: Pr
     understates: share.understates,
     shares: share.shares,
     carrier: b.carrier,
+    cheapest: b.cheapest,
     stock: item?.stock ?? {},
     shipments: item?.shipments ?? {},
     otherShipments: item?.otherShipments ?? 0,

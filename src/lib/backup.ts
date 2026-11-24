@@ -24,6 +24,7 @@ export const TABLE_ORDER = [
   "ShopifyDiscount",
   "ShippingReport",
   "ShippingHistoryAgg",
+  "ShippingPackage",
   "ShippingQuoteRun",
   "ShippingQuote",
   "ProductRateRun",

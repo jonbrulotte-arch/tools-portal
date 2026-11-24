@@ -241,6 +241,12 @@ export type BlendedCost = {
    * "cheapest" = the cheaper carrier (chosen in Settings, or no shipments to go by).
    */
   carrier: { method: CarrierMethod; source: "product" | "warehouse" | "cheapest"; shipments?: { ups: number; usps: number }; uspsShare: Record<string, number | null>; upsUplift: Record<string, number> };
+  /**
+   * The cheaper carrier for this product: USPS vs UPS (home/business blend by the residential share, plus the
+   * surcharge ratio), each averaged over the same orders (warehouse split × zone mix, cells priced on both). Null
+   * when no cell has both prices.
+   */
+  cheapest: { carrier: "USPS" | "UPS"; usps: number; ups: number } | null;
   cells: BlendCell[];
 };
 
@@ -304,6 +310,7 @@ export function blendedCost(rates: ProductRate[], mix: MixData, share: Warehouse
   const cells: BlendCell[] = [];
   let weighted = 0, covered = 0, totalWeight = 0;
   let best: number | null = null, worst: number | null = null;
+  let both = 0, uspsSum = 0, upsSum = 0;
   const own = mix.blend.carrierMethod === "actual-mix" ? ownUspsShare(ownCarriers) : null;
   const carrier: BlendedCost["carrier"] = { method: mix.blend.carrierMethod, source: own ? "product" : "cheapest", ...(own ? { shipments: { ups: own.ups, usps: own.usps } } : {}), uspsShare: {}, upsUplift: {} };
   for (const [origin, s] of Object.entries(share.shares)) {
@@ -317,7 +324,14 @@ export function blendedCost(rates: ProductRate[], mix: MixData, share: Warehouse
       const w = s * (mix.zoneMix[origin]?.[zone] ?? 0);
       if (w <= 0) continue;
       const get = (svc: string) => price.get(`${origin}|${zone}|${svc}`) ?? null;
-      const cost = cellCost({ usps: get("GROUND_ADVANTAGE"), com: get("GROUND_COM"), res: get("GROUND_RES") }, mix.resShare[origin] ?? 0.5, opts);
+      const prices = { usps: get("GROUND_ADVANTAGE"), com: get("GROUND_COM"), res: get("GROUND_RES") };
+      const cost = cellCost(prices, mix.resShare[origin] ?? 0.5, opts);
+      const ups = cellCost(prices, mix.resShare[origin] ?? 0.5, { ...opts, uspsShare: 0 });
+      if (prices.usps != null && ups != null && (prices.com != null || prices.res != null)) {
+        both += w;
+        uspsSum += w * prices.usps;
+        upsSum += w * ups;
+      }
       cells.push({ origin, zone, weight: w, cost: cost == null ? null : round2(cost) });
       totalWeight += w;
       if (cost == null) continue;
@@ -336,6 +350,7 @@ export function blendedCost(rates: ProductRate[], mix: MixData, share: Warehouse
     incomplete: coverage < COVERAGE_OK,
     share,
     carrier,
+    cheapest: both ? { carrier: uspsSum <= upsSum ? "USPS" : "UPS", usps: round2(uspsSum / both), ups: round2(upsSum / both) } : null,
     cells,
   };
 }

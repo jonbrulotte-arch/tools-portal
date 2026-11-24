@@ -578,7 +578,10 @@ function RealityCheckCard({ r }: { r: RealityCheckView }) {
         </p>
         <p className="text-sm text-gray-700">
           <span className="font-medium">Carrier choice:</span> shipping at our actual mix rather than always on the cheapest carrier cost about ${r.carrierChoice.toLocaleString()} over these {days ?? "?"} days
-          {perMonth != null && <> (about ${perMonth.toLocaleString()} a month)</>}, at quoted prices. Some of it can&apos;t be avoided: retailer routing guides that require UPS, and packages too large for USPS.
+          {perMonth != null && <> (about ${perMonth.toLocaleString()} a month)</>}, at quoted prices. Some of it can&apos;t be avoided: retailer routing guides that require UPS, and packages too large for USPS.{" "}
+          <Link href="/tools/shipping-rates/carrier-choice" className="font-medium text-blue-600 hover:underline">
+            See the packages and their orders
+          </Link>
         </p>
         <p className="text-xs text-gray-500">
           UPS surcharges:{" "}
@@ -609,7 +612,7 @@ function PushCard({ status, canRun, onRun }: { status: SalsifyPushStatus; canRun
         <CardDescription>
           {status.property ? (
             <>
-              Writes each product&apos;s blended cost to the Salsify property <span className="font-mono">{status.property}</span> as three values: cost, note, date pushed. {status.enabled ? "Runs on the schedule in Settings." : "Automatic push is off (Settings)."}
+              Writes each product&apos;s blended cost to the Salsify property <span className="font-mono">{status.property}</span> as four values: cost, note, cheapest carrier, date pushed. {status.enabled ? "Runs on the schedule in Settings." : "Automatic push is off (Settings)."}
             </>
           ) : (
             "Not set up: choose the Salsify property in Settings → Push blended cost to Salsify."

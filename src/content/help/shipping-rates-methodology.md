@@ -58,7 +58,7 @@ Each warehouse's **UPS charges** on those packages are also kept, overall and pe
 - **Handling by weight:** additional handling charged for weight alone. On packages billed **over 50 lb**, every additional-handling line counts here too (by size, its demand surcharge, and corrections to it): UPS charges one additional handling per package, and a quote at that weight already includes it.
 - **Other:** everything else: additional handling on packages up to 50 lb, large package, other demand surcharges, delivery area (extended, remote), address corrections and their fuel, shipping charge corrections, and so on.
 
-Reports processed before this was added don't have the buckets; the next import or upload does. Names and street addresses are read only to place each package and are never stored. Each package's tracking number and warehouse are kept for 120 days, so a product's USPS shipments can be traced back to the warehouse that sent them.
+Reports processed before this was added don't have the buckets; the next import or upload does. Names and street addresses are read only to place each package and are never stored. Each counted package is also kept with its order references (customer PO, SO, marketplace, UPS reference 5 as the channel, reference 1, ship reference 1) and its destination state, for the Carrier choice report (section 8). The destination company is kept only for UPS **commercial** deliveries, and not when it's the same as the recipient's name: on home deliveries and USPS labels that column usually holds the person's name; they're replaced when the report is re-processed and deleted with it. Each package's tracking number and warehouse are kept for 120 days, so a product's USPS shipments can be traced back to the warehouse that sent them.
 
 ## 4. Quote runs (the rate chart)
 
@@ -205,10 +205,27 @@ This checks the **method**, not each product. It uses the newest processed cost 
 - *At our carrier mix* close to *Paid* but *If cheapest carrier* well below: the prices are right, and the gap is carrier choice.
 - One band off: look at what's special about it, for example additional handling on 50 lb+ boxes or retailer drop-ships under 3 lb.
 
+### Carrier choice report (per package)
+
+The **Carrier choice** tab prices each package of the newest cost report on both carriers from the same quote run:
+- **UPS quote:**
+  - a UPS package: its own service (residential or commercial) at the weight UPS billed;
+  - a USPS package: the warehouse's residential/commercial blend (its residential share) at its actual weight rounded up to a pound;
+  - either way × (1 + the warehouse's UPS surcharge ratio for that weight band), as in section 7.
+- **USPS quote:** Ground Advantage at the package's actual weight tier (4/8/12/15.99 oz, then whole pounds). For a USPS package, that's the tier it was labelled at.
+- **Extra** = the quote on the carrier used − the quote on the other carrier, when that's more; otherwise 0. A package with no quote on either carrier (a weight over the quoted range, or a zone without a quote) isn't priced and isn't counted.
+- The weight band is the package's actual weight (else billed).
+
+Example: a 0.6 lb UPS residential package from Las Vegas to zone 5. UPS 1 lb residential quote $10 × (1 + 20% surcharge ratio under 1 lb) = $12; USPS 12 oz quote $6. Extra = $6.
+
+**Compared with the reality check's carrier choice cost:** both compare quotes, not what was paid. The reality check prices each weight at the warehouse split, zone mix and residential share, then multiplies by the band's shipments; this report uses each package's own warehouse, zone, service and weight. The totals are close but don't match. USPS dimensional weight above one cubic foot isn't applied (package sizes aren't in the cost report), so the USPS quote can understate large, light boxes.
+
 ### Method changes
 
 | Date | Change | Why |
 | --- | --- | --- |
+| Nov 24, 2026 | The Salsify push adds the **cheapest carrier** as the 3rd value, before the date. | Requested, so the carrier can be used in Salsify. |
+| Nov 24, 2026 | **Carrier choice report:** each package priced on both carriers, with its order references. | The shipping team needs the orders behind the carrier choice cost, not just the total. |
 | Nov 23, 2026 | Carrier choice can be **our actual carrier mix** (now the default) or the cheapest carrier. The reality check shows both, and the carrier choice cost. | Cheapest carrier was 15–26% under what we paid for packages under 10 lb: many light packages go UPS (retailer orders, among others). The actual mix landed within 4%. |
 | Nov 23, 2026 | UPS quotes raised by each warehouse's **surcharge ratio** per weight band, from the cost report. | About a third of UPS spend is charges other than freight; quotes priced by weight to a typical ZIP leave out size- and address-based ones. |
 | Nov 23, 2026 | On packages over 50 lb, all additional handling counts as already quoted. | UPS charges one additional handling per package, and the quote over 50 lb has it. |
@@ -229,10 +246,11 @@ This checks the **method**, not each product. It uses the newest processed cost 
 
 ## 10. Salsify push
 
-Each product's blended cost is written to the chosen Salsify property as three values: **[cost to the cent, note, date pushed]**.
+Each product's blended cost is written to the chosen Salsify property as four values: **[cost to the cent, note, cheapest carrier, date pushed]**.
 - **The note:** `OK: <basis>`, or every issue with the price, such as incomplete, may understate, or a fallback split.
+- **Cheapest carrier:** the carrier with the lower average price for the product, over the same orders as the blended cost (the warehouse split × each warehouse's zone mix), counting only warehouse/zone cells priced on both carriers. USPS is the Ground Advantage quote; UPS is the residential/commercial blend (the warehouse's residential share) plus the UPS surcharge ratio, as in section 7. `Unknown` when no cell has both prices. It's the carrier that's cheaper on average, so a product can still be cheaper on the other carrier to some zones; it doesn't depend on the carrier method chosen in Settings.
 - **Which run:** values come from the newest **completed live** Products run.
-- **When it writes:** only when the cost or the note changed since the last push.
+- **When it writes:** only when the cost, the note or the cheapest carrier changed since the last push.
 
 ## 11. Rounding and dates
 

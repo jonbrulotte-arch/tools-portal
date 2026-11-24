@@ -126,7 +126,7 @@ describe("cost report processing", () => {
   async function workbook(rows: Record<string, string | number>[]) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("UPS and USPS");
-    const cols = ["shipsource", "transactiondate", "trackingnumber", "weight", "billedweight", "zone", "transactionamount", "originzip", "destinationname", "destinationcity", "destinationstate", "ups_chargeclasscode", "ups_chargedescription"];
+    const cols = ["shipsource", "transactiondate", "trackingnumber", "weight", "billedweight", "zone", "transactionamount", "originzip", "destinationname", "destinationcity", "destinationstate", "ups_chargeclasscode", "ups_chargedescription", "customer_po", "so_number", "marketplace", "ups_pkgref5", "destinationcompanyname"];
     ws.addRow(cols);
     for (const r of rows) ws.addRow(cols.map((c) => r[c] ?? null));
     return Buffer.from(await wb.xlsx.writeBuffer());
@@ -180,6 +180,33 @@ describe("cost report processing", () => {
     const phoenix = aggregates.find((a) => a.carrier === "USPS" && Number(a.weight) === 2)!;
     expect(phoenix).toMatchObject({ zoneSource: "distance", zone: 3 });
     expect(JSON.stringify(aggregates)).not.toContain("A Person");
+  });
+
+  it("keeps each counted package with its order references, but no names", async () => {
+    const file = await workbook([
+      { shipsource: "UPS", transactiondate: "2026-08-01", trackingnumber: "1Z7963050000000001", weight: "1.2", billedweight: "2", zone: "008", transactionamount: 9.35, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Residential", destinationname: "A Person", destinationcity: "CHARLOTTE", destinationstate: "NC" },
+      // the order references arrive on a later line of the same package
+      { shipsource: "UPS", trackingnumber: "1Z7963050000000001", zone: "008", transactionamount: 2.25, ups_chargeclasscode: "FSC", ups_chargedescription: "Fuel Surcharge", customer_po: "PO123", so_number: "SO-9", ups_pkgref5: "LOWES-SMP", destinationcompanyname: "ACME HARDWARE" },
+      { shipsource: "UPS", trackingnumber: "1Z7963050000000002", billedweight: "3", zone: "007", transactionamount: 0, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial Third Party", destinationcity: "DALLAS", destinationstate: "TX" },
+      { shipsource: "USPS", transactiondate: "2026-08-02", trackingnumber: "9400 0000 0000 0001", weight: "0.4", transactionamount: 6.1, originzip: "89113", destinationcity: "CHARLOTTE", destinationstate: "NC", marketplace: "AMAZON", destinationcompanyname: "JANE DOE" },
+      // business address whose "company" is the recipient's name: not kept
+      { shipsource: "UPS", transactiondate: "2026-08-03", trackingnumber: "1Z9X0F560000000005", weight: "3", billedweight: "3", zone: "004", transactionamount: 12, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial", destinationname: "Bob Smith", destinationcompanyname: "BOB SMITH", destinationcity: "ATLANTA", destinationstate: "GA" },
+    ]);
+    const { packages } = await parseReport(file, SETTING_DEFAULTS.shippingRates);
+    expect(packages).toHaveLength(3);
+    // a home delivery: its company column is the person, so it's dropped
+    expect(packages[0]).toMatchObject({ tracking: "1Z7963050000000001", carrier: "UPS", service: "GROUND_RES", origin: "LV", zone: 8, actualWeight: 1.2, billedWeight: 2, cost: 11.6, po: "PO123", so: "SO-9", channel: "LOWES-SMP", destCompany: null, destState: "NC" });
+    expect(packages[1]).toMatchObject({ tracking: "1Z9X0F560000000005", service: "GROUND_COM", destCompany: null });
+    expect(packages[2]).toMatchObject({ tracking: "9400000000000001", carrier: "USPS", zone: 8, actualWeight: 0.4, billedWeight: 0.5, marketplace: "AMAZON", po: null, destCompany: null });
+    for (const name of ["A Person", "ACME", "JANE", "BOB", "Bob"]) expect(JSON.stringify(packages)).not.toContain(name);
+  });
+
+  it("keeps the company of a business delivery", async () => {
+    const file = await workbook([
+      { shipsource: "UPS", transactiondate: "2026-08-03", trackingnumber: "1Z9X0F560000000006", weight: "3", billedweight: "3", zone: "004", transactionamount: 12, ups_chargeclasscode: "FRT", ups_chargedescription: "Ground Commercial", destinationname: "Receiving", destinationcompanyname: "ACE HARDWARE 163", destinationcity: "ATLANTA", destinationstate: "GA" },
+    ]);
+    const { packages } = await parseReport(file, SETTING_DEFAULTS.shippingRates);
+    expect(packages[0]).toMatchObject({ destCompany: "ACE HARDWARE 163" });
   });
 
   it("rejects a file that isn't the cost report", async () => {

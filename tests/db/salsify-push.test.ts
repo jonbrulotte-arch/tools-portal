@@ -79,7 +79,7 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
     await prisma.setting.deleteMany({ where: { key: "shippingRates" } });
   });
 
-  it("writes [cost, note, date] for changed products, and reports skipped and failed ones", async () => {
+  it("writes [cost, note, cheapest carrier, date] for changed products, and reports skipped and failed ones", async () => {
     const { run, finished } = await startSalsifyPush(user);
     await finished;
     const r = await prisma.salsifyPushRun.findUniqueOrThrow({ where: { id: run.id } });
@@ -89,10 +89,11 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
       { partNumber: "MISSING", reason: "Product MISSING isn't in Salsify" },
     ]);
     expect(writes).toHaveLength(1);
-    const [cost, note, day] = writes[0].body["Blended Shipping Cost"];
+    const [cost, note, carrier, day] = writes[0].body["Blended Shipping Cost"];
     // no Mango data → company-wide split (50/50); cell = cheapest of USPS/UPS = 10 + zone; zones 4 and 8 half each → 16
     expect(cost).toBe("16.00");
     expect(note).toBe("No Mango data: company-wide split");
+    expect(carrier).toBe("USPS"); // USPS 10 + zone, UPS dearer in the stand-in prices
     expect(day).toBe(usageDay());
   });
 
@@ -107,7 +108,7 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
     const { getSetting } = await import("@/lib/settings");
     const t = await testSalsifyPush(await getSetting("shippingRates"), user, "A1");
     expect(t).toMatchObject({ ok: true, writeBlocker: null });
-    expect(t.message).toMatch(/A1 would get: "16.00", "No Mango data: company-wide split", "\d{4}-\d{2}-\d{2}"/);
+    expect(t.message).toMatch(/A1 would get: "16.00", "No Mango data: company-wide split", "USPS", "\d{4}-\d{2}-\d{2}"/);
     const one = await pushOne(await getSetting("shippingRates"), user, "A1");
     expect(one.readBack).toEqual(one.values);
   });

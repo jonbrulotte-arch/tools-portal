@@ -71,6 +71,10 @@ describe("blended cost", () => {
     const gv4 = 0.25 * 11 + 0.75 * 9; // GV has 60 UPS shipments, enough for its own 25% residential share; home min(12,11), business min(12,9)
     expect(b.cost).toBeCloseTo(0.4 * 0.75 * 20 + 0.4 * 0.25 * 10 + 0.6 * gv4, 2);
     expect(b).toMatchObject({ best: Math.round(gv4 * 100) / 100, worst: 20, coverage: 1, incomplete: false });
+    // cheapest carrier: USPS vs UPS averaged over the cells priced on both (LV zone 8, GV zone 4; LV zone 4 has no UPS price)
+    expect(b.cheapest?.carrier).toBe("USPS");
+    expect(b.cheapest?.usps).toBeCloseTo((0.3 * 20 + 0.6 * 12) / 0.9, 2);
+    expect(b.cheapest!.ups).toBeGreaterThan(b.cheapest!.usps);
   });
 
   it("drops cells with no price, re-weights the rest and flags low coverage", () => {

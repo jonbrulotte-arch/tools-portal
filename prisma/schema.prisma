@@ -259,6 +259,7 @@ model ShippingReport {
   createdAt    DateTime             @default(now())
   finishedAt   DateTime?
   aggregates   ShippingHistoryAgg[]
+  packages     ShippingPackage[]
 
   @@index([createdAt])
 }
@@ -527,6 +528,8 @@ model SalsifyPush {
   partNumber  String    @id
   cost        String?
   note        String?
+  /** The cheapest carrier last written (null before it was added: every product is written again once) */
+  carrier     String?
   pushedAt    DateTime?
   lastError   String?
   lastErrorAt DateTime?
@@ -714,4 +717,33 @@ model PackPushRun {
   finishedAt    DateTime?
 
   @@index([createdAt])
+}
+
+/// One prepaid package from a cost report (the ones counted in its totals), with its order references, for
+/// the Carrier choice report. Names and street addresses are never stored.
+model ShippingPackage {
+  id           String         @id @default(cuid())
+  reportId     String
+  report       ShippingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  tracking     String
+  carrier      String // UPS | USPS
+  service      String // GROUND_COM | GROUND_RES | GROUND_ADVANTAGE
+  origin       String
+  zone         Int
+  /// Actual weight (lb) and the weight tier it was counted at (UPS billed weight / USPS tier)
+  actualWeight Float?
+  billedWeight Float
+  cost         Float
+  shippedAt    DateTime?
+  po           String?
+  so           String?
+  marketplace  String?
+  /// UPS package reference 5 (the channel, e.g. LOWES-SMP)
+  channel      String?
+  reference    String?
+  shipRef      String?
+  destCompany  String?
+  destState    String?
+
+  @@index([reportId, carrier])
 }

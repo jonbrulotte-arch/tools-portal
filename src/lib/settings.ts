@@ -68,7 +68,7 @@ export type ShippingRatesSettings = {
   productRates: ProductRatesSettings;
   /** Stock and recent shipments per item, read from Mango's inventory page (for the blended shipping cost). */
   mangoInventory: MangoInventorySettings;
-  /** Weekly push of the blended cost to a Salsify property (one multi-value property: cost, note, date). */
+  /** Weekly push of the blended cost to a Salsify property (one multi-value property: cost, note, cheapest carrier, date). */
   salsifyPush: SalsifyPushSettings;
   /** Salsify product lookup. Each user's API key lives in their own profile, not here. */
   salsify: { orgId: string; fields: SalsifyFieldMap };

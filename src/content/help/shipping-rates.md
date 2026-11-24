@@ -70,7 +70,7 @@ The full formulas and a worked example are in *Shipping Rates Generator: methodo
 
 ### Blended cost in Salsify
 
-If your managers have set it up, each product's blended cost is also written to Salsify every week, so you can use it there. It's one property with three values: the **cost**, a **note** (`OK: …` or the issue with the price, the same as the badges here), and the **date** it was pushed. The **Salsify push** card on the Products tab shows when it last ran and what was written. Only managers can push.
+If your managers have set it up, each product's blended cost is also written to Salsify every week, so you can use it there. It's one property with four values: the **cost**, a **note** (`OK: …` or the issue with the price, the same as the badges here), the **cheapest carrier** (USPS or UPS) and the **date** it was pushed. The **Salsify push** card on the Products tab shows when it last ran and what was written. Only managers can push.
 
 ### Reality check
 
@@ -78,13 +78,33 @@ At the bottom of the Products tab, the **Reality check** compares the blended me
 - **At our carrier mix:** with each warehouse's real UPS/USPS split at that weight.
 - **If cheapest carrier:** with every package on the cheaper carrier.
 
-The column marked **used** is the one the blended costs and the Salsify push use (managers choose it in Settings). **Carrier choice cost** is the difference between the two, in dollars: roughly what shipping the way we do cost over always taking the cheaper carrier. The card also gives it per month.
+The column marked **used** is the one the blended costs and the Salsify push use (managers choose it in Settings). **Carrier choice cost** is the difference between the two, in dollars: roughly what shipping the way we do cost over always taking the cheaper carrier. The card also gives it per month, and **See the packages and their orders** opens the [Carrier choice](#carrier-choice) report behind it.
 
 **Within 10% on average** means the method is reliable enough for ROI decisions. If it's further off, the bands that are off show where to look: surcharges on heavy or large packages, or products that ship from one warehouse only.
 
 To refresh it, the newest cost report and the newest **finished** live quote run must both be current. A quote run that's still going isn't used until it finishes.
 
 ![Reality check](images/reality-check.jpg)
+
+## Carrier choice
+
+**Carrier choice** lists the packages behind the reality check's carrier choice cost: each package we paid for in the newest cost report that went on the carrier with the **higher quote**, with its order:
+- **Customer PO, SO, channel** (UPS package reference 5, such as LOWES-SMP) or **marketplace**, the destination **state** and, for business deliveries, the **company**, the tracking number and ship date;
+- the warehouse, zone, actual and billed weight, the carrier and what we **paid**;
+- the **UPS quote** and **USPS quote** for that package (the cheaper one in green), and the **Extra**: how much more the carrier used is quoted than the other one.
+
+Use the filters (warehouse, carrier used, weight band, channel or marketplace, order link, billed weight) or click a name in the **By channel**, **By weight band**, **By warehouse** and **By carrier used** tables. Search finds a PO, SO, tracking number, reference or company. **Show every package** includes the packages that went on the cheaper carrier too.
+
+**Presets:**
+- **Everything on the dearer carrier.**
+- **Light UPS, no order link:** UPS packages billed at 3 lb or less with no customer PO or marketplace order (often manual, replacement or return labels). This is the light-UPS report.
+- **UPS under 5 lb** and **USPS that UPS beats.**
+
+The page lists the 500 packages with the most extra; **Export to Excel** saves all the packages that match the filters, with a Summary, a By channel sheet and Notes.
+
+**Why its total differs from the reality check:** the reality check works from weight-band and zone averages, while this report prices each package at its own zone and weight, so the totals are close but not the same. Both compare **quotes**, not what was paid. Not every package could have gone the other way: retailer routing guides may require UPS, and USPS bills large boxes by size.
+
+Packages are kept from cost reports imported or uploaded after this report was added. If the page asks for it, upload the newest cost report again (or wait for the next scheduled import).
 
 ## Cost reports
 
@@ -94,7 +114,7 @@ A cost report is the ship cost history (UPS invoice lines and USPS labels) that 
 
 - **Import from Mango**: pick a date range and import it directly. Managers can also schedule a weekly import in Settings.
 - **Upload a file**: upload the Excel (.xlsx) export instead.
-- Only our own prepaid shipments are used; third-party and collect shipments are left out. Names and addresses are read only to place each package, and aren't stored.
+- Only our own prepaid shipments are used; third-party and collect shipments are left out. Names and street addresses are read only to place each package, and aren't stored. Each package's order references (PO, SO, marketplace, channel), destination state and, for UPS business deliveries, the destination company are kept for the [Carrier choice](#carrier-choice) report. The company is never kept for home deliveries or USPS labels, where it's usually the person's name.
 - UPS invoices reach Mango a few weeks after shipping, so the newest weeks contain mostly USPS.
 
 ## Quotes
