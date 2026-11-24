@@ -39,7 +39,7 @@ function toQuery(f: ChoiceFilter): Record<string, string> {
 }
 
 const PRESETS: { label: string; title: string; filter: ChoiceFilter }[] = [
-  { label: "Everything on the dearer carrier", title: "Every package that cost more on the carrier it went with", filter: {} },
+  { label: "Everything on the more expensive carrier", title: "Every package that cost more on the carrier it went with", filter: {} },
   { label: "Light UPS, no order link", title: "UPS packages billed at 3 lb or less with no customer PO or marketplace order (the light-UPS report)", filter: { carrier: "UPS", maxLb: 3, noOrderLink: true } },
   { label: "UPS under 5 lb", title: "UPS packages billed at 5 lb or less that USPS quotes lower", filter: { carrier: "UPS", maxLb: 5 } },
   { label: "USPS that UPS beats", title: "USPS packages that UPS quotes lower", filter: { carrier: "USPS" } },
@@ -125,7 +125,7 @@ export function CarrierChoiceClient({ view, filter, query }: { view: CarrierChoi
       <Card>
         <CardHeader>
           <CardTitle>Carrier choice</CardTitle>
-          <CardDescription>Which packages went on the dearer carrier, with their orders.</CardDescription>
+          <CardDescription>Which packages shipped on the more expensive carrier, with their orders.</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="info">
@@ -269,7 +269,7 @@ export function CarrierChoiceClient({ view, filter, query }: { view: CarrierChoi
             </form>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <Checkbox checked={!!filter.all} onCheckedChange={(v) => set({ all: v === true })} />
-              Show every package, not only the dearer ones
+              Show every package, not only those on the more expensive carrier
             </label>
             {(filtered || filter.all) && (
               <Button variant="ghost" size="sm" onClick={() => go({})}>
@@ -286,7 +286,7 @@ export function CarrierChoiceClient({ view, filter, query }: { view: CarrierChoi
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={Package} label={filter.all ? "Packages" : "On the dearer carrier"} value={t.packages.toLocaleString()} sub={filter.all ? `${t.dearer.toLocaleString()} on the dearer carrier` : `of ${view.overall.packages.toLocaleString()} across the report`} tone="bg-blue-50 text-blue-600" />
+        <Stat icon={Package} label={filter.all ? "Packages" : "On the more expensive carrier"} value={t.packages.toLocaleString()} sub={filter.all ? `${t.moreExpensive.toLocaleString()} on the more expensive carrier` : `of ${view.overall.packages.toLocaleString()} across the report`} tone="bg-blue-50 text-blue-600" />
         <Stat icon={DollarSign} label="Extra over the other carrier" value={dollars(t.extra)} sub={`at quoted prices${filtered ? "" : `; the reality check's model says $${(view.modelTotal ?? 0).toLocaleString()}`}`} tone="bg-amber-50 text-amber-600" />
         <Stat icon={Truck} label="Paid for these packages" value={dollars(t.paid)} sub={t.packages ? `${money(t.paid / t.packages)} a package` : undefined} tone="bg-gray-100 text-gray-600" />
         <Stat icon={Scale} label="Without both quotes" value={t.unpriced.toLocaleString()} sub={t.unpriced ? "Over the quoted weights or no quote for that zone" : "Every package was priced"} tone="bg-gray-100 text-gray-600" />

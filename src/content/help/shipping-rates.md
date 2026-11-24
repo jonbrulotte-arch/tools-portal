@@ -96,7 +96,7 @@ To refresh it, the newest cost report and the newest **finished** live quote run
 Use the filters (warehouse, carrier used, weight band, channel or marketplace, order link, billed weight) or click a name in the **By channel**, **By weight band**, **By warehouse** and **By carrier used** tables. Search finds a PO, SO, tracking number, reference or company. **Show every package** includes the packages that went on the cheaper carrier too.
 
 **Presets:**
-- **Everything on the dearer carrier.**
+- **Everything on the more expensive carrier.**
 - **Light UPS, no order link:** UPS packages billed at 3 lb or less with no customer PO or marketplace order (often manual, replacement or return labels). This is the light-UPS report.
 - **UPS under 5 lb** and **USPS that UPS beats.**
 

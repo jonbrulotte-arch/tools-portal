@@ -54,7 +54,7 @@ describe("carrier choice", () => {
     expect(r).toMatchObject({ upsQuote: null, uspsQuote: null, extra: null, cheaper: null });
   });
 
-  it("filters and totals the packages on the dearer carrier", () => {
+  it("filters and totals the packages on the more expensive carrier", () => {
     const rows = priceChoices(
       [pkg({ tracking: "A", channel: "LOWES-SMP", po: "PO1" }), pkg({ tracking: "B", cost: 15 }), pkg({ tracking: "C", carrier: "USPS", service: "GROUND_ADVANTAGE", billedWeight: 0.75 }), pkg({ tracking: "D", zone: 7 })],
       chart,
@@ -66,7 +66,7 @@ describe("carrier choice", () => {
     expect(filterChoices(rows, { channel: "LOWES-SMP" }).map((r) => r.tracking)).toEqual(["A"]);
     expect(filterChoices(rows, { q: "po1" }).map((r) => r.tracking)).toEqual(["A"]);
     const s = summarizeChoices(filterChoices(rows, { all: true }));
-    expect(s.totals).toEqual({ packages: 4, paid: 57, extra: 12, dearer: 2, unpriced: 1 });
+    expect(s.totals).toEqual({ packages: 4, paid: 57, extra: 12, moreExpensive: 2, unpriced: 1 });
     expect(s.byChannel.map((g) => [g.key, g.extra])).toEqual([["(none)", 6], ["LOWES-SMP", 6]]);
   });
 });

@@ -64,7 +64,7 @@ export async function carrierChoiceView(filter: ChoiceFilter) {
     run: data.run,
     problem: data.problem,
     modelTotal: data.modelTotal,
-    /** All packages that went on the dearer carrier, before the filter. */
+    /** All packages that went on the more expensive carrier, before the filter. */
     overall: overall.totals,
     summary: summarizeChoices(shown, (c) => name.get(c) ?? c),
     bands: WEIGHT_BANDS.map((b) => b.label),
@@ -106,7 +106,7 @@ export async function carrierChoiceWorkbook(filter: ChoiceFilter): Promise<{ buf
     filter.channel && `channel ${filter.channel}`,
     filter.noOrderLink && "no order link",
     filter.q && `matching "${filter.q}"`,
-    filter.all ? "every package" : "only packages on the dearer carrier",
+    filter.all ? "every package" : "only packages on the more expensive carrier",
   ].filter(Boolean);
   s.addRows([
     ["Carrier choice report"],
@@ -114,8 +114,8 @@ export async function carrierChoiceWorkbook(filter: ChoiceFilter): Promise<{ buf
     [],
     ["Packages", sum.totals.packages],
     ["Paid for them", sum.totals.paid],
-    ["On the dearer carrier", sum.totals.dearer],
-    ["Extra cost on the dearer carrier (quotes)", sum.totals.extra, "Quote on the carrier used − quote on the other carrier, added up. See Notes."],
+    ["On the more expensive carrier", sum.totals.moreExpensive],
+    ["Extra cost of the more expensive carrier (quotes)", sum.totals.extra, "Quote on the carrier used − quote on the other carrier, added up. See Notes."],
     ["Without a quote on both carriers", sum.totals.unpriced],
     [],
     ["The reality check's carrier choice figure (all packages)", data.modelTotal ?? "", "Worked out from weight-band and zone averages, so it won't match this report's total exactly."],
@@ -136,8 +136,8 @@ export async function carrierChoiceWorkbook(filter: ChoiceFilter): Promise<{ buf
   p.getColumn(2).numFmt = "yyyy-mm-dd";
   for (const c of [9, 10, 11, 13]) p.getColumn(c).numFmt = MONEY;
 
-  const g = sheet("By channel", ["Channel or marketplace", "Packages", "On the dearer carrier", "Paid ($)", "Extra ($)"], [28, 10, 14, 14, 14]);
-  for (const c of sum.byChannel) g.addRow([c.label, c.packages, c.dearer, c.paid, c.extra]);
+  const g = sheet("By channel", ["Channel or marketplace", "Packages", "On the more expensive carrier", "Paid ($)", "Extra ($)"], [28, 10, 14, 14, 14]);
+  for (const c of sum.byChannel) g.addRow([c.label, c.packages, c.moreExpensive, c.paid, c.extra]);
   for (const c of [4, 5]) g.getColumn(c).numFmt = MONEY;
 
   const n = wb.addWorksheet("Notes");

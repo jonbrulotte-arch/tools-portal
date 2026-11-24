@@ -93,7 +93,7 @@ describe.skipIf(!enabled)("Blended cost push to Salsify (database)", async () =>
     // no Mango data → company-wide split (50/50); cell = cheapest of USPS/UPS = 10 + zone; zones 4 and 8 half each → 16
     expect(cost).toBe("16.00");
     expect(note).toBe("No Mango data: company-wide split");
-    expect(carrier).toBe("USPS"); // USPS 10 + zone, UPS dearer in the stand-in prices
+    expect(carrier).toBe("USPS"); // USPS 10 + zone, UPS more expensive in the stand-in prices
     expect(day).toBe(usageDay());
   });
 

@@ -3,7 +3,7 @@ import { upsTier, uspsTier } from "@/lib/shipping/weights";
 
 // The Carrier choice report: each prepaid package from the newest cost report, priced from the quote chart on the
 // carrier it went with and on the other carrier, so the shipping team can see which orders (PO, SO, channel) went on
-// the dearer carrier, and by how much. The reality check's "carrier choice" figure is the same idea worked out from
+// the more expensive carrier, and by how much. The reality check's "carrier choice" figure is the same idea worked out from
 // the weight-band and zone averages; this report prices each package at its own zone and weight.
 
 export type ChoicePackage = {
@@ -91,7 +91,7 @@ export type ChoiceFilter = {
   maxLb?: number;
   /** Search in PO, SO, tracking, references and company. */
   q?: string;
-  /** Every package, not only those that went on the dearer carrier. */
+  /** Every package, not only those that went on the more expensive carrier. */
   all?: boolean;
 };
 
@@ -112,20 +112,20 @@ export function filterChoices(rows: ChoiceRow[], f: ChoiceFilter): ChoiceRow[] {
   );
 }
 
-export type ChoiceTotals = { packages: number; paid: number; extra: number; dearer: number; unpriced: number };
+export type ChoiceTotals = { packages: number; paid: number; extra: number; moreExpensive: number; unpriced: number };
 export type ChoiceGroup = ChoiceTotals & { key: string; label: string };
 
 function totals(rows: ChoiceRow[]): ChoiceTotals {
-  let paid = 0, extra = 0, dearer = 0, unpriced = 0;
+  let paid = 0, extra = 0, moreExpensive = 0, unpriced = 0;
   for (const r of rows) {
     paid += r.cost;
     if (r.extra == null) unpriced++;
     else if (r.extra > 0) {
       extra += r.extra;
-      dearer++;
+      moreExpensive++;
     }
   }
-  return { packages: rows.length, paid: round2(paid), extra: round2(extra), dearer, unpriced };
+  return { packages: rows.length, paid: round2(paid), extra: round2(extra), moreExpensive, unpriced };
 }
 
 function groupBy(rows: ChoiceRow[], key: (r: ChoiceRow) => string, label: (k: string) => string = (k) => k): ChoiceGroup[] {
