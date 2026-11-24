@@ -17,6 +17,7 @@ Built on the Sympl design-system starter: Next.js 16 (App Router), React 19, Pri
 | **Settings** | Admin → Settings | `admin.settings`. Branding (site name, accent word, tagline, logo), Microsoft Graph email, sign-in security, backup schedule. |
 | **Shopify Discount Code Generator** | `/tools/shopify-discounts` | Users granted the tool. Create discount codes on connected Shopify stores; every attempt is kept in the tool's discount log. |
 | **Shipping Rates Generator** | `/tools/shipping-rates` | Users granted the tool. Upload the ship cost history report, quote UPS Ground and USPS Ground Advantage from each warehouse for zones 2–8, find the most-used zone and the weight where UPS becomes cheaper, and check quotes against actual costs. |
+| **Packaging Configurator** | `/tools/packaging-configurator` | Users granted the tool. Find the best box or mailer for parts (by part number or scanned UPC) or a typed-in size, with actual, DIM and billed weight and the price on each shipping method; pack a spreadsheet of orders at once; a report of the whole Salsify product list against our packaging. Packaging and shipping methods need *Packaging Configurator: manage packaging & shipping methods*; the Salsify list, fit rules, sync and push need *manage tool settings*. |
 | **Automated Emails (EDI)** | `/tools/auto-emails` | Users granted the tool can view emails and the log; Super Admins and roles with *Automated Emails (EDI): manage tool settings* create, edit and send them. Each email runs a read-only SQL query every 15 minutes and emails only records it hasn't sent before. |
 
 Effective tool access = tools of the user's role + user "Grant" overrides − user "Deny" overrides. Disabled tools are hidden from everyone.
@@ -166,6 +167,10 @@ Tabs: **Analysis**, **Cost reports**, **Quotes** and **Settings**. Settings is s
 Every live carrier call is counted in `src/lib/shipping/carriers.ts` (`recordApiCall`). Counts are buffered and written as per-day (Pacific) counters in `CarrierApiUsage`. On first start, earlier days are estimated from the live quote and Products runs still stored, and labelled *estimated*.
 
 ZIP and city coordinates come from [GeoNames](https://www.geonames.org/) (CC BY 4.0), bundled in `src/lib/shipping/us-geo.json`.
+
+## Packaging Configurator
+
+Tabs: **Configurator**, **Bulk**, **Products**, **Packaging**, **Shipping methods**, **Report** and **Settings**. Ported from the stand-alone Packaging Configurator (the fit, DIM and billed-weight rules are unchanged; packaging over its weight limit now ranks last). Products come from the tool's own Salsify list and fields (a sync, scheduled or on demand, with the person's own Salsify key or the one chosen in Settings); packaging, shipping methods and rate cards are kept in the portal (tables `Pack*`). The analysis runs after each sync and a few seconds after packaging, methods or fit rules change; the push writes each product's calculated shipping size and billed weight to four Salsify properties, only when they changed. Code: `src/lib/packaging/` (`engine.ts` and `report.ts` are pure and tested). Guides: *Packaging Configurator: guide / methodology & calculations / settings* in Help & Docs.
 
 ## Automated Emails (EDI)
 

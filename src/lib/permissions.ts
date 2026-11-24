@@ -30,6 +30,12 @@ const EXTRA_TOOL_PERMISSIONS: ToolPermissionInfo[] = [
     label: "Shopify: view all discounts",
     description: "See discounts created by every user (otherwise users see only their own).",
   },
+  {
+    key: "tool.packaging-configurator.catalog",
+    tool: "packaging-configurator",
+    label: "Packaging Configurator: manage packaging & shipping methods",
+    description: "Add, edit, import and delete packaging options and shipping methods (with their rate cards).",
+  },
 ];
 
 export const TOOL_PERMISSIONS: ToolPermissionInfo[] = TOOL_REGISTRY.flatMap((t) => [

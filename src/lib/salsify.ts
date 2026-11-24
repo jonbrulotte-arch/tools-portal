@@ -178,29 +178,36 @@ async function listPage(apiKey: string, orgId: string, listId: string, cursor: s
 }
 
 /**
- * Every product on a Salsify list, a page at a time, mapped to weight and size (with the UPC fallback).
+ * Every product record on a Salsify list, a page at a time (raw, each once, with its part number).
  * Salsify's cursor is a stateless "search after" marker, so pages can be read while quoting for hours.
  */
-export async function* iterateSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, opts: { maxProducts?: number; wait?: Wait; pageSize?: number } = {}) {
+export async function* iterateSalsifyRecords(apiKey: string, orgId: string, listId: string, opts: { maxProducts?: number; wait?: Wait; pageSize?: number } = {}) {
   if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
-  if (!listId) throw new Error("No Salsify list is set (tool Settings → Products).");
+  if (!listId) throw new Error("No Salsify list is set (tool Settings).");
   const maxProducts = opts.maxProducts ?? 20_000;
   const seen = new Set<string>();
   let cursor: string | null = null;
   for (let page = 0; page < 5000; page++) {
     const started = Date.now();
     const r = await listPage(apiKey, orgId, listId, cursor, opts.pageSize ?? LIST_PAGE_SIZE, opts.wait);
-    const products: SalsifyProduct[] = [];
+    const records: { id: string; record: Record<string, unknown> }[] = [];
     for (const rec of r.records) {
       const id = plainValue(rec["salsify:id"]);
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      products.push(mapProduct(rec, fields, id));
+      records.push({ id, record: rec });
     }
     if (seen.size > maxProducts) throw new Error(`The list has more than ${maxProducts.toLocaleString("en-US")} products; use a smaller list.`);
-    yield { products, total: r.total, ms: Date.now() - started };
+    yield { records, total: r.total, ms: Date.now() - started };
     if (!r.cursor || !r.records.length) return;
     cursor = r.cursor;
+  }
+}
+
+/** Every product on a Salsify list, a page at a time, mapped to weight and size (with the UPC fallback). */
+export async function* iterateSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap, opts: { maxProducts?: number; wait?: Wait; pageSize?: number } = {}) {
+  for await (const page of iterateSalsifyRecords(apiKey, orgId, listId, opts)) {
+    yield { products: page.records.map((r) => mapProduct(r.record, fields, r.id)), total: page.total, ms: page.ms };
   }
 }
 
@@ -211,13 +218,18 @@ export async function fetchSalsifyList(apiKey: string, orgId: string, listId: st
   return out;
 }
 
-/** First page of a list, for the Settings test. */
-export async function testSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap) {
+/** The first few raw records of a list and its size (one try: it answers a button click). */
+export async function sampleSalsifyList(apiKey: string, orgId: string, listId: string, count = 5) {
   if (!orgId) throw new Error("The Salsify organization ID isn't set (tool Settings → Salsify).");
   if (!listId) throw new Error("Enter the Salsify list ID first.");
-  // one try (up to 2 minutes): this answers a button click, so no long retry loop
-  const r = await listPageOnce(apiKey, orgId, listId, null, 5);
-  return { total: r.total, sample: r.records.map((rec) => mapProduct(rec, fields, plainValue(rec["salsify:id"]) ?? "?")) };
+  const r = await listPageOnce(apiKey, orgId, listId, null, count);
+  return { total: r.total, records: r.records.map((rec) => ({ id: plainValue(rec["salsify:id"]) ?? "?", record: rec })) };
+}
+
+/** First page of a list, for the Settings test. */
+export async function testSalsifyList(apiKey: string, orgId: string, listId: string, fields: SalsifyFieldMap) {
+  const r = await sampleSalsifyList(apiKey, orgId, listId, 5);
+  return { total: r.total, sample: r.records.map((x) => mapProduct(x.record, fields, x.id)) };
 }
 
 // ─── Writes (blended cost push) ──────────────────────────────────────────────
@@ -247,11 +259,16 @@ const WRITE_RETRY_MS = [2_000, 5_000, 15_000, 30_000];
  * temporary errors; 404 = no such product, 401/403 = the key can't edit. `wait` is for tests.
  */
 export async function updateSalsifyProduct(apiKey: string, orgId: string, partNumber: string, property: string, values: string[], wait: Wait = sleep) {
+  return updateSalsifyProperties(apiKey, orgId, partNumber, { [property]: values }, wait);
+}
+
+/** Sets several properties on a product in one PUT (each property's values are replaced). Same retries as above. */
+export async function updateSalsifyProperties(apiKey: string, orgId: string, partNumber: string, properties: Record<string, string | string[]>, wait: Wait = sleep) {
   const path = `/orgs/${encodeURIComponent(orgId)}/products/${encodeURIComponent(partNumber)}`;
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
-      res = await salsifyFetch(apiKey, path, TIMEOUT_MS, { method: "PUT", body: { [property]: values } });
+      res = await salsifyFetch(apiKey, path, TIMEOUT_MS, { method: "PUT", body: properties });
     } catch (err) {
       if (attempt < WRITE_RETRY_MS.length) {
         await wait(WRITE_RETRY_MS[attempt]);
@@ -269,6 +286,14 @@ export async function updateSalsifyProduct(apiKey: string, orgId: string, partNu
     }
     throw await failure(res, `Salsify update of ${partNumber}`);
   }
+}
+
+/** A product's raw record, or null if it doesn't exist. */
+export async function readSalsifyRecord(apiKey: string, orgId: string, partNumber: string): Promise<Record<string, unknown> | null> {
+  const res = await salsifyFetch(apiKey, `/orgs/${encodeURIComponent(orgId)}/products/${encodeURIComponent(partNumber)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await failure(res, "Salsify product lookup");
+  return (await res.json()) as Record<string, unknown>;
 }
 
 /** A product's current values for one property (to confirm a write), or null if the product doesn't exist. */

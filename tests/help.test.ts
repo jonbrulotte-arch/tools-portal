@@ -40,7 +40,7 @@ describe("Help & Docs access", () => {
   });
 
   it("shows a Super Admin everything for enabled tools, and hides disabled tools' docs", () => {
-    const all = ["shopify-discounts", "shipping-rates", "auto-emails"];
+    const all = ["shopify-discounts", "shipping-rates", "auto-emails", "packaging-configurator"];
     expect(slugs(user({ superAdmin: true, tools: all }))).toEqual(HELP_DOCS.map((d) => d.slug));
     const shippingOff = slugs(user({ superAdmin: true, tools: ["shopify-discounts", "auto-emails"] }));
     expect(shippingOff).not.toContain("shipping-rates");

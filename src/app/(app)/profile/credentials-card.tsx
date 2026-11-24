@@ -12,7 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { apiFetch } from "@/lib/client-fetch";
 import { formatDate } from "@/lib/utils";
 
-/** The signed-in user's own Salsify API key (used by the Shipping Rates Generator's Product quote). */
+/** The signed-in user's own Salsify API key (Shipping Rates Generator and Packaging Configurator). */
 export function SalsifyKeyCard({ savedAt }: { savedAt: string | null }) {
   const router = useRouter();
   const [key, setKey] = useState("");
@@ -56,7 +56,7 @@ export function SalsifyKeyCard({ savedAt }: { savedAt: string | null }) {
           {savedAt ? <Badge variant="success">Saved</Badge> : <Badge variant="secondary">Not set</Badge>}
         </CardTitle>
         <CardDescription>
-          Your own key, used when you look up a part in Shipping Rates Generator → Product quote. It&apos;s encrypted, never shown again, and used only for your lookups. Create one in Salsify under your profile menu → API Access.
+          Your own key, used when you look up a part in Shipping Rates Generator → Product quote, and when you start a Salsify sync or push yourself in a tool. It&apos;s encrypted, never shown again, and used only for what you do. Create one in Salsify under your profile menu → API Access.
           {savedAt && <> Saved {formatDate(savedAt)}.</>}
         </CardDescription>
       </CardHeader>

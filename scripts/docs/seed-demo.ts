@@ -24,6 +24,7 @@ import { startProductRun } from "../../src/lib/shipping/product-rates";
 import { startInventoryImport } from "../../src/lib/shipping/mango-inventory";
 import { runAutoEmail } from "../../src/lib/auto-emails/runner";
 import { usageDay } from "../../src/lib/shipping/api-usage";
+import { startSync, latestReport } from "../../src/lib/packaging/jobs";
 
 export const DEMO_PASSWORD = "DemoPassword2026";
 
@@ -56,7 +57,8 @@ async function main() {
   const ediAdmin = await role("EDI Admin", "Runs the Automated Emails (EDI) module.", ["auto-emails"], [toolSettingsPermission("auto-emails")]);
   const ediViewer = await role("EDI Viewer", "Can see automated emails and the email log.", ["auto-emails"], []);
   const cs = await role("Customer Service", "Creates Shopify discount codes.", ["shopify-discounts"], []);
-  const logistics = await role("Logistics", "Shipping rate analysis.", ["shipping-rates"], [toolSettingsPermission("shipping-rates")]);
+  const logistics = await role("Logistics", "Shipping rate analysis and packaging.", ["shipping-rates", "packaging-configurator"], [toolSettingsPermission("shipping-rates"), toolSettingsPermission("packaging-configurator"), "tool.packaging-configurator.catalog"]);
+  await role("Warehouse", "Picks packaging for orders.", ["packaging-configurator"], []);
   const admin = await user("admin@demo.example", "Alex Admin", sa.id);
   await user("edi.admin@demo.example", "Erin EDI", ediAdmin.id);
   await user("edi.viewer@demo.example", "Victor Viewer", ediViewer.id);
@@ -181,6 +183,47 @@ async function main() {
     await runAutoEmail(hd.id, "MANUAL", actor);
     console.log("automated emails seeded");
   }
+  // ── Packaging Configurator: packaging, shipping methods with rate cards, products from the stand-in Salsify list ──
+  await setSetting("packagingConfigurator", { salsify: { ...(await getSetting("packagingConfigurator")).salsify, listId: "s-demo-list", keyUserId: admin.id } });
+  if (!(await prisma.packPackaging.count())) {
+    const box = (name: string, l: number, w: number, h: number, maxWeight: number, tare: number, notes: string | null = null) => ({ name, type: "box", length: l, width: w, height: h, maxWeight, tareWeight: tare, notes });
+    await prisma.packPackaging.createMany({
+      data: [
+        { name: "Bubble Mailer #0 (6x10)", type: "bubble_mailer", length: 10, width: 6, height: 0.25, maxHeight: 1, maxWeight: 2, tareWeight: 0.05 },
+        { name: "Bubble Mailer #2 (8.5x12)", type: "bubble_mailer", length: 12, width: 8.5, height: 0.25, maxHeight: 1.5, maxWeight: 3, tareWeight: 0.08 },
+        { name: "Poly Mailer 10x13", type: "poly_mailer", length: 13, width: 10, height: 0.1, maxHeight: 2, maxWeight: 4, tareWeight: 0.04 },
+        box("Box 6x4x4", 6, 4, 4, 25, 0.15),
+        box("Box 6x6x4", 6, 6, 4, 25, 0.2),
+        box("Box 10x4x2", 10, 4, 2, 40, 0.15),
+        box("Box 10x9x2", 10, 9, 2, 20, 0.25),
+        box("Box 10x8x6", 10, 8, 6, 40, 0.35),
+        box("Box 12x10x4", 12, 10, 4, 40, 0.4),
+        box("Box 14x4x2", 14, 4, 2, 30, 0.2),
+        box("Box 14x6x4", 14, 6, 4, 40, 0.3),
+        box("Box 15x7x3", 15, 7, 3, 30, 0.3),
+        box("Box 14x10x6", 14, 10, 6, 40, 0.5),
+        box("Box 13x11x7", 13, 11, 7, 50, 0.55),
+        box("Box 18x6x2", 18, 6, 2, 20, 0.3),
+        box("Box 18x10x4", 18, 10, 4, 40, 0.6),
+        box("Box 18x14x6", 18, 14, 6, 40, 0.8),
+        box("Box 24x14x6", 24, 14, 6, 50, 1.1, "Double wall"),
+        box("Box 31x7x4", 31, 7, 4, 30, 0.9, "Long items; order from Uline"),
+        box("Box 26x18x12", 26, 18, 12, 65, 2.1, "Double wall; rarely the best fit"),
+      ],
+    });
+    const method = (name: string, minWeight: number, maxWeight: number | null, dimDivisor: number | null, dimThreshold: number | null, isLtl: boolean, sortOrder: number, rates: [number, number][]) =>
+      prisma.packShippingMethod.create({ data: { name, minWeight, maxWeight, dimDivisor, dimThreshold, isLtl, sortOrder, rates: { create: rates.map(([w, rate]) => ({ maxWeight: w, rate })) } } });
+    await method("USPS Ground Advantage", 0, 70, 166, 1728, false, 10, [[0.25, 4.85], [0.5, 5.45], [0.75, 6.1], [1, 6.75], [2, 8.2], [3, 9.15], [5, 11.6], [10, 16.9], [20, 27.4], [70, 52.0]]);
+    await method("UPS Ground", 0, 150, null, null, false, 20, [[1, 10.95], [2, 11.6], [5, 13.4], [10, 17.1], [20, 24.8], [30, 31.9], [50, 44.2], [70, 58.5], [150, 112.0]]);
+    await method("FedEx Home Delivery", 0, 150, null, null, false, 30, [[1, 11.2], [5, 13.9], [10, 17.8], [20, 25.6], [50, 45.0], [150, 115.0]]);
+    await method("LTL freight", 150, null, null, null, true, 90, [[500, 165], [1000, 240]]);
+  }
+  if (process.env.SALSIFY_API_BASE && !(await prisma.packProduct.count())) {
+    await (await startSync({ id: admin.id, email: admin.email })).finished;
+    for (let i = 0; i < 60 && !(await latestReport()); i++) await new Promise((r) => setTimeout(r, 500));
+    console.log("packaging products synced and analysed");
+  }
+
   console.log(`demo ready: sign in as admin@demo.example / edi.admin@demo.example / edi.viewer@demo.example (password ${DEMO_PASSWORD})`);
 }
 

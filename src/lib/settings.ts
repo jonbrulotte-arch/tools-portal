@@ -126,6 +126,36 @@ export type AutoEmailSettings = {
   sql: { server: string; port: number; database: string; authType: "sql" | "windows"; domain: string; encUser: string | null; encPassword: string | null; encrypt: boolean; trustServerCertificate: boolean };
 };
 
+/** A daily or weekly job at a set hour, in a time zone. */
+export type JobSchedule = { enabled: boolean; frequency: "daily" | "weekly"; weekday: number; hour: number; timezone: string };
+
+/** Packaging Configurator: fit rules, its own Salsify list and fields, and the sync and push schedules. */
+export type PackagingSettings = {
+  engine: {
+    /** Global DIM divisor (a shipping method can override it). */
+    dimDivisor: number;
+    /** Share of a box's volume several items can fill (0.1–1). */
+    packEfficiency: number;
+    /** Shipments at or above this actual weight need LTL freight (lb). */
+    ltlThreshold: number;
+    /** Added to each product side when checking a fit (in). */
+    fitClearance: number;
+  };
+  salsify: {
+    /** Blank uses the organization set in the Shipping Rates Generator. */
+    orgId: string;
+    listId: string;
+    /** Whose saved Salsify key scheduled syncs and pushes use. */
+    keyUserId: string | null;
+    /** Salsify property names (case-sensitive). Size in inches, weight in lb; flags read yes/no, true/false or 1/0. */
+    fields: { name: string; length: string; width: string; height: string; weight: string; upc: string; foldable: string; shipsOwn: string };
+  };
+  /** Reading the product list from Salsify. The analysis runs after every sync. */
+  sync: JobSchedule;
+  /** Writing each product's calculated shipping size and weight back to Salsify. */
+  push: JobSchedule & { properties: { length: string; width: string; height: string; weight: string } };
+};
+
 type SettingsMap = {
   branding: BrandingSettings;
   email: EmailSettings;
@@ -134,6 +164,7 @@ type SettingsMap = {
   shopifyDiscountForm: ShopifyDiscountFormSettings;
   shippingRates: ShippingRatesSettings;
   autoEmails: AutoEmailSettings;
+  packagingConfigurator: PackagingSettings;
 };
 
 export const SETTING_DEFAULTS: SettingsMap = {
@@ -216,6 +247,34 @@ export const SETTING_DEFAULTS: SettingsMap = {
     graph: { encTenantId: null, encClientId: null, encClientSecret: null, senderAddress: "", senderName: "" },
     sql: { server: "", port: 1433, database: "", authType: "sql", domain: "", encUser: null, encPassword: null, encrypt: true, trustServerCertificate: false },
   },
+  packagingConfigurator: {
+    engine: { dimDivisor: 139, packEfficiency: 0.7, ltlThreshold: 150, fitClearance: 0.5 },
+    salsify: {
+      orgId: "",
+      listId: "",
+      keyUserId: null,
+      fields: {
+        name: "Item Name",
+        length: "UPC Length (Inches)",
+        width: "UPC Width (Inches)",
+        height: "UPC Height (Inches)",
+        weight: "UPC Weight (Pounds)",
+        upc: "UPC",
+        foldable: "Foldable",
+        shipsOwn: "Ships in Own Packaging",
+      },
+    },
+    // nightly at 3 AM, after the Shipping Rates jobs
+    sync: { enabled: false, frequency: "daily", weekday: 1, hour: 3, timezone: "America/Los_Angeles" },
+    push: {
+      enabled: false,
+      frequency: "weekly",
+      weekday: 1,
+      hour: 7,
+      timezone: "America/Los_Angeles",
+      properties: { length: "Calculated Shipping Length (Inches)", width: "Calculated Shipping Width (Inches)", height: "Calculated Shipping Height (Inches)", weight: "Calculated Shipping Weight (Pounds)" },
+    },
+  },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<SettingsMap[K]> {
@@ -223,6 +282,7 @@ export async function getSetting<K extends keyof SettingsMap>(key: K): Promise<S
   const stored = (row?.value ?? {}) as Partial<SettingsMap[K]>;
   const merged = { ...SETTING_DEFAULTS[key], ...stored };
   if (key === "autoEmails") return normalizeAutoEmails(merged as AutoEmailSettings) as SettingsMap[K];
+  if (key === "packagingConfigurator") return withPackagingDefaults(merged as PackagingSettings) as SettingsMap[K];
   return (key === "shippingRates" ? withShippingDefaults(merged as ShippingRatesSettings) : merged) as SettingsMap[K];
 }
 
@@ -339,4 +399,15 @@ export async function migrateAutoEmailCredentials(): Promise<boolean> {
   const value = await getSetting("autoEmails"); // normalised: plain values moved into encrypted fields
   await prisma.setting.update({ where: { key: "autoEmails" }, data: { value: value as object } });
   return true;
+}
+
+/** Fills nested Packaging Configurator settings added after a value was first saved. */
+function withPackagingDefaults(s: PackagingSettings): PackagingSettings {
+  const d = SETTING_DEFAULTS.packagingConfigurator;
+  return {
+    engine: { ...d.engine, ...s.engine },
+    salsify: { ...d.salsify, ...s.salsify, fields: { ...d.salsify.fields, ...s.salsify?.fields } },
+    sync: { ...d.sync, ...s.sync },
+    push: { ...d.push, ...s.push, properties: { ...d.push.properties, ...s.push?.properties } },
+  };
 }

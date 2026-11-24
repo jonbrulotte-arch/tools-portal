@@ -174,6 +174,71 @@ const shots = {
     await save(d, "quotes", p);
   },
 
+  "packaging-configurator": async () => {
+    const doc = "packaging-configurator";
+    const p = await as("logistics@demo.example");
+    const T = "/tools/packaging-configurator";
+    await go(p, T);
+    const first = p.locator("input[id^=part-]").first();
+    await first.fill("00028-S");
+    await first.press("Enter");
+    await p.keyboard.type("0846000012339");
+    await p.locator("input[aria-label=Quantity]").nth(1).fill("2");
+    await save(doc, "lookup", card(p, "What's shipping?"));
+    await p.getByRole("button", { name: "Find packaging" }).click();
+    await p.waitForSelector("text=/packaging options? fit/");
+    await p.waitForTimeout(400);
+    await save(doc, "best-fit", p.locator("div.rounded-lg.border").filter({ hasText: "Best fit" }).first());
+    await p.getByRole("tab", { name: "Enter a size" }).click();
+    await p.fill("input[id^=name-]", "Shop towels");
+    await p.fill("input[id^=length-]", "10");
+    await p.fill("input[id^=width-]", "7");
+    await p.fill("input[id^=height-]", "0.6");
+    await p.fill("input[id^=weight-]", "0.4");
+    await p.locator("input[id^=qty-]").fill("2");
+    await p.getByText("Foldable").first().click();
+    await save(doc, "manual", card(p, "What's shipping?"));
+    await go(p, `${T}/bulk`);
+    await p.setInputFiles("input[type=file]", process.env.DOCS_BULK_FILE ?? "scripts/docs/sample-bulk.xlsx");
+    await p.waitForSelector("text=/of \\d+ shipments/");
+    await p.waitForTimeout(400);
+    await save(doc, "bulk", p);
+    await go(p, `${T}/products`);
+    await save(doc, "products", p);
+    await go(p, `${T}/report`);
+    await save(doc, "report", p);
+  },
+  "packaging-configurator-admin": async () => {
+    const doc = "packaging-configurator-admin";
+    const p = await as("logistics@demo.example");
+    const T = "/tools/packaging-configurator";
+    await go(p, `${T}/packaging`);
+    await save(doc, "packaging", p);
+    await p.getByRole("button", { name: /^Edit Bubble Mailer #2/ }).click();
+    await p.waitForSelector("[role=dialog]");
+    await p.waitForTimeout(400);
+    await save(doc, "packaging-dialog", p.locator("[role=dialog]"));
+    await p.keyboard.press("Escape");
+    await go(p, `${T}/methods`);
+    await save(doc, "methods", p);
+    await p.getByRole("button", { name: "Rate card for USPS Ground Advantage" }).click();
+    await p.waitForSelector("[role=dialog]");
+    await p.waitForTimeout(400);
+    await save(doc, "rates", p.locator("[role=dialog]"));
+    await p.keyboard.press("Escape");
+    await go(p, `${T}/settings`);
+    await p.addStyleTag({ content: ".sticky.bottom-0 { display: none !important; }" }); // the Save bar would cover the cards
+    await save(doc, "fit-rules", card(p, "Fit rules"));
+    await p.getByRole("button", { name: "Test the list" }).click();
+    await p.waitForSelector("text=/The list has/");
+    await p.waitForTimeout(300);
+    await save(doc, "salsify", card(p, "Salsify"));
+    await save(doc, "sync", card(p, "Sync products from Salsify"));
+    await p.fill("#pp-part", "00039-S");
+    await p.getByRole("button", { name: "Show values" }).click();
+    await p.waitForSelector("text=/would write/");
+    await save(doc, "push", card(p, "Push to Salsify"));
+  },
   "shipping-rates-admin": async () => {
     const d = "shipping-rates-admin";
     const p = await as("logistics@demo.example");

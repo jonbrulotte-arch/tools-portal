@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { guard } from "@/lib/rbac";
 import { jsonError, parseBody } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-import { CREDENTIAL_PROVIDERS, deleteUserSecret, isCredentialProvider, setUserSecret } from "@/lib/user-credentials";
+import { usesCredential, deleteUserSecret, isCredentialProvider, setUserSecret } from "@/lib/user-credentials";
 import { credentialBodySchema } from "@/lib/credential-schema";
 
 type Ctx = { params: Promise<{ provider: string }> };
@@ -12,7 +12,7 @@ async function resolve(ctx: Ctx) {
   if (user instanceof NextResponse) return user;
   const { provider } = await ctx.params;
   if (!isCredentialProvider(provider)) return jsonError("Unknown service", 404);
-  if (!user.canUseTool(CREDENTIAL_PROVIDERS[provider].tool)) return jsonError("You don't have access to the tool that uses this key", 403);
+  if (!usesCredential(user, provider)) return jsonError("You don't have access to the tool that uses this key", 403);
   return { user, provider };
 }
 

@@ -486,23 +486,23 @@ model CarrierApiUsage {
 
 /// Latest read of Mango's inventory page for one item. A failed refresh keeps the last good figures and sets `error`.
 model ProductInventory {
-  partNumber     String    @id
-  description    String?
+  partNumber       String    @id
+  description      String?
   /// { [warehouse code]: { onHand, allocated } }
-  stock          Json      @default("{}")
+  stock            Json      @default("{}")
   /// Shipments in the last month per warehouse (UPS and USPS, from tracking numbers): { [warehouse code]: count }
-  shipments      Json      @default("{}")
+  shipments        Json      @default("{}")
   /// Placed shipments per carrier last month: { UPS: n, USPS: n }
-  shipmentCarriers Json    @default("{}")
+  shipmentCarriers Json      @default("{}")
   /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, or not in a cost report yet)
-  otherShipments Int       @default(0)
-  unitsLastMonth Int?
+  otherShipments   Int       @default(0)
+  unitsLastMonth   Int?
   /// Mango's own snapshot time, as shown on the page
-  snapshotAt     String?
-  fetchedAt      DateTime?
-  error          String?
-  errorAt        DateTime?
-  updatedAt      DateTime  @updatedAt
+  snapshotAt       String?
+  fetchedAt        DateTime?
+  error            String?
+  errorAt          DateTime?
+  updatedAt        DateTime  @updatedAt
 }
 
 model InventoryImportRun {
@@ -566,4 +566,140 @@ model ShipmentOrigin {
   createdAt DateTime  @default(now())
 
   @@index([shippedAt])
+}
+
+// ─── Packaging Configurator ─────────────────────────────────────────────────
+
+/// A product from the Packaging Configurator's Salsify list (size in inches, weight in lb). Rows not on the
+/// list at the last complete sync are removed.
+model PackProduct {
+  partNumber String   @id
+  name       String
+  height     Float?
+  width      Float?
+  length     Float?
+  weight     Float?
+  upc        String?
+  foldable   Boolean  @default(false)
+  shipsOwn   Boolean  @default(false)
+  /// What's missing from Salsify (null when complete)
+  error      String?
+  syncedAt   DateTime @default(now())
+
+  @@index([upc])
+  @@index([name])
+}
+
+model PackPackaging {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  /// box | bubble_mailer | poly_mailer | other
+  type       String   @default("box")
+  height     Float
+  width      Float
+  length     Float
+  maxHeight  Float?
+  maxWeight  Float?
+  tareWeight Float?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model PackShippingMethod {
+  id           String             @id @default(cuid())
+  name         String             @unique
+  minWeight    Float              @default(0)
+  maxWeight    Float?
+  dimDivisor   Float?
+  dimThreshold Float?
+  isLtl        Boolean            @default(false)
+  active       Boolean            @default(true)
+  notes        String?
+  sortOrder    Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  rates        PackShippingRate[]
+}
+
+/// One "up to maxWeight lb → rate" break of a shipping method's rate card.
+model PackShippingRate {
+  id        String             @id @default(cuid())
+  methodId  String
+  method    PackShippingMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  maxWeight Float
+  rate      Float
+
+  @@unique([methodId, maxWeight])
+}
+
+/// Reading the product list from Salsify.
+model PackSyncRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  listId      String
+  total       Int               @default(0)
+  done        Int               @default(0)
+  created     Int               @default(0)
+  updated     Int               @default(0)
+  removed     Int               @default(0)
+  incomplete  Int               @default(0)
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}
+
+/// The packaging analysis of the whole catalog (the report is stored as JSON).
+model PackAnalysisRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  /// manual | after-sync | scheduled
+  trigger     String
+  products    Int               @default(0)
+  done        Int               @default(0)
+  report      Json?
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}
+
+/// The last calculated shipping size and weight written to each product in Salsify.
+model PackPush {
+  partNumber  String    @id
+  /// { length, width, height, weight } as written
+  values      Json?
+  pushedAt    DateTime?
+  lastError   String?
+  lastErrorAt DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model PackPushRun {
+  id            String            @id @default(cuid())
+  status        ShippingJobStatus @default(PENDING)
+  startedById   String?
+  startedBy     String?
+  analysisRunId String?
+  products      Int               @default(0)
+  done          Int               @default(0)
+  written       Int               @default(0)
+  unchanged     Int               @default(0)
+  skipped       Int               @default(0)
+  failed        Int               @default(0)
+  /// [{ partNumber, reason }] for skipped and failed products (capped)
+  problems      Json              @default("[]")
+  error         String?
+  createdAt     DateTime          @default(now())
+  finishedAt    DateTime?
+
+  @@index([createdAt])
 }

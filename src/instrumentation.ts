@@ -13,5 +13,7 @@ export async function register() {
     await backfillApiUsageEstimates(await getSetting("shippingRates")).catch((err) => console.error("[shipping] couldn't estimate past API usage", err));
     const { failInterruptedJobs } = await import("@/lib/shipping/runner");
     await failInterruptedJobs().catch((err) => console.error("[shipping] couldn't mark interrupted jobs", err));
+    const { markInterruptedPackagingJobs } = await import("@/lib/packaging/jobs");
+    await markInterruptedPackagingJobs().catch((err) => console.error("[packaging] couldn't mark interrupted jobs", err));
   }
 }

@@ -4,7 +4,7 @@ import { errorMessage, jsonError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { getSetting } from "@/lib/settings";
 import { testSalsifyKey } from "@/lib/salsify";
-import { CREDENTIAL_PROVIDERS, getUserSecret, isCredentialProvider } from "@/lib/user-credentials";
+import { usesCredential, getUserSecret, isCredentialProvider } from "@/lib/user-credentials";
 
 // Checks the signed-in user's saved key against the service.
 export async function POST(_req: Request, { params }: { params: Promise<{ provider: string }> }) {
@@ -12,7 +12,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ provid
   if (user instanceof NextResponse) return user;
   const { provider } = await params;
   if (!isCredentialProvider(provider)) return jsonError("Unknown service", 404);
-  if (!user.canUseTool(CREDENTIAL_PROVIDERS[provider].tool)) return jsonError("You don't have access to the tool that uses this key", 403);
+  if (!usesCredential(user, provider)) return jsonError("You don't have access to the tool that uses this key", 403);
   const key = await getUserSecret(user.id, provider);
   if (!key) return jsonError("Save your API key first.");
   try {

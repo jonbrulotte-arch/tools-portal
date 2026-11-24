@@ -27,7 +27,7 @@ Click the person icon at the bottom of the sidebar.
 
 - **Name**: change how your name appears.
 - **Change password**: at least 10 characters, with letters and numbers. You need your current password.
-- **Salsify API key** (only if you use the Shipping Rates Generator): your personal key for product lookups. It's encrypted and never shown again; only the last 4 characters are displayed.
+- **Salsify API key** (only if you use the Shipping Rates Generator or the Packaging Configurator): your personal key for product lookups, and for Salsify syncs and pushes you start yourself. It's encrypted and never shown again; only the last 4 characters are displayed.
 
 ## Help & Docs
 

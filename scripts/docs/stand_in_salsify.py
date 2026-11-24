@@ -21,10 +21,19 @@ for i, name in enumerate(NAMES):
         pass
     else:
         rec.update({"Shipping Weight (Pounds)": f"{w:.2f}", "Shipping Length (Inches)": f"{l:.2f}", "Shipping Width (Inches)": f"{wd:.2f}", "Shipping Height (Inches)": f"{h:.2f}"})
+        # the product's own (retail package) size, a little smaller than its shipping box
+        rec.update({"UPC Weight (Pounds)": f"{w * 0.95:.2f}", "UPC Length (Inches)": f"{l - 0.75:.2f}", "UPC Width (Inches)": f"{wd - 0.5:.2f}", "UPC Height (Inches)": f"{max(h - 0.5, 0.5):.2f}"})
+    if i % 11 != 7:
+        rec["UPC"] = f"0{846000000000 + i * 1371}"
+    if i in (14, 15): rec["Ships in Own Packaging"] = "Yes"   # floor jack, bench grinder stand
+    if i in (21, 24): rec["Foldable"] = True                  # flat, flexible items
     products.append(rec)
 
 # a text, multi-value property for the blended cost push
 PROPERTIES = {"Blended Shipping Cost": {"salsify:id": "Blended Shipping Cost", "salsify:name": "Blended Shipping Cost", "salsify:data_type": "string", "salsify:is_multi_valued": True}}
+# a thin, flexible part: fits a mailer (Packaging Configurator demo)
+products.append({"salsify:id": "00060-F", "Part Number": "00060-F", "Item Name": {"en-US": "Shop Towel Pack"}, "UPC": "0846000099991",
+                 "UPC Weight (Pounds)": "0.4", "UPC Length (Inches)": "10", "UPC Width (Inches)": "7", "UPC Height (Inches)": "0.6", "Foldable": "Yes"})
 BY_ID = {p["salsify:id"]: p for p in products}
 
 def send_json(h, code, obj):

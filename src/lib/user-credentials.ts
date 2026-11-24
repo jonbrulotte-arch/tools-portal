@@ -5,11 +5,14 @@ import { decrypt, encrypt } from "@/lib/crypto";
 // keys are encrypted at rest and never sent back to the browser.
 
 export const CREDENTIAL_PROVIDERS = {
-  salsify: { label: "Salsify", tool: "shipping-rates" },
+  salsify: { label: "Salsify", tools: ["shipping-rates", "packaging-configurator"] },
 } as const;
 export type CredentialProvider = keyof typeof CREDENTIAL_PROVIDERS;
 
 export const isCredentialProvider = (p: string): p is CredentialProvider => p in CREDENTIAL_PROVIDERS;
+
+/** Whether someone can use any tool that needs this key. */
+export const usesCredential = (user: { canUseTool: (slug: string) => boolean }, provider: CredentialProvider) => CREDENTIAL_PROVIDERS[provider].tools.some((t) => user.canUseTool(t));
 
 export async function getUserSecret(userId: string, provider: CredentialProvider): Promise<string | null> {
   const row = await prisma.userCredential.findUnique({ where: { userId_provider: { userId, provider } } });

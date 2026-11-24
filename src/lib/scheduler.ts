@@ -9,6 +9,7 @@ import { runScheduledProductRates } from "@/lib/shipping/product-rates";
 import { runScheduledInventoryImport } from "@/lib/shipping/mango-inventory";
 import { runScheduledSalsifyPush } from "@/lib/shipping/salsify-push";
 import { runScheduledAutoEmails } from "@/lib/auto-emails/runner";
+import { runScheduledPackaging } from "@/lib/packaging/jobs";
 import { zonedParts } from "@/lib/timezone";
 
 // Runs every hour on the hour and checks the backup, quote-run, Mango-import and Products schedules in settings,
@@ -25,6 +26,7 @@ export function startScheduler() {
     void runScheduledProductRates().catch((err) => console.error("[scheduler] Products run:", errorMessage(err)));
     void runScheduledInventoryImport().catch((err) => console.error("[scheduler] Mango inventory:", errorMessage(err)));
     void runScheduledSalsifyPush().catch((err) => console.error("[scheduler] Salsify push:", errorMessage(err)));
+    void runScheduledPackaging().catch((err) => console.error("[scheduler] Packaging Configurator:", errorMessage(err)));
     try {
       const s = await getSetting("backup");
       const now = zonedParts(new Date(), s.timezone);

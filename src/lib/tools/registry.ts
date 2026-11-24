@@ -44,6 +44,16 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     sortOrder: 30,
     settingsDescription: "Create, edit and send automated emails (including their SQL queries), and manage the tool's Microsoft Graph sender and SQL Server connection.",
   },
+  {
+    slug: "packaging-configurator",
+    name: "Packaging Configurator",
+    description: "Find the best box or mailer for any product or order, with dimensional and billed weight for every shipping method.",
+    usage:
+      "Enter part numbers (or scan UPCs) and quantities, or type in a size, to see every packaging option that fits, best fit first, with the actual, dimensional and billed weight and the price on each shipping method. Upload grouped order lines to pack many shipments at once. The report checks the whole Salsify product list against our packaging and can write each product's calculated shipping size and weight back to Salsify.",
+    icon: "Package",
+    sortOrder: 40,
+    settingsDescription: "Open the tool's Settings tab: fit rules (DIM divisor, pack efficiency, clearance, LTL threshold), the Salsify list and fields, the sync and push schedules, and running a sync, report or push.",
+  },
 ];
 
 export function toolHref(slug: string) {
