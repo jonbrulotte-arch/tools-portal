@@ -31,7 +31,9 @@ Click the person icon at the bottom of the sidebar.
 
 ## Help & Docs
 
-**Help & Docs** shows only the guides for the tools and admin areas **you** can access, so what you see may differ from a colleague. Tools also have a **Help** link next to their tabs that opens the right guide for you.
+**Help & Docs** shows only the guides for the tools and admin areas **you** can access, so what you see may differ from a colleague. The guides are grouped by tool, one box per tool with its articles listed inside; the buttons above narrow the page to one tool, and the search box searches every title and summary. In a guide, the path at the top (*Help & Docs / tool name*) takes you back to that tool's articles, and the side bar lists its other articles.
+
+Tools also have a **Help** link next to their tabs that opens the right guide for you.
 
 ![Help & Docs](images/help-index.jpg)
 
