@@ -57,16 +57,21 @@ describe.skipIf(!enabled)("Mango inventory import (database)", async () => {
     const { shipmentOrigins } = await parseReport(await costReportXlsx(), await getSetting("shippingRates"));
     expect(shipmentOrigins).toEqual(
       expect.arrayContaining([
-        { tracking: "1Z7963050000000001", origin: "LV", carrier: "UPS", shippedAt: expect.any(Date) },
-        { tracking: "9400000000000001", origin: "LV", carrier: "USPS", shippedAt: expect.any(Date) },
+        { tracking: "1Z7963050000000001", origin: "LV", carrier: "UPS", billing: "prepaid", shippedAt: expect.any(Date) },
+        { tracking: "9400000000000001", origin: "LV", carrier: "USPS", billing: "prepaid", shippedAt: expect.any(Date) },
       ]),
     );
-    await saveShipmentOrigins([...shipmentOrigins, { tracking: "0800000003", origin: "LV", carrier: "USPS", shippedAt: new Date() }]);
+    await saveShipmentOrigins([...shipmentOrigins, { tracking: "0800000003", origin: "LV", carrier: "USPS", billing: "prepaid", shippedAt: new Date() }]);
     await saveShipmentOrigins(shipmentOrigins); // again: no duplicates
     expect(await prisma.shipmentOrigin.count()).toBe(3);
     // the fixture's third shipment (0800000003) is now placed in Las Vegas
     const item = await refreshItemInventory(await getSetting("shippingRates"), "56831");
-    expect(item).toMatchObject({ shipments: { GV: 2, LV: 1 }, shipmentCarriers: { UPS: 2, USPS: 1 }, otherShipments: 0 });
+    expect(item).toMatchObject({ shipments: { GV: 2, LV: 1 }, shipmentCarriers: { "UPS pending": 2, USPS: 1 }, otherShipments: 0 });
+    // a later cost report shows one UPS package was billed collect: saved as prepaid first, then corrected
+    await saveShipmentOrigins([{ tracking: "1Z9X0F530300000001", origin: "GV", carrier: "UPS", billing: "prepaid", shippedAt: new Date() }]);
+    await saveShipmentOrigins([{ tracking: "1Z9X0F530300000001", origin: "GV", carrier: "UPS", billing: "collect", shippedAt: new Date() }]);
+    const again = await refreshItemInventory(await getSetting("shippingRates"), "56831");
+    expect(again).toMatchObject({ shipments: { GV: 2, LV: 1 }, collectShipments: { GV: 1 }, shipmentCarriers: { "UPS collect": 1, "UPS pending": 1, USPS: 1 } });
     await prisma.shipmentOrigin.deleteMany();
   });
 

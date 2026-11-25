@@ -1,3 +1,4 @@
+import { CARRIER_LABELS, carrierCounts } from "@/lib/shipping/carrier-labels";
 import { prisma } from "@/lib/prisma";
 import { getSetting, type BlendSettings } from "@/lib/settings";
 import { ZONES, upsTier, uspsTier } from "@/lib/shipping/weights";
@@ -190,9 +191,10 @@ export function warehouseShare(inv: ItemInventory | null | undefined, mix: Pick<
   const fromShipments = (basis: ShareBasis): WarehouseShare => {
     const shares = Object.fromEntries(shipped.map((c) => [c, inv.shipments[c] / nShip]));
     const top = shipped.sort((a, b) => shares[b] - shares[a])[0];
-    const carriers = Object.entries(inv.shipmentCarriers ?? {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${n} ${c}`);
-    const how = carriers.length > 1 ? ` (${carriers.join(", ")})` : carriers.length === 1 ? ` ${carriers[0].split(" ")[1]}` : "";
-    const label = `${basis === "few-shipments" ? "From only" : "From"} ${nShip}${carriers.length === 1 ? how : ""} shipment${nShip === 1 ? "" : "s"} last month${carriers.length > 1 ? how : ""}: ${shipped.length === 1 ? `all ${name(top)}` : `${pct(shares[top])} ${name(top)}`}`;
+    const kinds = Object.entries(inv.shipmentCarriers ?? {}).filter(([, n]) => n > 0);
+    const one = kinds.length === 1 ? ` ${CARRIER_LABELS[kinds[0][0]] ?? kinds[0][0]}` : "";
+    const how = kinds.length > 1 ? ` (${carrierCounts(inv.shipmentCarriers)})` : "";
+    const label = `${basis === "few-shipments" ? "From only" : "From"} ${nShip}${one} shipment${nShip === 1 ? "" : "s"} last month${how}: ${shipped.length === 1 ? `all ${name(top)}` : `${pct(shares[top])} ${name(top)}`}`;
     return { shares, basis, label, understates: false };
   };
   if (nShip >= MIN_OWN_SHIPMENTS) return fromShipments("shipments");
@@ -301,7 +303,8 @@ function cellOpts(mix: MixData, origin: string, w: Partial<BilledWeights> | null
  * MIN_OWN_SHIPMENTS of them; otherwise null and the warehouse's split at its weight is used.
  */
 export function ownUspsShare(carriers: Record<string, number> | null | undefined): { share: number; ups: number; usps: number } | null {
-  const ups = carriers?.UPS ?? 0, usps = carriers?.USPS ?? 0;
+  // collect/third-party UPS shipments are left out: the customer chose the carrier, and we didn't pay for them
+  const ups = (carriers?.UPS ?? 0) + (carriers?.["UPS pending"] ?? 0), usps = carriers?.USPS ?? 0;
   return ups + usps >= MIN_OWN_SHIPMENTS ? { share: usps / (ups + usps), ups, usps } : null;
 }
 

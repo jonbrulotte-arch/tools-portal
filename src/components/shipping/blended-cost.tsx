@@ -43,6 +43,7 @@ export function BlendedCell({ b, origins }: { b: BlendSummary | null; origins: {
 /** Full explanation: cost, range, basis, stock and shipments, and the cells it was built from. */
 export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail; origins: { code: string; name: string }[]; showCells?: boolean }) {
   const name = (c: string) => origins.find((o) => o.code === c)?.name ?? c;
+  const collect = b.shipmentCarriers?.["UPS collect"] ?? 0;
   const zones = [...new Set(b.cells.map((c) => c.zone))].sort((x, y) => x - y);
   const used = origins.filter((o) => b.cells.some((c) => c.origin === o.code));
   return (
@@ -76,7 +77,7 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
       <p className="text-sm text-gray-700">
         Carrier:{" "}
         {b.carrier.source === "product" && b.carrier.shipments
-          ? `${pct(b.carrier.shipments.usps / (b.carrier.shipments.usps + b.carrier.shipments.ups))} USPS, ${pct(b.carrier.shipments.ups / (b.carrier.shipments.usps + b.carrier.shipments.ups))} UPS, from this product's own ${b.carrier.shipments.usps + b.carrier.shipments.ups} shipments last month`
+          ? `${pct(b.carrier.shipments.usps / (b.carrier.shipments.usps + b.carrier.shipments.ups))} USPS, ${pct(b.carrier.shipments.ups / (b.carrier.shipments.usps + b.carrier.shipments.ups))} UPS, from this product's own ${b.carrier.shipments.usps + b.carrier.shipments.ups} prepaid shipments last month`
           : Object.entries(b.carrier.uspsShare)
               .map(([o, s]) =>
                 b.carrier.method === "cheapest" || s == null
@@ -84,6 +85,7 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
                   : `${name(o)} ${pct(s)} USPS, ${pct(1 - s)} UPS (what it shipped at this weight)`,
               )
               .join(" · ")}
+        {collect > 0 && `. ${collect} UPS collect/third-party shipment${collect === 1 ? " is" : "s are"} left out: the customer chose the carrier and paid for it`}
         {Object.values(b.carrier.upsUplift).some((v) => v > 0) &&
           `. UPS includes surcharges: ${Object.entries(b.carrier.upsUplift)
             .filter(([, v]) => v > 0)
@@ -104,7 +106,15 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
             <p className="text-gray-600">
               Stock: {b.stock[o.code] ? `${b.stock[o.code].onHand.toLocaleString()} on hand${b.stock[o.code].allocated ? ` (${b.stock[o.code].allocated.toLocaleString()} allocated)` : ""}` : "—"}
             </p>
-            <p className="text-gray-600">Shipments last month (UPS and USPS): {(b.shipments[o.code] ?? 0).toLocaleString()}</p>
+            <p className="text-gray-600">
+              Shipments last month (UPS and USPS): {(b.shipments[o.code] ?? 0).toLocaleString()}
+              {(b.collectShipments?.[o.code] ?? 0) > 0 && (
+                <>
+                  {" "}
+                  ({((b.shipments[o.code] ?? 0) - b.collectShipments[o.code]).toLocaleString()} prepaid, {b.collectShipments[o.code].toLocaleString()} collect/third-party)
+                </>
+              )}
+            </p>
           </div>
         ))}
       </div>

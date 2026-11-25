@@ -23,6 +23,9 @@ export type BlendSummary = {
   cheapest: BlendedCost["cheapest"];
   stock: Record<string, { onHand: number; allocated: number }>;
   shipments: Record<string, number>;
+  /** Shipments per carrier (see CARRIER_LABELS), and those billed collect or to a third party per warehouse. */
+  shipmentCarriers: Record<string, number>;
+  collectShipments: Record<string, number>;
   otherShipments: number;
   inventoryAsOf: string | null;
   inventoryError: string | null;
@@ -59,6 +62,8 @@ export function blendFor(ctx: BlendContext, partNumber: string | null, rates: Pr
     cheapest: b.cheapest,
     stock: item?.stock ?? {},
     shipments: item?.shipments ?? {},
+    shipmentCarriers: item?.shipmentCarriers ?? {},
+    collectShipments: item?.collectShipments ?? {},
     otherShipments: item?.otherShipments ?? 0,
     inventoryAsOf: item?.fetchedAt ?? null,
     inventoryError: item?.error ?? null,

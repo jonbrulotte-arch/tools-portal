@@ -15,7 +15,7 @@ const mix = mixFrom(
   ],
   { reportId: "r", dateFrom: null, dateTo: null },
 );
-const inv = (o: Partial<ItemInventory> = {}): ItemInventory => ({ partNumber: "P", description: null, stock: {}, shipments: {}, shipmentCarriers: {}, otherShipments: 0, unitsLastMonth: null, snapshotAt: null, fetchedAt: "2026-11-20T00:00:00Z", error: null, ...o });
+const inv = (o: Partial<ItemInventory> = {}): ItemInventory => ({ partNumber: "P", description: null, stock: {}, shipments: {}, shipmentCarriers: {}, collectShipments: {}, otherShipments: 0, unitsLastMonth: null, snapshotAt: null, fetchedAt: "2026-11-20T00:00:00Z", error: null, ...o });
 
 describe("mixes from the cost report", () => {
   it("zone mix per warehouse, residential share, warehouse split", () => {
@@ -33,9 +33,13 @@ describe("warehouse share", () => {
     const s = warehouseShare(inv({ shipments: { GV: 11, LV: 3 }, shipmentCarriers: { UPS: 5, USPS: 9 }, stock: { LV: { onHand: 5, allocated: 0 } } }), mix, origins);
     expect(s).toMatchObject({ basis: "shipments", understates: false });
     expect(s.shares.GV).toBeCloseTo(11 / 14);
-    expect(s.label).toBe("From 14 shipments last month (9 USPS, 5 UPS): 79% Groveport, OH");
+    expect(s.label).toBe("From 14 shipments last month (9 USPS, 5 UPS prepaid): 79% Groveport, OH");
     // USPS-only products now have their own split too
     expect(warehouseShare(inv({ shipments: { LV: 6 }, shipmentCarriers: { USPS: 6 } }), mix, origins)).toMatchObject({ basis: "shipments", shares: { LV: 1 }, label: "From 6 USPS shipments last month: all Las Vegas, NV" });
+  });
+  it("names collect shipments apart from the ones we paid for", () => {
+    const s = warehouseShare(inv({ shipments: { LV: 21 }, shipmentCarriers: { UPS: 5, "UPS collect": 15, USPS: 1 }, collectShipments: { LV: 15 } }), mix, origins);
+    expect(s.label).toBe("From 21 shipments last month (1 USPS, 5 UPS prepaid, 15 UPS collect/third-party): all Las Vegas, NV");
   });
   it("one warehouse stocked: 100% there, flagged as possibly understated", () => {
     const s = warehouseShare(inv({ stock: { LV: { onHand: 0, allocated: 0 }, GV: { onHand: 1319, allocated: 16 } }, shipments: { GV: 2 } }), mix, origins);
@@ -195,6 +199,9 @@ describe("carrier mix and UPS surcharges", () => {
     expect(own.carrier).toMatchObject({ source: "product", shipments: { ups: 4, usps: 1 }, uspsShare: { LV: 0.2 } });
     expect(own.cost).toBeCloseTo(0.2 * 10 + 0.8 * 20 * 1.3, 2);
     expect(ownUspsShare({ UPS: 2, USPS: 2 })).toBeNull(); // 4 is too few
+    // collect/third-party UPS doesn't count (the customer chose UPS); UPS not invoiced yet counts as ours
+    expect(ownUspsShare({ UPS: 2, "UPS collect": 15, USPS: 1 })).toBeNull();
+    expect(ownUspsShare({ UPS: 3, "UPS pending": 1, "UPS collect": 15, USPS: 1 })).toEqual({ share: 0.2, ups: 4, usps: 1 });
     // too few → the warehouse's split at its weight
     expect(blendedCost(rates, m, share, { ups: 2, usps: 2 }, { UPS: 2, USPS: 2 }).carrier).toMatchObject({ source: "warehouse", uspsShare: { LV: 0.75 } });
     // cheapest-carrier setting ignores the product's own split

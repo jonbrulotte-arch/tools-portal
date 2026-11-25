@@ -21,8 +21,10 @@ export type ItemInventory = {
   description: string | null;
   stock: Record<string, SiteStock>;
   shipments: Record<string, number>;
-  /** Placed shipments per carrier: { UPS, USPS }. */
+  /** Placed shipments per carrier (keys in CARRIER_LABELS: UPS prepaid, UPS collect, UPS pending, USPS). */
   shipmentCarriers: Record<string, number>;
+  /** Placed shipments billed collect or to a third party, per warehouse. */
+  collectShipments: Record<string, number>;
   otherShipments: number;
   unitsLastMonth: number | null;
   snapshotAt: string | null;
@@ -60,8 +62,8 @@ const siteIndex = (s: ShippingRatesSettings) => Object.fromEntries(Object.entrie
 export async function trackingOrigins(trackings: string[]): Promise<TrackingOrigins> {
   const keys = [...new Set(trackings.map((t) => t.toUpperCase()).filter(Boolean))];
   if (!keys.length) return new Map();
-  const rows = await prisma.shipmentOrigin.findMany({ where: { tracking: { in: keys } }, select: { tracking: true, origin: true, carrier: true } });
-  return new Map(rows.map((r) => [r.tracking.toUpperCase(), { origin: r.origin, carrier: r.carrier }]));
+  const rows = await prisma.shipmentOrigin.findMany({ where: { tracking: { in: keys } }, select: { tracking: true, origin: true, carrier: true, billing: true } });
+  return new Map(rows.map((r) => [r.tracking.toUpperCase(), { origin: r.origin, carrier: r.carrier, billing: r.billing }]));
 }
 
 /** Stock and shipments per warehouse for one parsed page (USPS and UPS placed by tracking number). */
@@ -74,7 +76,7 @@ export async function refreshItemInventory(s: ShippingRatesSettings, part: strin
   try {
     const page = await fetchInventoryPage(s, part);
     const sum = await summarizePage(s, page);
-    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, shipmentCarriers: sum.shipmentCarriers, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
+    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, shipmentCarriers: sum.shipmentCarriers, collectShipments: sum.collectShipments, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
     return toItem(await prisma.productInventory.upsert({ where: { partNumber: part }, create: { partNumber: part, ...data }, update: data }));
   } catch (err) {
     const error = errorMessage(err).slice(0, 500);
@@ -90,6 +92,7 @@ export function toItem(r: Row): ItemInventory {
     stock: (r.stock ?? {}) as Record<string, SiteStock>,
     shipments: (r.shipments ?? {}) as Record<string, number>,
     shipmentCarriers: (r.shipmentCarriers ?? {}) as Record<string, number>,
+    collectShipments: (r.collectShipments ?? {}) as Record<string, number>,
     otherShipments: r.otherShipments,
     unitsLastMonth: r.unitsLastMonth,
     snapshotAt: r.snapshotAt,

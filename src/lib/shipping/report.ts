@@ -137,10 +137,14 @@ async function savePackages(reportId: string, packages: PackageRow[]) {
 }
 
 const ORIGIN_RETENTION_DAYS = 120;
+type ShipmentOriginRow = { tracking: string; origin: string; carrier: string; billing: "prepaid" | "collect"; shippedAt: Date | null };
 
-/** Remembers which warehouse shipped each package (new tracking numbers only) and forgets old ones. */
-export async function saveShipmentOrigins(rows: { tracking: string; origin: string; carrier: string; shippedAt: Date | null }[]) {
+/** Remembers which warehouse shipped each package, and who paid (new tracking numbers; billing is corrected on known ones), and forgets old ones. */
+export async function saveShipmentOrigins(rows: ShipmentOriginRow[]) {
   for (let i = 0; i < rows.length; i += 5000) await prisma.shipmentOrigin.createMany({ data: rows.slice(i, i + 5000), skipDuplicates: true });
+  // rows saved before billing was recorded default to prepaid
+  const collect = rows.filter((r) => r.billing === "collect").map((r) => r.tracking);
+  for (let i = 0; i < collect.length; i += 5000) await prisma.shipmentOrigin.updateMany({ where: { tracking: { in: collect.slice(i, i + 5000) }, billing: { not: "collect" } }, data: { billing: "collect" } });
   await prisma.shipmentOrigin.deleteMany({ where: { OR: [{ shippedAt: { lt: new Date(Date.now() - ORIGIN_RETENTION_DAYS * 86_400_000) } }, { shippedAt: null, createdAt: { lt: new Date(Date.now() - ORIGIN_RETENTION_DAYS * 86_400_000) } }] } });
 }
 
@@ -386,15 +390,15 @@ export async function parseReport(file: Buffer, settings: ShippingRatesSettings,
     upsCharges: Object.fromEntries(Object.entries(upsCharges).map(([o, c]) => [o, { ...roundCharges(c), bands: c.bands!.map(roundCharges) }])),
     zoneUsage: [...usage.values()].sort((a, b) => a.carrier.localeCompare(b.carrier) || a.origin.localeCompare(b.origin) || a.zone - b.zone),
   };
-  // which warehouse shipped each package (tracking number → warehouse), for placing a product's shipments
-  const shipmentOrigins: { tracking: string; origin: string; carrier: string; shippedAt: Date | null }[] = [];
+  // which warehouse shipped each package (tracking number → warehouse) and who paid, for placing a product's shipments
+  const shipmentOrigins: ShipmentOriginRow[] = [];
   for (const [tracking, p] of ups) {
     const origin = settings.upsAccounts[p.account] ?? originByZip.get(p.originZip);
-    if (origin) shipmentOrigins.push({ tracking, origin, carrier: "UPS", shippedAt: p.date ?? null });
+    if (origin) shipmentOrigins.push({ tracking, origin, carrier: "UPS", billing: p.billedToOthers ? "collect" : "prepaid", shippedAt: p.date ?? null });
   }
   for (const p of usps) {
     const origin = originByZip.get(p.originZip);
-    if (p.tracking && origin && p.cost > 0) shipmentOrigins.push({ tracking: p.tracking.replace(/\s/g, ""), origin, carrier: "USPS", shippedAt: p.date ?? null });
+    if (p.tracking && origin && p.cost > 0) shipmentOrigins.push({ tracking: p.tracking.replace(/\s/g, ""), origin, carrier: "USPS", billing: "prepaid", shippedAt: p.date ?? null });
   }
   return { summary, aggregates, dateFrom, dateTo, shipmentOrigins, packages };
 }

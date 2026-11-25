@@ -493,8 +493,10 @@ model ProductInventory {
   stock            Json      @default("{}")
   /// Shipments in the last month per warehouse (UPS and USPS, from tracking numbers): { [warehouse code]: count }
   shipments        Json      @default("{}")
-  /// Placed shipments per carrier last month: { UPS: n, USPS: n }
+  /// Placed shipments per carrier last month: { UPS (prepaid), "UPS collect", "UPS pending" (not invoiced yet), USPS }
   shipmentCarriers Json      @default("{}")
+  /// Of the placed shipments, those billed collect or to a third party, per warehouse: { [warehouse code]: count }
+  collectShipments Json      @default("{}")
   /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, or not in a cost report yet)
   otherShipments   Int       @default(0)
   unitsLastMonth   Int?
@@ -565,6 +567,8 @@ model ShipmentOrigin {
   tracking  String    @id
   origin    String
   carrier   String
+  /// "prepaid" (we paid) or "collect" (billed to the receiver or a third party, who chose the carrier)
+  billing   String    @default("prepaid")
   shippedAt DateTime?
   createdAt DateTime  @default(now())
 

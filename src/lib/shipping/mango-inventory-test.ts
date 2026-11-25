@@ -1,3 +1,4 @@
+import { carrierCounts } from "@/lib/shipping/carrier-labels";
 import { z } from "zod";
 import type { ShippingRatesSettings } from "@/lib/settings";
 import type { MangoInventoryPage, summarizeInventory } from "@/lib/shipping/mango-inventory-parse";
@@ -15,7 +16,7 @@ export function describeInventoryTest(s: ShippingRatesSettings, p: MangoInventor
   });
   const placed = Object.values(sum.shipments).reduce((a, b) => a + b, 0);
   const split = Object.entries(sum.shipments).map(([o, c]) => `${name(o)} ${c}`).join(", ");
-  const byCarrier = Object.entries(sum.shipmentCarriers).map(([c, k]) => `${k} ${c}`).join(", ");
+  const byCarrier = carrierCounts(sum.shipmentCarriers);
   const ignored = Object.keys(p.sites).filter((site) => !index[site]).map((site) => `site ${site}`);
   return [
     `Mango answered for item ${p.partNumber}${p.description ? ` (${p.description})` : ""}.`,

@@ -110,7 +110,8 @@ export function parseInventoryPage(html: string, partNumber: string): MangoInven
 }
 
 /** Tracking number → the warehouse that shipped it (from the cost reports), for shipments whose number doesn't say. */
-export type TrackingOrigins = Map<string, { origin: string; carrier: string }>;
+export type TrackingOrigins = Map<string, { origin: string; carrier: string; billing?: string }>;
+
 
 /**
  * Stock and shipments per warehouse code. A shipment is placed by its tracking number: the cost reports' record
@@ -120,16 +121,19 @@ export function summarizeInventory(p: MangoInventoryPage, siteToOrigin: Record<s
   const stock: Record<string, SiteStock> = {};
   for (const [site, origin] of Object.entries(siteToOrigin)) if (p.sites[site]) stock[origin] = p.sites[site];
   const shipments: Record<string, number> = {};
+  const collect: Record<string, number> = {};
   const carriers: Record<string, number> = {};
   let other = 0;
   for (const s of p.shipments) {
     const known = tracked.get(s.tracking.toUpperCase());
     const origin = known?.origin ?? (s.upsAccount ? upsAccounts[s.upsAccount] : undefined);
-    const carrier = known?.carrier ?? (s.upsAccount ? "UPS" : null);
+    // UPS placed only by its account isn't on an invoice yet, so who paid isn't known
+    const carrier = known ? (known.carrier === "UPS" && known.billing === "collect" ? "UPS collect" : known.carrier) : s.upsAccount ? "UPS pending" : null;
     if (origin && carrier) {
       shipments[origin] = (shipments[origin] ?? 0) + 1;
       carriers[carrier] = (carriers[carrier] ?? 0) + 1;
+      if (carrier === "UPS collect") collect[origin] = (collect[origin] ?? 0) + 1;
     } else other++;
   }
-  return { stock, shipments, shipmentCarriers: carriers, otherShipments: other };
+  return { stock, shipments, collectShipments: collect, shipmentCarriers: carriers, otherShipments: other };
 }

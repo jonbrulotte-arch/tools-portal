@@ -41,13 +41,13 @@ Quote one product from both warehouses to every zone.
 Many products ship from either Las Vegas or Groveport, and the cost depends on where the customer is. The **Blended cost** column on the Products tab gives one expected shipping cost per unit:
 
 - **Warehouse share**: how this product's orders split between the warehouses. It's read from Mango every night:
-  - **Own shipments**: if the product had at least 5 shipments last month (UPS and USPS), its own split is used. Each tracking number is matched to the warehouse that shipped it.
+  - **Own shipments**: if the product had at least 5 shipments last month (UPS and USPS), its own split is used. Each tracking number is matched to the warehouse that shipped it. Collect and third-party shipments count here (they still leave from that warehouse), and the product's details show them apart: for example *21 shipments (1 USPS, 5 UPS prepaid, 15 UPS collect/third-party)*.
   - **One warehouse**: if it's stocked in only one warehouse, 100% is from there.
   - **Most stock**: if it's stocked in both, 100% is from the warehouse holding most of the stock, which is the one that usually ships it.
   - **Company split**: if Mango has no data, the company-wide split from the cost report is used.
 - **Zone mix**: for each warehouse, its usual share of shipments per zone, from the latest cost report.
 - **Cell price**: for each warehouse and zone, the product's UPS and USPS prices combined the way your managers chose in Settings:
-  - **Our actual carrier mix** (the default): the product's own UPS/USPS split if it had at least 5 shipments last month; otherwise the share of that warehouse's packages at this weight that really went USPS, from the cost report.
+  - **Our actual carrier mix** (the default): the product's own UPS/USPS split if it had at least 5 prepaid shipments last month (collect and third-party UPS shipments don't count: the customer chose the carrier); otherwise the share of that warehouse's packages at this weight that really went USPS, from the cost report.
   - **Cheapest carrier**: the cheaper carrier for a home address and for a business address.
 
   Either way, UPS home and business prices are weighted by how many of that warehouse's UPS shipments go to homes. UPS prices also include the warehouse's usual surcharges (additional handling, delivery area and so on) when that's turned on.
