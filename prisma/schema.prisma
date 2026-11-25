@@ -1,0 +1,755 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users & auth ─────────────────────────────────────────────
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id               String     @id @default(cuid())
+  email            String     @unique
+  name             String
+  passwordHash     String?
+  status           UserStatus @default(INVITED)
+  roleId           String
+  role             Role       @relation(fields: [roleId], references: [id])
+  failedLoginCount Int        @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  invitedById      String?
+  invitedAt        DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  toolAccess   UserToolAccess[]
+  inviteTokens InviteToken[]
+  resetTokens  PasswordResetToken[]
+  auditLogs    AuditLog[]
+  discounts    ShopifyDiscount[]
+  credentials  UserCredential[]
+}
+
+/// A user's own API credential for an outside service (e.g. Salsify), encrypted with APP_ENCRYPTION_KEY.
+model UserCredential {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String
+  encSecret String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+}
+
+model InviteToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ─── RBAC ─────────────────────────────────────────────────────
+
+model Role {
+  id           String           @id @default(cuid())
+  name         String           @unique
+  description  String           @default("")
+  isSystem     Boolean          @default(false)
+  isSuperAdmin Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  permissions  RolePermission[]
+  toolAccess   RoleToolAccess[]
+  users        User[]
+}
+
+model RolePermission {
+  roleId     String
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission String
+
+  @@id([roleId, permission])
+}
+
+model Tool {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  name        String
+  description String           @default("")
+  usage       String           @default("")
+  icon        String           @default("Wrench")
+  enabled     Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roleAccess  RoleToolAccess[]
+  userAccess  UserToolAccess[]
+}
+
+model RoleToolAccess {
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  toolId String
+  tool   Tool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, toolId])
+}
+
+enum AccessEffect {
+  GRANT
+  DENY
+}
+
+model UserToolAccess {
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolId String
+  tool   Tool         @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  effect AccessEffect
+
+  @@id([userId, toolId])
+}
+
+// ─── Audit log ────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  action     String
+  category   String
+  targetType String?
+  targetId   String?
+  success    Boolean  @default(true)
+  ip         String?
+  userAgent  String?
+  metadata   Json?
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@index([category])
+}
+
+// ─── Settings ─────────────────────────────────────────────────
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Asset {
+  key       String   @id
+  mimeType  String
+  data      Bytes
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Tool: Shopify Discount Code Generator ───────────────────
+
+enum ShopifyAuthType {
+  ACCESS_TOKEN
+  CLIENT_CREDENTIALS
+}
+
+model ShopifyStore {
+  id                   String            @id @default(cuid())
+  name                 String
+  shopDomain           String            @unique
+  authType             ShopifyAuthType
+  encAccessToken       String?
+  clientId             String?
+  encClientSecret      String?
+  encCachedToken       String?
+  cachedTokenExpiresAt DateTime?
+  apiVersion           String            @default("2026-10")
+  currencyCode         String?
+  enabled              Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  discounts            ShopifyDiscount[]
+}
+
+enum DiscountValueType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+enum DiscountRecordStatus {
+  CREATED
+  FAILED
+}
+
+model ShopifyDiscount {
+  id                String               @id @default(cuid())
+  storeId           String
+  store             ShopifyStore         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdById       String?
+  createdBy         User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdByEmail    String?
+  title             String
+  valueType         DiscountValueType
+  value             Decimal?             @db.Decimal(12, 2)
+  codes             String[]
+  config            Json
+  shopifyDiscountId String?
+  status            DiscountRecordStatus
+  errorMessage      String?
+  requestPayload    Json?
+  responsePayload   Json?
+  startsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime             @default(now())
+
+  @@index([createdAt])
+  @@index([storeId])
+  @@index([createdById])
+}
+
+// ─── Tool: Shipping Rates Generator ──────────────────────────
+// Uploaded ship-cost reports are reduced to aggregates; no names/addresses are stored.
+
+enum ShippingJobStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+  CANCELLED
+}
+
+model ShippingReport {
+  id           String               @id @default(cuid())
+  fileName     String
+  uploadedById String?
+  uploadedBy   String?
+  status       ShippingJobStatus    @default(PENDING)
+  error        String?
+  progress     Int                  @default(0)
+  rowCount     Int                  @default(0)
+  dateFrom     DateTime?
+  dateTo       DateTime?
+  summary      Json?
+  createdAt    DateTime             @default(now())
+  finishedAt   DateTime?
+  aggregates   ShippingHistoryAgg[]
+  packages     ShippingPackage[]
+
+  @@index([createdAt])
+}
+
+model ShippingHistoryAgg {
+  id         String         @id @default(cuid())
+  reportId   String
+  report     ShippingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  carrier    String // UPS | USPS
+  service    String // UPS: GROUND_COM | GROUND_RES ; USPS: GROUND_ADVANTAGE
+  origin     String // origin code, e.g. LV | GV
+  zone       Int
+  zoneSource String // actual | ups-city | distance
+  weight     Decimal        @db.Decimal(8, 2) // billed lb (UPS) / USPS tier in lb (0.25, 0.5, 0.75, 1, 2, ...)
+  count      Int
+  total      Decimal        @db.Decimal(12, 2)
+  minCost    Decimal        @db.Decimal(10, 2)
+  maxCost    Decimal        @db.Decimal(10, 2)
+
+  @@index([reportId, carrier, origin, zone])
+}
+
+model ShippingQuoteRun {
+  id          String            @id @default(cuid())
+  mode        String // live | simulated
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  total       Int               @default(0)
+  done        Int               @default(0)
+  failed      Int               @default(0)
+  error       String?
+  config      Json
+  createdAt   DateTime          @default(now())
+  /// When the current pass began (a "Retry failed" pass starts a new one) and how many quotes were done before it.
+  startedAt   DateTime?
+  startDone   Int               @default(0)
+  finishedAt  DateTime?
+  quotes      ShippingQuote[]
+
+  @@index([createdAt])
+}
+
+model ShippingQuote {
+  id         String           @id @default(cuid())
+  runId      String
+  run        ShippingQuoteRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  carrier    String
+  service    String
+  origin     String
+  zone       Int
+  destZip    String
+  weight     Decimal          @db.Decimal(8, 2)
+  amount     Decimal?         @db.Decimal(10, 2)
+  listAmount Decimal?         @db.Decimal(10, 2)
+  apiZone    String?
+  error      String?
+  createdAt  DateTime         @default(now())
+
+  @@index([runId, carrier, origin, zone])
+}
+
+// ─── Shipping Rates Generator: Products (weekly live rates for a Salsify list) ───
+
+enum ProductRateItemStatus {
+  OK
+  NO_DATA
+  FAILED
+}
+
+model ProductRateRun {
+  id            String            @id @default(cuid())
+  mode          String // live | simulated
+  status        ShippingJobStatus @default(PENDING)
+  startedById   String?
+  startedBy     String?
+  listId        String
+  total         Int               @default(0)
+  done          Int               @default(0)
+  failed        Int               @default(0)
+  error         String?
+  comparedRunId String?
+  createdAt     DateTime          @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  items         ProductRateItem[]
+
+  @@index([createdAt])
+}
+
+model ProductRateItem {
+  id           String                @id @default(cuid())
+  runId        String
+  run          ProductRateRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  position     Int
+  partNumber   String
+  name         String?
+  packaging    String?
+  weight       Decimal?              @db.Decimal(8, 2)
+  length       Decimal?              @db.Decimal(8, 2)
+  width        Decimal?              @db.Decimal(8, 2)
+  height       Decimal?              @db.Decimal(8, 2)
+  sizeSource   String? // primary | fallback | mixed
+  upsBillable  Decimal?              @db.Decimal(8, 2)
+  uspsBillable Decimal?              @db.Decimal(8, 2)
+  status       ProductRateItemStatus
+  error        String?
+  createdAt    DateTime              @default(now())
+  quotes       ProductRateQuote[]
+
+  @@index([runId, partNumber])
+  @@index([partNumber])
+}
+
+model ProductRateQuote {
+  id         String          @id @default(cuid())
+  itemId     String
+  item       ProductRateItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  origin     String
+  zone       Int
+  carrier    String
+  service    String
+  destZip    String
+  amount     Decimal?        @db.Decimal(10, 2)
+  listAmount Decimal?        @db.Decimal(10, 2)
+  negotiated Boolean?
+  chart      Decimal?        @db.Decimal(10, 2)
+  diffPct    Decimal?        @db.Decimal(8, 1)
+  error      String?
+
+  @@index([itemId])
+}
+
+// ─── Automated Emails (EDI) ───
+
+enum AutoEmailTrigger {
+  SCHEDULE
+  MANUAL
+  TEST
+}
+
+enum AutoEmailStatus {
+  SENT
+  FAILED
+}
+
+model AutoEmail {
+  id            String             @id @default(cuid())
+  name          String
+  enabled       Boolean            @default(false)
+  to            String[]
+  cc            String[]
+  subject       String
+  appendDate    Boolean            @default(true)
+  introText     String             @default("")
+  sqlQuery      String             @default("")
+  keyColumns    String[]
+  closingText   String             @default("")
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  lastCheckedAt DateTime?
+  lastSentAt    DateTime?
+  lastStatus    String?
+  lastError     String?
+  sentKeys      AutoEmailSentKey[]
+  logs          AutoEmailLog[]
+}
+
+model AutoEmailSentKey {
+  id      String    @id @default(cuid())
+  emailId String
+  email   AutoEmail @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  keyHash String
+  keyText String
+  sentAt  DateTime  @default(now())
+  logId   String?
+
+  @@unique([emailId, keyHash])
+  @@index([sentAt])
+}
+
+model AutoEmailLog {
+  id         String           @id @default(cuid())
+  emailId    String?
+  email      AutoEmail?       @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  emailName  String
+  trigger    AutoEmailTrigger
+  status     AutoEmailStatus
+  to         String[]
+  cc         String[]
+  subject    String
+  rowCount   Int              @default(0)
+  keys       Json?
+  html       String?
+  error      String?
+  durationMs Int?
+  actorEmail String?
+  createdAt  DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([emailId, createdAt])
+}
+
+// ─── Shipping Rates Generator: carrier API usage (API Report tab) ───
+
+/// Real carrier API calls, counted per Pacific day. Every attempt counts (retries included), as the carriers count them.
+model CarrierApiUsage {
+  id        String   @id @default(cuid())
+  day       String   @db.VarChar(10) // YYYY-MM-DD, America/Los_Angeles
+  carrier   String // UPS | USPS
+  account   String // UPS shipper account, or the Endicia account ID
+  source    String // quote_run | product_run | product_quote | settings_test | estimate
+  kind      String // rate | token
+  outcome   String // ok | error | throttled
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, carrier, account, source, kind, outcome])
+  @@index([day])
+}
+
+// ─── Shipping Rates Generator: stock and recent shipments per item, from Mango's inventory page ───
+
+/// Latest read of Mango's inventory page for one item. A failed refresh keeps the last good figures and sets `error`.
+model ProductInventory {
+  partNumber       String    @id
+  description      String?
+  /// { [warehouse code]: { onHand, allocated } }
+  stock            Json      @default("{}")
+  /// Shipments in the last month per warehouse (UPS and USPS, from tracking numbers): { [warehouse code]: count }
+  shipments        Json      @default("{}")
+  /// Placed shipments per carrier last month: { UPS (prepaid), "UPS collect", "UPS pending" (not invoiced yet), USPS }
+  shipmentCarriers Json      @default("{}")
+  /// Of the placed shipments, those billed collect or to a third party, per warehouse: { [warehouse code]: count }
+  collectShipments Json      @default("{}")
+  /// Counted since who paid was recorded; older counts' "UPS" doesn't tell prepaid from collect
+  billingChecked   Boolean   @default(false)
+  /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, or not in a cost report yet)
+  otherShipments   Int       @default(0)
+  unitsLastMonth   Int?
+  /// Mango's own snapshot time, as shown on the page
+  snapshotAt       String?
+  fetchedAt        DateTime?
+  error            String?
+  errorAt          DateTime?
+  updatedAt        DateTime  @updatedAt
+}
+
+model InventoryImportRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  total       Int               @default(0)
+  done        Int               @default(0)
+  failed      Int               @default(0)
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}
+
+// ─── Shipping Rates Generator: blended cost pushed to Salsify ───
+
+/// What was last written to Salsify per product, so only changed values are written.
+model SalsifyPush {
+  partNumber  String    @id
+  cost        String?
+  note        String?
+  /** The cheapest carrier last written (null before it was added: every product is written again once) */
+  carrier     String?
+  pushedAt    DateTime?
+  lastError   String?
+  lastErrorAt DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model SalsifyPushRun {
+  id           String            @id @default(cuid())
+  status       ShippingJobStatus @default(PENDING)
+  startedById  String?
+  startedBy    String?
+  property     String
+  productRunId String?
+  products     Int               @default(0)
+  done         Int               @default(0)
+  written      Int               @default(0)
+  unchanged    Int               @default(0)
+  skipped      Int               @default(0)
+  failed       Int               @default(0)
+  /// [{ partNumber, reason }] for skipped and failed products (capped)
+  problems     Json              @default("[]")
+  error        String?
+  createdAt    DateTime          @default(now())
+  finishedAt   DateTime?
+
+  @@index([createdAt])
+}
+
+/// Which warehouse shipped each package, from the cost reports (tracking number → warehouse). Lets the Mango
+/// inventory read place USPS shipments (whose tracking numbers don't say) and UPS from unlisted accounts.
+/// No names or addresses. Entries older than 120 days are pruned.
+model ShipmentOrigin {
+  tracking  String    @id
+  origin    String
+  carrier   String
+  /// "prepaid" (we paid) or "collect" (billed to the receiver or a third party, who chose the carrier)
+  billing   String    @default("prepaid")
+  shippedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([shippedAt])
+}
+
+// ─── Packaging Configurator ─────────────────────────────────────────────────
+
+/// A product from the Packaging Configurator's Salsify list (size in inches, weight in lb). Rows not on the
+/// list at the last complete sync are removed.
+model PackProduct {
+  partNumber   String   @id
+  name         String
+  height       Float?
+  width        Float?
+  length       Float?
+  weight       Float?
+  upc          String?
+  foldable     Boolean  @default(false)
+  shipsOwn     Boolean  @default(false)
+  /// How it ships today: its packaged size and weight in Salsify (optional; compared in the Packaging review)
+  packedHeight Float?
+  packedWidth  Float?
+  packedLength Float?
+  packedWeight Float?
+  /// What's missing from Salsify (null when complete)
+  error        String?
+  syncedAt     DateTime @default(now())
+
+  @@index([upc])
+  @@index([name])
+}
+
+model PackPackaging {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  /// box | bubble_mailer | poly_mailer | other
+  type       String   @default("box")
+  height     Float
+  width      Float
+  length     Float
+  maxHeight  Float?
+  maxWeight  Float?
+  tareWeight Float?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model PackShippingMethod {
+  id           String             @id @default(cuid())
+  name         String             @unique
+  minWeight    Float              @default(0)
+  maxWeight    Float?
+  dimDivisor   Float?
+  dimThreshold Float?
+  isLtl        Boolean            @default(false)
+  active       Boolean            @default(true)
+  notes        String?
+  sortOrder    Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  rates        PackShippingRate[]
+}
+
+/// One "up to maxWeight lb → rate" break of a shipping method's rate card.
+model PackShippingRate {
+  id        String             @id @default(cuid())
+  methodId  String
+  method    PackShippingMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  maxWeight Float
+  rate      Float
+
+  @@unique([methodId, maxWeight])
+}
+
+/// Reading the product list from Salsify.
+model PackSyncRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  listId      String
+  total       Int               @default(0)
+  done        Int               @default(0)
+  created     Int               @default(0)
+  updated     Int               @default(0)
+  removed     Int               @default(0)
+  incomplete  Int               @default(0)
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}
+
+/// The packaging analysis of the whole catalog (the report is stored as JSON).
+model PackAnalysisRun {
+  id          String            @id @default(cuid())
+  status      ShippingJobStatus @default(PENDING)
+  startedById String?
+  startedBy   String?
+  /// manual | after-sync | scheduled
+  trigger     String
+  products    Int               @default(0)
+  done        Int               @default(0)
+  report      Json?
+  error       String?
+  createdAt   DateTime          @default(now())
+  finishedAt  DateTime?
+
+  @@index([createdAt])
+}
+
+/// The last calculated shipping size and weight written to each product in Salsify.
+model PackPush {
+  partNumber    String    @id
+  /// { length, width, height, weight } as written
+  values        Json?
+  pushedAt      DateTime?
+  lastError     String?
+  lastErrorAt   DateTime?
+  /// Packaging chosen by hand in the Configurator: the scheduled push keeps its values until it's cleared
+  manual        Boolean   @default(false)
+  packagingName String?
+  chosenBy      String?
+  chosenAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+model PackPushRun {
+  id            String            @id @default(cuid())
+  status        ShippingJobStatus @default(PENDING)
+  startedById   String?
+  startedBy     String?
+  analysisRunId String?
+  products      Int               @default(0)
+  done          Int               @default(0)
+  written       Int               @default(0)
+  unchanged     Int               @default(0)
+  skipped       Int               @default(0)
+  failed        Int               @default(0)
+  /// products kept at a packaging chosen by hand
+  manual        Int               @default(0)
+  /// [{ partNumber, reason }] for skipped and failed products (capped)
+  problems      Json              @default("[]")
+  error         String?
+  createdAt     DateTime          @default(now())
+  finishedAt    DateTime?
+
+  @@index([createdAt])
+}
+
+/// One prepaid package from a cost report (the ones counted in its totals), with its order references, for
+/// the Carrier choice report. Names and street addresses are never stored.
+model ShippingPackage {
+  id           String         @id @default(cuid())
+  reportId     String
+  report       ShippingReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  tracking     String
+  carrier      String // UPS | USPS
+  service      String // GROUND_COM | GROUND_RES | GROUND_ADVANTAGE
+  origin       String
+  zone         Int
+  /// Actual weight (lb) and the weight tier it was counted at (UPS billed weight / USPS tier)
+  actualWeight Float?
+  billedWeight Float
+  cost         Float
+  shippedAt    DateTime?
+  po           String?
+  so           String?
+  marketplace  String?
+  /// UPS package reference 5 (the channel, e.g. LOWES-SMP)
+  channel      String?
+  reference    String?
+  shipRef      String?
+  destCompany  String?
+  destState    String?
+
+  @@index([reportId, carrier])
+}

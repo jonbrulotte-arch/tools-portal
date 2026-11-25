@@ -1,0 +1,149 @@
+How the Packaging Configurator decides what fits and what each shipping method bills. The defaults below are the fit rules in Settings and can be changed there.
+
+| Rule | Default |
+| --- | --- |
+| DIM divisor | 139 cubic inches per pound (a shipping method can use its own) |
+| Pack efficiency | 70% |
+| Fit clearance | 0.5 in. |
+| LTL threshold | 150 lb |
+
+## 1. The products
+
+Each product's **length, width, height (inches) and weight (pounds)** come from the Salsify fields set in Settings: by default the *UPC* (retail package) fields, which are the product's own size. Two optional flags change how it packs:
+- **Foldable:** it can be folded in half: its longest side is halved and its thinnest doubled (the volume stays the same). Example: a 20 × 10 × 1 in. item packs as 10 × 10 × 2. Each packaging option is tried with the items as they are and folded, and the fuller fit is used (folding can make an item too thick for a box it fits flat). Cards show *Folded* when folding was used.
+- **Ships in own packaging:** its carton is the shipping box. It isn't put in packaging; it's priced on its own size, one carton per unit.
+
+A product missing any of the four values isn't packed or checked. The Products tab lists these.
+
+## 2. Does it fit?
+
+Sides are compared largest to largest, so a product can turn any way.
+
+- **Boxes:** each product side plus the clearance must fit the matching inside side. Example: a 9 × 7 × 5 in. product needs 9.5 × 7.5 × 5.5 in. inside.
+- **Max height:** for mailers and flat-pack boxes, the max height (how thick the contents can be) stands in for the box's height.
+- **Bubble and poly mailers** (with a max height): a mailer wraps around what's in it, so each flat side loses the contents' thickness (see *How mailers work* below). The product's two largest sides **plus its thickness** plus clearance must fit the mailer's flat size, and its thickness plus clearance must be within the max height. With several items, the thickness is the whole stack. Example: a 9.5 × 8 × 3 in. product needs at least 13 × 11.5 in. flat (9.5 + 3 + 0.5 and 8 + 3 + 0.5), so a 13 × 10 in. mailer doesn't fit.
+- **Several units or products:**
+  - With a **max height**, items lie flat and stack: the thinnest sides add up, and the stack plus clearance must be within the max height.
+  - Otherwise, by **volume**: all the items' volume must be within the box's inside volume × the pack efficiency. Example: a 480 in³ box at 70% takes 336 in³ of products.
+
+## 3. How well it fits
+
+**Volume used** = products' volume ÷ the packaging's volume. With a max height, the packaging's volume is its sealed size (section 4).
+
+| Volume used | Fit |
+| --- | --- |
+| 90% or more | Exact fit |
+| 60–90% | Good fit |
+| 35–60% | Loose fit |
+| Under 35% | Oversized |
+
+**Best first:** options are ranked by volume used, fullest first. Options the shipment would be **over the weight limit** for come last, whatever their fit, so an overweight mailer is never the best fit.
+
+## 4. The package's size
+
+- **Boxes:** the box's own size.
+- **Flat-pack boxes with a max height:** length × width × (the stacked products' thickness).
+- **Mailers:** the mailer wraps around the contents, so the sealed package is:
+  - thickness = the stacked products' thickness + the mailer material (the mailer's "height");
+  - length and width = the mailer's flat size minus the products' thickness.
+
+  Example: a 9 × 6 in. bubble mailer (0.25 in. material) with a 0.5 in. product seals at 8.5 × 5.5 × 0.75 in.
+
+This **shipping size** is what the push writes to Salsify and the Bulk export shows.
+
+## How mailers work
+
+A bubble or poly mailer isn't a box with fixed sides. It's a flat envelope that **wraps around what's in it**, so the thicker the contents, the more of the envelope goes up and over them and the less is left for length and width:
+
+- **Sealed thickness** = the contents' (stacked) thickness + the mailer material.
+- **Sealed length and width** = the mailer's flat size **minus** the contents' thickness.
+- **Largest footprint it holds** = the sealed length and width minus the clearance. A product only fits if its two largest sides, plus its thickness, plus the clearance, fit the flat size.
+- **Thickest contents it takes** = the mailer's **max height** minus the clearance.
+
+Example: a **13 × 10 in. poly mailer** (0.1 in. material, max height 3.5 in.), with the default 0.5 in. clearance and DIM divisor 139:
+
+| Contents thick | Sealed size (L × W × H) | Largest footprint it holds | Sealed volume | DIM weight |
+| --- | --- | --- | --- | --- |
+| 0.5 in. | 12.5 × 9.5 × 0.6 in. | 12 × 9 in. | 71 in³ | 0.513 lb |
+| 1 in. | 12 × 9 × 1.1 in. | 11.5 × 8.5 in. | 119 in³ | 0.855 lb |
+| 2 in. | 11 × 8 × 2.1 in. | 10.5 × 7.5 in. | 185 in³ | 2 lb |
+| 3 in. | 10 × 7 × 3.1 in. | 9.5 × 6.5 in. | 217 in³ | 2 lb |
+
+What this means in practice:
+- **A mailer holds less than its flat size suggests.** At 3 in. thick, this 13 × 10 mailer takes a 9.5 × 6.5 in. footprint, not 13 × 10. A 9.5 × 8 × 3 in. product doesn't fit it, though its footprint fits the flat mailer easily.
+- **Volume grows more slowly than thickness.** Going from 1 to 3 in. thick triples the thickness, but the sealed volume (and the DIM weight) less than doubles, because the length and width shrink.
+- **Several items stack:** their thinnest sides add up to the contents' thickness, so each extra item shrinks the footprint for all of them.
+- **Max height** (set on the Packaging tab) is how thick the contents can be. Above it the mailer won't close, whatever the footprint.
+- **Volume used** for a mailer is measured against its sealed size, so a well-filled mailer reads close to 100%, and never over it.
+
+## 5. Weights
+
+- **Actual weight** = the products' weight + the packaging's own weight.
+- **DIM weight** = the package's volume ÷ the DIM divisor.
+- **Rounding:** 1 lb and over rounds **up** to a whole pound; under 1 lb keeps three decimals. Example: 3.45 → 4 lb; 0.2524 → 0.252 lb.
+- **Billed weight** (on the cards, the Report and Bulk) = the **lowest billed weight among the shipping methods** that take the package (section 6: each applies its own divisor and DIM threshold). Without any shipping method, it's the larger of actual and DIM weight at the global divisor. Example: an 11.5 × 8.5 × 1.6 in. mailer holding 0.29 lb is 2 lb by DIM at 139, but USPS (DIM only over 1,728 in³) bills it at 0.29 lb, so its billed weight is 0.29 lb.
+
+## 6. Shipping methods
+
+For each active method (LTL methods aside):
+1. **DIM weight** at the method's own divisor, else the global one.
+2. **Does DIM apply?** Yes, unless the method has a **DIM threshold** and the package's volume is at or under it (USPS: 1,728 in³, one cubic foot).
+3. **Billed weight** = the larger of actual and DIM weight when DIM applies, else the actual weight; rounded as above. **DIM** is tagged when the DIM weight is the larger.
+4. The method is offered only if the billed weight is within its **min and max weight**.
+5. **Price:** the first rate-card break at or above the billed weight ("up to 5 lb: $13.40"). Heavier than the last break: *no rate*.
+
+**Cheapest** marks the lowest price. A package is flagged **DIM on every method** only if every offered method bills it by DIM, because otherwise DIM can be avoided by choosing another method.
+
+Example: a 10 × 8 × 6 in. box (480 in³) with 2.5 lb inside:
+- UPS Ground (divisor 139, no threshold): DIM 3.45 → 4 lb, billed **4 lb (DIM)**;
+- USPS Ground Advantage (166, threshold 1,728): 480 in³ is under the threshold, so billed at the actual weight, **3 lb**.
+
+## 7. LTL freight
+
+A shipment whose products weigh the LTL threshold or more (actual weight, without packaging) is flagged **LTL freight**. LTL methods are matched by actual weight only (no DIM) and priced from their rate card. Parcel options are still listed if any fit.
+
+## 8. The report
+
+The report runs each product **alone (one unit)** through sections 2–6:
+- **With packaging:** fits at least one active option, or ships in its own packaging.
+- **No packaging fits** and **Only loose fits** (its best option is under 60% full).
+- **Billed by DIM:** its best option is billed by DIM on at least one method. *DIM by method* counts it under each such method.
+- **Packaging use:** for each option, the products it fits, those it's the best fit for, those it's the *only* option for, the fit quality mix and the average volume used.
+
+## 9. Pushing to Salsify
+
+For each product with a best option, the push writes four values: its **shipping size** (section 4) as length, width and height, rounded to 0.01 in., and its **actual weight** (section 5: the products plus the packaging's own weight, rounded to 0.01 lb), not the billed (DIM) weight. Products that ship in their own packaging send their own size and weight. Products with no fitting packaging are skipped. A product is written only when one of its four values changed since it was last written.
+
+**Chosen by hand:** someone with the permission can pick any option that fits a product (one unit) in the Configurator and push it. The same four values are worked out for that option, again on the server, and written at once. The product is then marked as chosen by hand, and the scheduled push skips it until it's returned to automatic.
+
+## 10. How products ship today (the Report's comparison)
+
+For each product with all four **packaged** values in Salsify (how it ships today: length, width, height and weight; by default the *Shipping … (Inches/Pounds)* fields):
+1. **Today's package** is priced as a box of that size and that weight (the packaged weight already includes the packaging): DIM weight, billed weight, and each method's billed weight and price (section 6). The cheapest priced method is kept.
+2. **The recommendation** is the product's best packaging (one unit), priced the same way from its shipping size and actual weight. A product that ships in its own packaging is compared with its own size.
+3. **Saving** = today's cheapest price − the recommendation's cheapest price. Without rates on both sides it's compared on billed weight (at the global divisor) instead.
+4. **Verdict:**
+   - *Packaged size smaller than the product*: today's package is smaller than the product on any side, folded or not (0.05 in. allowed).
+   - *No packaging of ours fits*: there's no recommendation.
+   - *Configured correctly*: today's package matches the recommended packaging (every side within 0.5 in., any orientation; a mailer's sealed size), or the saving is under half a cent (or a hundredth of a pound).
+   - *Could be packaged better*: the saving is positive.
+   - *Expired packaging option*: the saving is negative. Our packaging options are what we ship in, so a package that bills less than all of them isn't one we use any more: Salsify still has a retired packaging. A product that **ships in its own packaging** is *configured correctly* here instead, since its own carton is its packaging.
+
+"Looks like" is the packaging option whose size today's package matches within 0.5 in. on every side. Totals on the Report add up the savings of the *could be packaged better* products, one shipment each.
+
+### Method changes
+
+| Date | Change | Why |
+| --- | --- | --- |
+| Nov 24, 2026 | **Billed weight** is the lowest among the shipping methods (their own divisors and DIM thresholds), not the global DIM weight; the Report shows actual and billed weight side by side. | Small, light packages showed DIM weights no method would bill. |
+| Nov 24, 2026 | The push writes the **actual** shipping weight (product + packaging) instead of the billed weight. | The billed weight is the DIM weight rounded up (a 0.28 lb item in a mailer went to Salsify as 2 lb). |
+| Nov 24, 2026 | The Packaging review became part of the Report. | One place for the analysis. |
+| Nov 24, 2026 | "Current packaging beats our options" became **Expired packaging option** (except products that ship in their own packaging). | Our options are the packaging we ship in; a cheaper package in Salsify is a retired one, not a better one. |
+
+## Changes from the stand-alone app
+
+- Packaging over its weight limit is ranked after the rest (it was flagged but could still be the best fit).
+- A mailer must fit the product after wrapping its thickness. The old app checked only the flat size, so a thick product could "fit" a mailer whose sealed size was smaller than the product (more than 100% used).
+- Products, with their size, weight, UPC and flags, come only from Salsify; they aren't edited in the tool.
+- Weights a hair over a whole pound from rounding (for example 3.0000001 lb) no longer round up to the next pound.
+- Foldable products are tried both flat and folded; the old app always folded them, which could rule out a box they fit flat.
