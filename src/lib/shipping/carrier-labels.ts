@@ -1,9 +1,9 @@
 /**
- * Carrier keys in a product's shipment counts. Only "UPS" and "USPS" (and "UPS pending", not invoiced yet, so
- * presumed ours) are shipments we paid for and chose the carrier of; "UPS collect" was billed to the receiver or a
- * third party, who chose the carrier.
+ * Carrier keys in a product's shipment counts. "UPS" and "USPS" are shipments we paid for and chose the carrier of;
+ * "UPS collect" was billed to the receiver or a third party, who chose the carrier; "UPS pending" isn't on an
+ * imported cost report yet (or was counted before who paid was recorded), so it's presumed ours.
  */
-export const CARRIER_LABELS: Record<string, string> = { UPS: "UPS prepaid", "UPS pending": "UPS not invoiced yet", "UPS collect": "UPS collect/third-party", USPS: "USPS" };
+export const CARRIER_LABELS: Record<string, string> = { UPS: "UPS prepaid", "UPS pending": "UPS, who paid not known yet", "UPS collect": "UPS collect/third-party", USPS: "USPS" };
 
 /** "1 USPS, 5 UPS prepaid, 15 UPS collect/third-party": USPS, then UPS prepaid, not invoiced and collect. */
 export function carrierCounts(carriers: Record<string, number> | null | undefined): string {

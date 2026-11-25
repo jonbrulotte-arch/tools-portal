@@ -497,6 +497,8 @@ model ProductInventory {
   shipmentCarriers Json      @default("{}")
   /// Of the placed shipments, those billed collect or to a third party, per warehouse: { [warehouse code]: count }
   collectShipments Json      @default("{}")
+  /// Counted since who paid was recorded; older counts' "UPS" doesn't tell prepaid from collect
+  billingChecked   Boolean   @default(false)
   /// Shipped orders that couldn't be placed in a warehouse (FedEx, freight, or not in a cost report yet)
   otherShipments   Int       @default(0)
   unitsLastMonth   Int?

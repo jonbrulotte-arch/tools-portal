@@ -76,7 +76,7 @@ export async function refreshItemInventory(s: ShippingRatesSettings, part: strin
   try {
     const page = await fetchInventoryPage(s, part);
     const sum = await summarizePage(s, page);
-    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, shipmentCarriers: sum.shipmentCarriers, collectShipments: sum.collectShipments, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
+    const data = { description: page.description, stock: sum.stock, shipments: sum.shipments, shipmentCarriers: sum.shipmentCarriers, collectShipments: sum.collectShipments, billingChecked: true, otherShipments: sum.otherShipments, unitsLastMonth: page.unitsLastMonth, snapshotAt: page.snapshotAt, fetchedAt: new Date(), error: null, errorAt: null };
     return toItem(await prisma.productInventory.upsert({ where: { partNumber: part }, create: { partNumber: part, ...data }, update: data }));
   } catch (err) {
     const error = errorMessage(err).slice(0, 500);
@@ -85,13 +85,23 @@ export async function refreshItemInventory(s: ShippingRatesSettings, part: strin
 }
 
 type Row = Awaited<ReturnType<typeof prisma.productInventory.findFirstOrThrow>>;
+
+/** Counts saved before who paid was recorded can't call their UPS shipments prepaid: they're "not known yet" until the next read. */
+function billingKnown(carriers: Record<string, number> | null, checked: boolean): Record<string, number> {
+  const c = { ...(carriers ?? {}) };
+  if (!checked && c.UPS) {
+    c["UPS pending"] = (c["UPS pending"] ?? 0) + c.UPS;
+    delete c.UPS;
+  }
+  return c;
+}
 export function toItem(r: Row): ItemInventory {
   return {
     partNumber: r.partNumber,
     description: r.description,
     stock: (r.stock ?? {}) as Record<string, SiteStock>,
     shipments: (r.shipments ?? {}) as Record<string, number>,
-    shipmentCarriers: (r.shipmentCarriers ?? {}) as Record<string, number>,
+    shipmentCarriers: billingKnown(r.shipmentCarriers as Record<string, number> | null, r.billingChecked),
     collectShipments: (r.collectShipments ?? {}) as Record<string, number>,
     otherShipments: r.otherShipments,
     unitsLastMonth: r.unitsLastMonth,

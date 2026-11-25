@@ -44,6 +44,7 @@ export function BlendedCell({ b, origins }: { b: BlendSummary | null; origins: {
 export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail; origins: { code: string; name: string }[]; showCells?: boolean }) {
   const name = (c: string) => origins.find((o) => o.code === c)?.name ?? c;
   const collect = b.shipmentCarriers?.["UPS collect"] ?? 0;
+  const pending = b.shipmentCarriers?.["UPS pending"] ?? 0;
   const zones = [...new Set(b.cells.map((c) => c.zone))].sort((x, y) => x - y);
   const used = origins.filter((o) => b.cells.some((c) => c.origin === o.code));
   return (
@@ -77,7 +78,7 @@ export function BlendedPanel({ b, origins, showCells = true }: { b: BlendDetail;
       <p className="text-sm text-gray-700">
         Carrier:{" "}
         {b.carrier.source === "product" && b.carrier.shipments
-          ? `${pct(b.carrier.shipments.usps / (b.carrier.shipments.usps + b.carrier.shipments.ups))} USPS, ${pct(b.carrier.shipments.ups / (b.carrier.shipments.usps + b.carrier.shipments.ups))} UPS, from this product's own ${b.carrier.shipments.usps + b.carrier.shipments.ups} prepaid shipments last month`
+          ? `${pct(b.carrier.shipments.usps / (b.carrier.shipments.usps + b.carrier.shipments.ups))} USPS, ${pct(b.carrier.shipments.ups / (b.carrier.shipments.usps + b.carrier.shipments.ups))} UPS, from this product's own ${b.carrier.shipments.usps + b.carrier.shipments.ups} shipments last month${pending ? ` (${pending} UPS not matched to a UPS invoice yet, so who paid isn't known: counted as ours)` : ", all prepaid"}`
           : Object.entries(b.carrier.uspsShare)
               .map(([o, s]) =>
                 b.carrier.method === "cheapest" || s == null

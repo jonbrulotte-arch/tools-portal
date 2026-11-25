@@ -10,7 +10,7 @@ const page = readFileSync(path.join(__dirname, "..", "fixtures", "mango-inventor
 describe.skipIf(!enabled)("Mango inventory import (database)", async () => {
   const { prisma } = await import("@/lib/prisma");
   const { setSetting, SETTING_DEFAULTS, getSetting } = await import("@/lib/settings");
-  const { startInventoryImport, refreshItemInventory, inventoryStatus } = await import("@/lib/shipping/mango-inventory");
+  const { startInventoryImport, refreshItemInventory, inventoryStatus, loadInventory } = await import("@/lib/shipping/mango-inventory");
   let server: http.Server;
   let mangoUp = true;
 
@@ -73,6 +73,9 @@ describe.skipIf(!enabled)("Mango inventory import (database)", async () => {
     const again = await refreshItemInventory(await getSetting("shippingRates"), "56831");
     expect(again).toMatchObject({ shipments: { GV: 2, LV: 1 }, collectShipments: { GV: 1 }, shipmentCarriers: { "UPS collect": 1, "UPS pending": 1, USPS: 1 } });
     await prisma.shipmentOrigin.deleteMany();
+    // counts saved before who paid was recorded don't call their UPS shipments prepaid
+    await prisma.productInventory.update({ where: { partNumber: "56831" }, data: { shipmentCarriers: { UPS: 20, USPS: 1 }, billingChecked: false } });
+    expect((await loadInventory(["56831"])).get("56831")?.shipmentCarriers).toEqual({ "UPS pending": 20, USPS: 1 });
   });
 
   it("keeps the last good figures when a refresh fails", async () => {
